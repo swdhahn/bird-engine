@@ -39,7 +39,7 @@ namespace bird::vk {
         std::cout << pProperties.limits.maxImageDimension2D << "  " << m_pSwapChain->getSwapChainImageFormat() << std::endl;
     }
 
-    void VKPipeline::renderScene(const bird::Scene *scene) {
+    void VKPipeline::renderRootScene(const bird::Scene *scene) {
 
     }
 

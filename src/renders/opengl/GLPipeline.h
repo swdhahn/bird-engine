@@ -7,6 +7,7 @@
 
 #include "../GraphicsPipeline.h"
 #include "GLMesh.h"
+#include "GLShader.h"
 #include "../../util/File.h"
 
 namespace bird::gl {
@@ -18,11 +19,14 @@ namespace bird::gl {
         void init() override;
         void cleanUp() override;
 
-        void renderScene(const Scene* scene) override;
+        void renderRootScene(const Scene* scene) override;
 
         std::string getName() const override;
 
     private:
+        std::unique_ptr<Shader> m_shader;
+
+        void renderScene(const Scene* scene);
 
     };
 

@@ -22,7 +22,7 @@ namespace bird::vk {
         void init() override;
         void cleanUp() override;
 
-        void renderScene(const Scene* scene) override;
+        void renderRootScene(const Scene* scene) override;
 
         [[nodiscard]] std::string getName() const override;
 

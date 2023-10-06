@@ -7,6 +7,10 @@
 
 #include <vector>
 #include <string>
+#include <shaderc/shaderc.hpp>
+#include <spirv_cross/spirv_glsl.hpp>
+#include "../GraphicsPipeline.h"
+#include "../../util/File.h"
 
 namespace bird {
 
@@ -24,7 +28,7 @@ namespace bird {
      */
     class ShaderBuilder {
     public:
-        Shader create();
+        std::unique_ptr<Shader> create();
         ShaderBuilder& attachShaderFile(std::string fileName, const ShaderPipeline shaderStage);
         ShaderBuilder& addUniformBuffer(const ShaderPipeline shaderStage);
         ShaderBuilder& enableTextures(const uint8_t textureCount);
@@ -32,12 +36,11 @@ namespace bird {
         std::vector<std::pair<std::string, ShaderPipeline>> m_shaderFiles;
         uint8_t m_textureCount;
 
-
     };
 
     class Shader {
     public:
-
+        Shader();
         virtual ~Shader();
 
     protected:
@@ -45,6 +48,13 @@ namespace bird {
         uint8_t m_textureCount;
 
     };
+
+    std::string preprocessShader(const std::string& source_name, shaderc_shader_kind kind,
+                                  const std::string& source);
+    std::vector<uint32_t> compileShader(const std::string& source_name,
+                                       shaderc_shader_kind kind,
+                                       bool optimize = true);
+    std::string decompileShader_glsl(std::vector<uint32_t> spirv_binary);
 
 } // bird
 

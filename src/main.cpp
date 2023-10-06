@@ -95,7 +95,7 @@ int main() {
         scene.init();
 
         while(!pipeline->getWindow()->shouldWindowClose()) {
-            pipeline->renderScene(&scene);
+            pipeline->renderRootScene(&scene);
             pipeline->getWindow()->pollWindow();
         }
 

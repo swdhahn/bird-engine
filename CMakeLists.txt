@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.23)
 
-set(CMAKE_CXX_STANDARD 20)
-find_package(Vulkan REQUIRED)
+set(CMAKE_CXX_STANDARD 17)
 
 project(Bird)
 
@@ -19,13 +18,11 @@ foreach(file_path ${shader_sources})
     set(shader_compilation_cmd ${shader_compilation_cmd} "&&" "mkdir" "-p" "${new_file_directory}" "&&" "${Vulkan_GLSLC_EXECUTABLE}" "${file_path}" "-o" "${CMAKE_BINARY_DIR}${file_path_new}.spv")
 endforeach()
 
-add_custom_target(CompileShaders COMMAND
-        ${shader_compilation_cmd}
-        VERBATIM)
+add_custom_target(CompileShaders)# COMMAND ${shader_compilation_cmd} VERBATIM)
 
-link_directories(libs/GLFW/lib libs/ASSIMP/lib libs/GLEW/lib)
+link_directories(libs/GLFW/lib libs/ASSIMP/lib libs/GLEW/lib libs/SHADERC/lib libs/SPIRV_CROSS/lib)
 
-add_executable(Bird src/main.cpp src/Application.cpp src/Application.h src/util/stb_image.h src/util/Constants.h src/util/Math.h src/util/Math.cpp src/util/File.cpp src/util/File.h)
+add_executable(Bird libs/VOLK/src/VOLK/volk.c src/main.cpp src/Application.cpp src/Application.h src/util/stb_image.h src/util/Constants.h src/util/Math.h src/util/Math.cpp src/util/File.cpp src/util/File.h)
 add_dependencies(Bird CompileShaders GenerateDependencies)
 
 if(APPLE)
@@ -38,7 +35,8 @@ endif()
 
 include_directories(
         libs/GLFW/include libs/ASSIMP/include libs/GLEW/include
-        libs/GLM/src/GLM ${Vulkan_INCLUDE_DIRS}
+        libs/GLM/src/GLM libs/VULKAN/src/VULKAN/include libs/VOLK/src
+        libs/SHADERC/include libs/SPIRV_CROSS/include
 )
 add_subdirectory(src/renders)
 include_directories(src/renders)
@@ -47,7 +45,7 @@ add_subdirectory(src/scene)
 include_directories(src/scene)
 target_link_libraries(Bird scene)
 
-target_link_libraries(Bird stdc++ -lglfw3 -lassimp -lglew Vulkan::Vulkan)
+target_link_libraries(Bird stdc++ -lglfw3 -lassimp -lglew -lshaderc_combined -lspirv-cross-core -lspirv-cross-glsl)# Vulkan::Vulkan)
 add_definitions(-Wno-deprecated-volatile)
 
 

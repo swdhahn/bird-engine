@@ -20,7 +20,7 @@ namespace bird {
         const uint64_t& getID() const;
         bool operator==(const WorldObject& e);
 
-        void move(const Vector3& delta);
+        void translate(const Vector3& delta);
 
         const Vector3 &getWorldPosition() const;
         void setWorldPosition(const Vector3 &worldPosition);

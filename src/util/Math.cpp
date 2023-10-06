@@ -20,6 +20,10 @@ namespace bird {
         *dst = glm::translate(*dst, obj->getWorldPosition() + obj->getLocalPosition());
     }
 
+    Matrix4 createPerspectiveMatrix(uint32_t width, uint32_t height, float fov, float near, float far) {
+        return glm::perspective(fov, (float)width / (float)height, near, far);
+    }
+
     std::ostream& operator<<(std::ostream& out, const Vector2& s) {
         out << "{" << s.x << ", " << s.y << "}";
         return out;

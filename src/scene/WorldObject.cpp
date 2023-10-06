@@ -19,7 +19,7 @@ namespace bird {
         return e.getID() == m_id;
     }
 
-    void WorldObject::move(const Vector3& delta) {
+    void WorldObject::translate(const Vector3& delta) {
         m_worldPosition += delta;
         m_needsMatrixUpdate = true;
     }

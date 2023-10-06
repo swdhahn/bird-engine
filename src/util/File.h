@@ -13,6 +13,7 @@ namespace bird {
 
     //std::string readFile(std::string& path);
     std::unique_ptr<std::byte[]> readBinaryFile(std::string path, size_t& length);
+    std::string readFileToString(std::string path);
 
 }
 

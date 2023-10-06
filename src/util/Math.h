@@ -34,7 +34,6 @@ namespace bird {
     }
 
     inline Matrix4 lookAt(const Vector3& eyePos, const Vector3& lookPos, const Vector3& upDir) {
-
         return glm::lookAt(eyePos, lookPos, upDir);
     }
 

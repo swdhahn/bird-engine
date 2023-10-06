@@ -1,7 +1,7 @@
 //
 // Created by Seth Hahn on 11/1/22.
 //
-
+#ifdef _VULKAN_DEFINED
 #ifndef BIRD_APPLICATION_H
 #define BIRD_APPLICATION_H
 
@@ -65,7 +65,7 @@ namespace bird {
     void DestroyDebugUtilsMessengerEXT(VkInstance instance,
                                        VkDebugUtilsMessengerEXT debugMessenger,
                                        const VkAllocationCallbacks* pAllocator);
-
+*/
     extern const std::vector<const char*> validationLayers, deviceExtensions;
 
     extern const bool enableValidationLayers;
@@ -201,3 +201,4 @@ namespace bird {
 } // bird
 
 #endif //BIRD_APPLICATION_H
+#endif

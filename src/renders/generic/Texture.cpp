@@ -7,7 +7,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../util/stb_image.h"
 #include "../opengl/GLTexture.h"
-#include "../vulkan/VKTexture.h"
+//#include "../vulkan/VKTexture.h"
 
 namespace bird {
 

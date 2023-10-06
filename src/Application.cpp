@@ -1,7 +1,7 @@
 //
 // Created by Seth Hahn on 11/1/22.
 //
-
+#ifdef _VULKAN_DEFINED
 #include "Application.h"
 #include "util/stb_image.h"
 
@@ -1625,3 +1625,4 @@ namespace bird {
     }
 
 } // bird
+#endif

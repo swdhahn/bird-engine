@@ -18,6 +18,10 @@ namespace bird {
         return m_pWindow;
     }
 
+    void GraphicsPipeline::setCamera(Camera* camera) {
+        m_camera = camera;
+    }
+
     void GraphicsPipeline::getModelEntities(const Scene* const scene, std::vector<ModelEntity*>& entities) const {
         ModelEntity* e = nullptr;
         for(int i = 0; i < scene->getEntities().size(); i++) {

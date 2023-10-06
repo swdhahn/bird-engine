@@ -5,7 +5,11 @@
 #ifndef BIRD_GRAPHICSCONSTANTS_H
 #define BIRD_GRAPHICSCONSTANTS_H
 
-#define GLFW_INCLUDE_VULKAN
+#ifdef _VULKAN_DEFINED
+//#define GLFW_INCLUDE_VULKAN
+#include "VOLK/volk.h"
+#endif
+
 #include "GL/glew.h"
 #include "GLFW/glfw3.h"
 
