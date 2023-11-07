@@ -1,15 +1,15 @@
 # Bird Engine
 
-#Downloads
+## Downloads
 If you want the latest version, 
 
-#Status
+## Status
 This project is currently under heavy development and may not work properly.
 
-#File Organization
+## File Organization
 
 
-#Getting and Building
+## Getting and Building
 1. Clone the repo
 ```bash
 git clone https://github.com/swdhahn/bird-engine $SOURCE_DIR
@@ -23,8 +23,8 @@ cmake --build .
 cmake .
 ```
 
-#Running the code
+## Running the code
 
-#License
+## License
 © 2023 Seth Hahn
 https://choosealicense.com/licenses/gpl-3.0/
