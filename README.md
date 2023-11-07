@@ -3,7 +3,7 @@ A game engine that encapsulates multiple graphics libraries (OpenGL, Vulkan, Met
 *Note* This project is currently under heavy development and may not work properly or be fully usable yet.
 
 ## Downloads
-If you want the latest version, you must build it yourself. For the most stable version, look for stable tagged branches. The releases provided are simply built from the most stable branch.
+If you want the latest version, you must build it yourself. For the most stable version, look for branches tagged stable. The releases provided are simply built from the most stable branch.
 
 
 ## File Organization
@@ -28,7 +28,7 @@ cd $SOURCE_DIR
 ```
 2. Run the cmake file. CMAKE_BUILD_TYPE can be Release or Debug.
 ```bash
-cmake -DCMAKE_BUILD_TYPE=Debug -B $BUILD_DIR
+cmake -DCMAKE_BUILD_TYPE={Debug|Release} -B $BUILD_DIR
 cd $BUILD_DIR
 cmake --build .
 ```
@@ -37,4 +37,4 @@ cmake --build .
 
 ## License
 © 2023 Seth Hahn
-https://choosealicense.com/licenses/gpl-3.0/
+[License](https://github.com/swdhahn/bird-engine/blob/main/LICENSE)
