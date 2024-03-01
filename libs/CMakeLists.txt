@@ -37,6 +37,12 @@ ExternalProject_Add(ASSIMP
         -Werror
         -Wdeprecated-declarations
         )
+ExternalProject_Add(DevIL
+        URL "https://github.com/DentonW/DevIL/archive/refs/tags/v1.8.0.tar.gz"
+        PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/DevIL
+        CMAKE_ARGS
+        "-DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>"
+        )
 ExternalProject_Add(VOLK
         URL "https://github.com/zeux/volk/archive/refs/tags/1.3.250.tar.gz"
         PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/VOLK
