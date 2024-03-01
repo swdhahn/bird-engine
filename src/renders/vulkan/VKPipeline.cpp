@@ -3,7 +3,6 @@
 //
 
 #include "VKPipeline.h"
-
 #include <memory>
 
 namespace bird::vk {
@@ -24,12 +23,20 @@ namespace bird::vk {
     }
 
     void VKPipeline::init() {
-        m_pWindow = std::make_unique<Window>(1280, 720, "Engine!");
+
+        if(VK_SUCCESS != volkInitialize()) {
+            std::cerr << "Volk failed to initialize!" << std::endl;
+        }
+
+        m_pWindow = std::make_unique<Window>(1280, 720, "Vulkan App!");
         m_pInstance = std::make_unique<VKInstance>("Vulkan App", "Bird Engine", m_pWindow.get());
         m_pPhysicalDevice = std::make_unique<VKPhysicalDevice>(m_pInstance.get());
         m_pLogicalDevice =  std::make_unique<VKLogicalDevice>(m_pPhysicalDevice.get());
         m_pSwapChain = std::make_unique<VKSwapChain>(m_pPhysicalDevice.get(), m_pLogicalDevice.get(), m_pInstance.get(), m_pWindow.get());
+
+        // Start here
         m_pRenderPass = std::make_unique<VKRenderPass>(m_pPhysicalDevice.get(), m_pLogicalDevice.get(), m_pSwapChain.get());
+
 
         // cleanUpSwapChain() function in SwapChain
 

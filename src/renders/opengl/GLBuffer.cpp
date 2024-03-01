@@ -6,4 +6,5 @@
 
 namespace bird::gl {
 
+
 } // bird

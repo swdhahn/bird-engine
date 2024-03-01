@@ -13,12 +13,8 @@ namespace bird {
         }
 
         if(GraphicsPipeline::getGraphicsPipelineType() == GRAPHICS_PIPELINE_VULKAN) {
-#ifdef _VULKAN_DEFINED
             glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
             m_pWindow = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
-#else
-            throw std::runtime_error("Vulkan does not exist!");
-#endif
         } else if(GraphicsPipeline::getGraphicsPipelineType() == GRAPHICS_PIPELINE_OPENGL) {
             glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);

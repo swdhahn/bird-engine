@@ -6,12 +6,12 @@
 
 namespace bird::gl {
 
-    GLShader::GLShader(std::vector<std::pair<std::string, ShaderPipeline>>& shaderFiles) {
-
+    GLShader::GLShader(std::vector<std::pair<std::string, ShaderPipeline>> shaderFiles) {
         m_programId = glCreateProgram();
         uint32_t shader_ids[shaderFiles.size()];
         int success;
         char infoLog[512];
+        std::string prev_shader_source = "";
         for(int i = 0; i < shaderFiles.size(); i++) {
             shaderc_shader_kind shaderc_shader_type;
             uint32_t gl_shader_type;
@@ -33,7 +33,16 @@ namespace bird::gl {
                     throw std::runtime_error("Invalid shader stage.");
             }
 
-            std::string shader_source = decompileShader_glsl(compileShader(shaderFiles[i].first, shaderc_shader_type, true));
+            std::string raw_shader_source = readFileToString(shaderFiles[i].first);
+            auto spirvComped = compileShader(shaderFiles[i].first, raw_shader_source, prev_shader_source,
+                                             shaderc_shader_type, true);
+
+            //initResources(spirvComped);
+
+            std::string shader_source = decompileShader_glsl(spirvComped, prev_shader_source, shaderFiles[i].second);
+            prev_shader_source = shader_source;
+            std::cout << "----\n" << shader_source << "\n----\n";
+
             const char* shader_source_c = shader_source.c_str();
             shader_ids[i] = glCreateShader(gl_shader_type);
             glShaderSource(shader_ids[i], 1, &shader_source_c, NULL);
@@ -41,8 +50,7 @@ namespace bird::gl {
             // check for shader compile errors
 
             glGetShaderiv(shader_ids[i], GL_COMPILE_STATUS, &success);
-            if (!success)
-            {
+            if (!success) {
                 glGetShaderInfoLog(shader_ids[i], 512, NULL, infoLog);
                 std::cout << "ERROR::SHADER::COMPILATION_FAILED\n" << infoLog << std::endl;
             }
@@ -57,17 +65,31 @@ namespace bird::gl {
                 std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
         }
 
+
         for(int i = 0; i < shaderFiles.size(); i++) {
+            glDetachShader(m_programId, shader_ids[i]);
             glDeleteShader(shader_ids[i]);
         }
+        glValidateProgram(m_programId);
 
-
+        unbind();
 
     }
 
     GLShader::~GLShader() {
-        unbind();
         glDeleteProgram(m_programId);
+    }
+
+    void GLShader::loadPerspectiveMatrix(Matrix4 perspectiveMatrix) {
+        glUniformMatrix4fv(glGetUniformLocation(m_programId, "registerMapped.perspective"), 1, GL_FALSE, &perspectiveMatrix[0][0]);
+    }
+
+    void GLShader::loadViewMatrix(Matrix4 viewMatrix) {
+        glUniformMatrix4fv(glGetUniformLocation(m_programId, "registerMapped.view"), 1, GL_FALSE, &viewMatrix[0][0]);
+    }
+
+    void GLShader::loadModelMatrix(Matrix4 modelMatrix) {
+        glUniformMatrix4fv(glGetUniformLocation(m_programId, "registerMapped.model"), 1, GL_FALSE, &modelMatrix[0][0]);
     }
 
     void GLShader::bind() const {

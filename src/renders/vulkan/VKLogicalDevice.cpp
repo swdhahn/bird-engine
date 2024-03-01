@@ -53,6 +53,8 @@ namespace bird::vk {
         vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
         vkGetDeviceQueue(m_device, indices.presentFamily.value(), 0, &m_presentQueue);
 
+        volkLoadDevice(m_device); // loads the device into volk
+
     }
 
     const VkDevice& VKLogicalDevice::getDevice() const {

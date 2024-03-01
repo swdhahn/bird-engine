@@ -10,13 +10,14 @@
 #include "../scene/Scene.h"
 #include "../scene/ModelEntity.h"
 #include "../scene/Camera.h"
+#include "../scene/DefaultCamera.h"
 
 namespace bird {
 
     class GraphicsPipeline {
     public:
         GraphicsPipeline(GraphicsPipelineType graphicsPipeline);
-        virtual ~GraphicsPipeline() {};
+        virtual ~GraphicsPipeline();
         virtual void init() = 0;
         virtual void cleanUp() = 0;
 
@@ -33,6 +34,7 @@ namespace bird {
         std::unique_ptr<Window> m_pWindow = nullptr;
         inline static GraphicsPipelineType s_graphicsPipeline = GRAPHICS_PIPELINE_NONE;
         Camera* m_camera;
+        DefaultCamera* m_defaultCamera;
 
         void getModelEntities(const Scene* const scene, std::vector<ModelEntity*>& entities) const;
 

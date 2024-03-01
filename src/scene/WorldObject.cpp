@@ -24,6 +24,21 @@ namespace bird {
         m_needsMatrixUpdate = true;
     }
 
+    void WorldObject::translateLocal(const Vector3& delta) {
+        m_localPosition += delta;
+        m_needsMatrixUpdate = true;
+    }
+
+    void WorldObject::rotate(const Vector3& axis, const float& angle) {
+        m_worldRotation = fromAngleAxis(angle, axis) * m_worldRotation;
+        m_needsMatrixUpdate = true;
+    }
+
+    void WorldObject::rotateLocal(const Vector3& axis, const float& angle) {
+        m_localRotation = fromAngleAxis(angle, axis) * m_localRotation;
+        m_needsMatrixUpdate = true;
+    }
+
     const Vector3 &WorldObject::getWorldPosition() const {
         return m_worldPosition;
     }

@@ -14,7 +14,8 @@ namespace bird {
         Material(uint8_t textureCount);
         ~Material();
 
-        Texture **textures;
+        std::vector<std::shared_ptr<Texture>> m_textures;
+
 
     private:
     };

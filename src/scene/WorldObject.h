@@ -6,8 +6,11 @@
 #define BIRD_WORLDOBJECT_H
 
 #include "../util/Math.h"
+#include "../util/Input.h"
 
 namespace bird {
+
+    extern Input* INPUT;
 
     class WorldObject {
     public:
@@ -21,6 +24,9 @@ namespace bird {
         bool operator==(const WorldObject& e);
 
         void translate(const Vector3& delta);
+        void translateLocal(const Vector3& delta);
+        void rotate(const Vector3& axis, const float& angle);
+        void rotateLocal(const Vector3& axis, const float& angle);
 
         const Vector3 &getWorldPosition() const;
         void setWorldPosition(const Vector3 &worldPosition);

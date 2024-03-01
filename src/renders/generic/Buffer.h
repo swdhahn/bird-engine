@@ -2,8 +2,8 @@
 // Created by Seth Hahn on 11/18/22.
 //
 
-#ifndef BIRD_BUFFER_H
-#define BIRD_BUFFER_H
+#ifndef BIRD_BUFFERTEMPLATE_H
+#define BIRD_BUFFERTEMPLATE_H
 
 #include "../GraphicsConstants.h"
 
@@ -32,14 +32,13 @@ namespace bird {
         const size_t& getBufferSize() const;
         const BufferMode& getBufferMode() const;
         /**
-         * Be careful that this is not misinterpreted as an unsigned byte. It is an integer,
-         * but wont ever really need more than 16 or so
          * @return the size of each attribute. The count of objects in
          * buffer is [getBufferSize() / getAttributeSize();]
          */
         uint8_t getAttributeSize() const {
             return t_attributeSize;
         }
+
     protected:
         size_t m_size;
         BufferMode m_bufferMode;
@@ -63,4 +62,4 @@ namespace bird {
 
 } // bird
 
-#endif //BIRD_BUFFER_H
+#endif //BIRD_BUFFERTEMPLATE_H

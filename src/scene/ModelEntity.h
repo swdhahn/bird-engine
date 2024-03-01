@@ -7,24 +7,24 @@
 
 #include "Entity.h"
 #include "../renders/generic/Mesh.h"
+#include <array>
 
 namespace bird {
 
     class ModelEntity : public Entity {
     public:
-        ModelEntity(Mesh* pMeshes, uint16_t meshCount);
+        ModelEntity(std::vector<std::shared_ptr<Mesh>> meshes);
+        ModelEntity(std::shared_ptr<Mesh> mesh);
         virtual ~ModelEntity();
 
         virtual void init() = 0;
         virtual void deinit() = 0;
         virtual void process(float delta) = 0;
 
-        const Mesh* const getMeshes() const;
-        const uint16_t& getMeshCount() const;
+        const std::vector<std::shared_ptr<Mesh>> getMeshes() const;
 
     private:
-        Mesh* m_pMeshes;
-        uint16_t m_meshCount;
+        std::vector<std::shared_ptr<Mesh>> m_meshes;
 
     };
 

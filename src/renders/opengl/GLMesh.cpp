@@ -17,6 +17,10 @@ namespace bird::gl {
         m_vertexBuffer->initialize();
         glVertexAttribPointer(0, m_vertexBuffer->getAttributeSize(), ((GLBuffer<float>*)m_vertexBuffer.get())->getGLBasicBufferType(), GL_FALSE, m_vertexBuffer->getAttributeSize() * sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
+        glVertexAttribPointer(1, m_normalBuffer->getAttributeSize(), ((GLBuffer<float>*)m_normalBuffer.get())->getGLBasicBufferType(), GL_FALSE, m_normalBuffer->getAttributeSize() * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(2, m_textureCoordBuffer->getAttributeSize(), ((GLBuffer<float>*)m_textureCoordBuffer.get())->getGLBasicBufferType(), GL_FALSE, m_textureCoordBuffer->getAttributeSize() * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(2);
 
 
     }

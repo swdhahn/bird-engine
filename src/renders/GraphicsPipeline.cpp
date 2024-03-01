@@ -8,6 +8,12 @@ namespace bird {
 
     GraphicsPipeline::GraphicsPipeline(GraphicsPipelineType graphicsPipeline) {
         s_graphicsPipeline = graphicsPipeline;
+        m_defaultCamera = new DefaultCamera(1280, 720); // TODO: Make this configurable
+        m_camera = m_defaultCamera;
+    }
+
+    GraphicsPipeline::~GraphicsPipeline() {
+        delete m_defaultCamera;
     }
 
     const GraphicsPipelineType GraphicsPipeline::getGraphicsPipelineType() {

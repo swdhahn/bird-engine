@@ -1,36 +1,25 @@
-
 #include <stdexcept>
 #include <iostream>
 #include <vector>
-//#include "Application.h"
-//#include "vulkan/VKPipeline.h"
-#include "renders/opengl/GLPipeline.h"
-#include "renders/opengl/GLBuffer.h"
+#include "Application.h"
+#include "ApplicationVK.h"
+#include "util/Assets.h"
 
-bird::gl::GLMesh* createMesh() {
-    const static float cSVertices[] = {
-            0.5f,  0.5f, 0.0f,  // top right
-            0.5f, -0.5f, 0.0f,  // bottom right
-            -0.5f, -0.5f, 0.0f,  // bottom left
-            -0.5f,  0.5f, 0.0f   // top left
-    };
-    const static unsigned int cSIndices[] = {  // note that we start from 0!
-            0, 1, 3,   // first triangle
-            1, 2, 3    // second triangle
-    };
-    std::unique_ptr<uint32_t[]> indices = std::make_unique<uint32_t[]>(6);
-    std::unique_ptr<float[]> vertices = std::make_unique<float[]>(12);
-    memcpy(indices.get(), cSIndices, 6 * sizeof(uint32_t));
-    memcpy(vertices.get(), cSVertices, 12 * sizeof(float));
-    std::unique_ptr<bird::gl::GLBuffer<uint32_t>> indexBuffer = std::make_unique<bird::gl::GLBuffer<uint32_t>>(static_cast<bird::BufferMode>(bird::BUFFER_STAGED | bird::BUFFER_ELEMENT_ARRAY), std::move(indices), 6);
-    std::unique_ptr<bird::gl::GLBuffer<float>> vertexBuffer = std::make_unique<bird::gl::GLBuffer<float>>(static_cast<bird::BufferMode>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY), std::move(vertices), 12);
-
-    return new bird::gl::GLMesh(std::move(indexBuffer), std::move(vertexBuffer), nullptr, nullptr);
-}
+/*
+ *
+ * 1. Shader has a list of materials
+ * 2. each material has a list of mesh pointers
+ * 3. each model has a list of mesh pointers
+ *
+ * 1. We loop through shaders. loop through materials in each shader.
+ * 2. We loop through models. Connect pair shader material and material for each mesh. Loop through meshes.
+ *
+ *
+ */
 
 class TestEntity : public bird::ModelEntity {
 public:
-    TestEntity(bird::Mesh* m) : bird::ModelEntity(m, 1) {
+    TestEntity(std::vector<std::shared_ptr<bird::Mesh>> m) : bird::ModelEntity(m) {
 
     }
 
@@ -47,7 +36,20 @@ public:
     }
 
     void process(float delta) {
-
+        float speed = 10;
+        float rotSpeed = 10;
+        translate(bird::Vector3(
+                (-bird::INPUT->getActionValue("move_right")
+                + bird::INPUT->getActionValue("move_left")) * speed * delta,
+                (-bird::INPUT->getActionValue("move_up")
+                 + bird::INPUT->getActionValue("move_down")) * speed * delta,
+                (-bird::INPUT->getActionValue("move_backward")
+                 + bird::INPUT->getActionValue("move_forward")) * speed * delta
+                ));
+        float rotVal = -bird::INPUT->getActionValue("look_right")
+                       + bird::INPUT->getActionValue("look_left");
+        rotate(bird::Vector3(0, 1, 0),
+               rotVal * rotSpeed * delta);
     }
 
 };
@@ -56,23 +58,29 @@ class MainScene : public bird::Scene {
 public:
 
     void init() override {
-        mesh = createMesh();
+        // mesh = bird::Assets::loadMesh("assets/models/Lowpoly_tree_sample.obj");
+        mesh = bird::Assets::loadMesh("assets/models/bugatti/bugatti.obj");
+        // mesh = bird::Assets::loadMesh("assets/models/cube.obj");
 
         e = new TestEntity(mesh);
 
-
         this->addEntity(e);
+
+        e2 = new TestEntity(mesh);
+        e2->translate(bird::Vector3(2, 0, -20));
+        //this->addEntity(e2);
+
     }
 
     void deinit() override {
         delete e;
-        delete mesh;
+        delete e2;
     }
 
 private:
-    bird::Mesh* mesh = nullptr;
+    std::vector<std::shared_ptr<bird::Mesh>> mesh;
     bird::ModelEntity* e = nullptr;
-
+    bird::ModelEntity* e2 = nullptr;
 };
 
 /* TODO:
@@ -85,38 +93,19 @@ private:
  *
  */
 int main() {
-    bird::GraphicsPipeline* pipeline = new bird::gl::GLPipeline;
+    /*bird::ApplicationVK app;
+    app.run();//*/
 
     MainScene scene;
-
-    try {
-        pipeline->init();
-
-        scene.init();
-
-        while(!pipeline->getWindow()->shouldWindowClose()) {
-            pipeline->renderRootScene(&scene);
-            pipeline->getWindow()->pollWindow();
-        }
-
-        scene.deinit();
-
-        pipeline->cleanUp();
-    } catch(std::exception& e) {
-        std::cerr << e.what() << std::endl;
-        return EXIT_FAILURE;
-    }
-    delete pipeline;
-    //*/
-
-    /*bird::Application app;
+    bird::Application app(scene);
 
     try {
         app.run();
     } catch(std::exception& e) {
         std::cerr << e.what() << std::endl;
         return EXIT_FAILURE;
-    }//*/
+    }
 
-    return EXIT_SUCCESS;
+    return EXIT_SUCCESS;//*/
 }
+

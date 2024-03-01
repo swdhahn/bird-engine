@@ -18,6 +18,9 @@ namespace bird {
         void deinit() override;
 
         void process(float delta) override;
+    private:
+        float m_speed = 10.0f;
+
     };
 
 } // bird

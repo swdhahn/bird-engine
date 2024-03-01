@@ -6,20 +6,20 @@
 
 namespace bird {
 
-    ModelEntity::ModelEntity(Mesh* pMeshes, uint16_t meshCount) : m_pMeshes(pMeshes), m_meshCount(meshCount) {
+    ModelEntity::ModelEntity(std::vector<std::shared_ptr<Mesh>> meshes) : m_meshes(meshes) {
 
+    }
+
+    ModelEntity::ModelEntity(std::shared_ptr<Mesh> mesh) : m_meshes(std::vector<std::shared_ptr<Mesh>>()) {
+        m_meshes.push_back(mesh);
     }
 
     ModelEntity::~ModelEntity() {
 
     }
 
-    const Mesh* const ModelEntity::getMeshes() const {
-        return m_pMeshes;
-    }
-
-    const uint16_t& ModelEntity::getMeshCount() const {
-        return m_meshCount;
+    const std::vector<std::shared_ptr<Mesh>> const ModelEntity::getMeshes() const {
+        return m_meshes;
     }
 
 }

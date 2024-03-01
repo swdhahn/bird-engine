@@ -58,6 +58,8 @@ namespace bird::vk {
             throw std::runtime_error("Failed to create Vulkan Instance!");
         }
 
+        volkLoadInstance(m_instance); // loads all vulkan entrance points in volk
+
     }
 
     void VKInstance::createSurface(Window* pWindow) {

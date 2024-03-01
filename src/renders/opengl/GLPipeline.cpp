@@ -3,6 +3,7 @@
 //
 
 #include "GLPipeline.h"
+#include <memory>
 
 namespace bird::gl {
 
@@ -24,13 +25,20 @@ namespace bird::gl {
             throw std::runtime_error("Couldn't initialize GLEW!");
         }
 
-        ShaderBuilder builder;
-        m_shader = builder
+
+        m_shader = ShaderBuilder()
+                .attachShaderFile("assets/shaders/default_vertex.glsl", VERTEX)
+                .attachShaderFile("assets/shaders/default_fragment.glsl", FRAGMENT)
+                .create();//*/
+
+        /*m_shader = ShaderBuilder()
                 .attachShaderFile("shaders/vertex.glsl", VERTEX)
                 .attachShaderFile("shaders/fragment.glsl", FRAGMENT)
-                .create();
+                .create();//*/
 
         ((GLShader*)m_shader.get())->bind();
+
+        glEnable(GL_DEPTH_TEST);
 
     }
 
@@ -50,12 +58,19 @@ namespace bird::gl {
         // cull entities here
 
         // render entities
+
+        m_shader->loadPerspectiveMatrix(m_camera->getPerspectiveMatrix());
+        m_shader->loadViewMatrix(m_camera->getTransformMatrix());
+
         for(int i = 0; i < entities.size(); i++) {
             ModelEntity* e = entities[i];
-            for(int j = 0; j < e->getMeshCount(); j++) {
-                const GLMesh* m = dynamic_cast<const GLMesh*>(&e->getMeshes()[j]);
+            for(int j = 0; j < e->getMeshes().size(); j++) {
+                GLMesh* m = (GLMesh*)e->getMeshes()[j].get();
                 glBindVertexArray(m->getVAO());
-                glDrawElements(GL_TRIANGLES, m->getIndexBuffer()->getBufferSize(), GL_UNSIGNED_INT, 0);
+                // TODO: Uniform buffer objects and textures
+                m_shader->loadModelMatrix(e->getTransformMatrix());
+
+                glDrawElements(GL_TRIANGLES, e->getMeshes()[j]->getIndexBuffer()->getBufferSize(), GL_UNSIGNED_INT, 0);
             }
         }
         for(int i = 0; i < scene->getChildren().size(); i++) {
@@ -69,7 +84,7 @@ namespace bird::gl {
     }
 
     std::string GLPipeline::getName() const {
-        return "Opengl Pipeline";
+        return "OpenGL Pipeline";
     }
 
 } // bird

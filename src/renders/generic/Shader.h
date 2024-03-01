@@ -30,11 +30,9 @@ namespace bird {
     public:
         std::unique_ptr<Shader> create();
         ShaderBuilder& attachShaderFile(std::string fileName, const ShaderPipeline shaderStage);
-        ShaderBuilder& addUniformBuffer(const ShaderPipeline shaderStage);
-        ShaderBuilder& enableTextures(const uint8_t textureCount);
+
     private:
         std::vector<std::pair<std::string, ShaderPipeline>> m_shaderFiles;
-        uint8_t m_textureCount;
 
     };
 
@@ -43,18 +41,25 @@ namespace bird {
         Shader();
         virtual ~Shader();
 
+        void initResources(std::vector<uint32_t> spirv_binary);
+        virtual void loadPerspectiveMatrix(Matrix4 perspectiveMatrix) = 0;
+        virtual void loadViewMatrix(Matrix4 viewMatrix) = 0;
+        virtual void loadModelMatrix(Matrix4 modelMatrix) = 0;
+
     protected:
         ShaderPipeline m_pipeline;
         uint8_t m_textureCount;
+        std::vector<std::string> m_variableNames;
+
 
     };
 
     std::string preprocessShader(const std::string& source_name, shaderc_shader_kind kind,
                                   const std::string& source);
-    std::vector<uint32_t> compileShader(const std::string& source_name,
+    std::vector<uint32_t> compileShader(const std::string& source, const std::string& source_name, const std::string& prevSource,
                                        shaderc_shader_kind kind,
-                                       bool optimize = true);
-    std::string decompileShader_glsl(std::vector<uint32_t> spirv_binary);
+                                       bool optimize = false);
+    std::string decompileShader_glsl(std::vector<uint32_t> spirv_binary, const std::string& prevShaderSource, ShaderPipeline pipeline);
 
 } // bird
 
