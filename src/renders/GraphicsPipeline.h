@@ -25,14 +25,12 @@ namespace bird {
 
         virtual std::string getName() const = 0;
 
-        static const GraphicsPipelineType getGraphicsPipelineType();
         std::unique_ptr<Window>& getWindow();
 
         void setCamera(Camera* camera);
 
     protected:
         std::unique_ptr<Window> m_pWindow = nullptr;
-        inline static GraphicsPipelineType s_graphicsPipeline = GRAPHICS_PIPELINE_NONE;
         Camera* m_camera;
         DefaultCamera* m_defaultCamera;
 

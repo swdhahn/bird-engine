@@ -10,6 +10,8 @@
 #include "GL/glew.h"
 #include "GLFW/glfw3.h"
 
+#include "../util/Math.h"
+
 #include <cstdint>
 #include <string>
 #include <stdexcept>
@@ -26,6 +28,9 @@ namespace bird {
         GRAPHICS_PIPELINE_OPENGL, GRAPHICS_PIPELINE_VULKAN,
         GRAPHICS_PIPELINE_METAL, GRAPHICS_PIPELINE_DIRECTX
     };
+
+    extern GraphicsPipelineType CURRENT_GRAPHICS_PIPELINE;
+
 
 
 }

@@ -8,6 +8,7 @@
 #include "../GraphicsPipeline.h"
 #include "GLMesh.h"
 #include "GLShader.h"
+#include "GLTexture.h"
 #include "../../util/File.h"
 
 namespace bird::gl {
@@ -24,8 +25,6 @@ namespace bird::gl {
         std::string getName() const override;
 
     private:
-        std::unique_ptr<Shader> m_shader;
-
         void renderScene(const Scene* scene);
 
     };

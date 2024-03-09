@@ -21,7 +21,8 @@ else()
     message(STATUS "VOLK directory not found, skipping.")
 endif()
 
-add_executable(Bird src/main.cpp ${VOLK_SOURCE_FILE_PATH} src/ApplicationVK.cpp src/ApplicationVK.h src/util/stb_image.h src/util/Constants.h src/util/Math.h src/util/Math.cpp src/util/File.cpp src/util/File.h src/util/Input.cpp src/util/Input.h src/Application.cpp src/Application.h src/util/Assets.cpp src/util/Assets.h)
+# src/ApplicationVK.cpp src/ApplicationVK.h
+add_executable(Bird src/main.cpp ${VOLK_SOURCE_FILE_PATH} src/util/stb_image.h src/util/Constants.h src/util/Math.h src/util/Math.cpp src/util/File.cpp src/util/File.h src/util/Input.cpp src/util/Input.h src/Application.cpp src/Application.h src/util/ResourceManager.cpp src/util/ResourceManager.h src/util/Resource.cpp src/util/Resource.h)
 add_dependencies(Bird GenerateDependencies)
 
 if(APPLE)

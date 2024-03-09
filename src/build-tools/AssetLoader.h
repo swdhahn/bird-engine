@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <fstream>
+
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -33,6 +34,8 @@ namespace bird {
         void loadShader(std::string& path);
         void loadMaterial(std::string& path);
         void loadCustom(std::string& path);
+
+        //void writeMaterial(std::string& path, const aiMaterial* material);
 
     private:
         Assimp::Importer importer;

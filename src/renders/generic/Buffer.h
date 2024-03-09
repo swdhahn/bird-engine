@@ -27,6 +27,7 @@ namespace bird {
         virtual ~Buffer();
 
         virtual void initialize() = 0;
+        virtual void initialize(std::unique_ptr<T[]> pData, size_t size) = 0;
         virtual void update(T* pData, size_t size, uint32_t offset) = 0;
 
         const size_t& getBufferSize() const;

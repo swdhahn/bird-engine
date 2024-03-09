@@ -6,18 +6,16 @@
 
 namespace bird {
 
+    GraphicsPipelineType CURRENT_GRAPHICS_PIPELINE = GRAPHICS_PIPELINE_NONE;
+
     GraphicsPipeline::GraphicsPipeline(GraphicsPipelineType graphicsPipeline) {
-        s_graphicsPipeline = graphicsPipeline;
+        CURRENT_GRAPHICS_PIPELINE = graphicsPipeline;
         m_defaultCamera = new DefaultCamera(1280, 720); // TODO: Make this configurable
         m_camera = m_defaultCamera;
     }
 
     GraphicsPipeline::~GraphicsPipeline() {
         delete m_defaultCamera;
-    }
-
-    const GraphicsPipelineType GraphicsPipeline::getGraphicsPipelineType() {
-        return s_graphicsPipeline;
     }
 
     std::unique_ptr<Window>& GraphicsPipeline::getWindow() {

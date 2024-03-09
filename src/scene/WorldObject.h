@@ -7,10 +7,12 @@
 
 #include "../util/Math.h"
 #include "../util/Input.h"
+#include "../util/ResourceManager.h"
 
 namespace bird {
 
     extern Input* INPUT;
+    extern ResourceManager* RESOURCE_MANAGER;
 
     class WorldObject {
     public:
@@ -29,18 +31,18 @@ namespace bird {
         void rotateLocal(const Vector3& axis, const float& angle);
 
         const Vector3 &getWorldPosition() const;
-        void setWorldPosition(const Vector3 &worldPosition);
+        void setWorldPosition(Vector3 worldPosition);
         const Vector3 &getLocalPosition() const;
-        void setLocalPosition(const Vector3 &localPosition);
+        void setLocalPosition(Vector3 localPosition);
         const Quaternion &getWorldRotation() const;
-        void setWorldRotation(const Quaternion &worldRotation);
+        void setWorldRotation(Quaternion worldRotation);
         const Quaternion &getLocalRotation() const;
-        void setLocalRotation(const Quaternion &localRotation);
+        void setLocalRotation(Quaternion localRotation);
         const Matrix4 &getTransformMatrix() const;
         const Vector3 &getScale() const;
-        void setScale(const Vector3 &scale);
+        void setScale(Vector3 scale);
 
-        void setTransformMatrix(const Matrix4 &transformMatrix);
+        void setTransformMatrix(Matrix4 transformMatrix);
 
         void updateTransformationMatrix();
         bool needsMatrixUpdate() const;

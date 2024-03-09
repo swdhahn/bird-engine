@@ -7,6 +7,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../util/stb_image.h"
 #include "../opengl/GLTexture.h"
+#include "../GraphicsPipeline.h"
 //#include "../vulkan/VKTexture.h"
 
 namespace bird {
@@ -29,19 +30,20 @@ namespace bird {
         return *this;
     }
 
-    std::unique_ptr<Texture> TextureBuilder::build() {
+    std::shared_ptr<Texture> TextureBuilder::build() {
         if(m_generateMipMaps) { // TODO: actually finish this function with mipmap generation and all
 
         }
 
         std::unique_ptr<Texture> tex;
-        if(GraphicsPipeline::getGraphicsPipelineType() == GRAPHICS_PIPELINE_OPENGL) {
+        if(CURRENT_GRAPHICS_PIPELINE == GRAPHICS_PIPELINE_OPENGL) {
             uint32_t texID;
             glGenTextures(1, &texID);
             glBindTexture(GL_TEXTURE_2D, texID);
 
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -63,6 +65,14 @@ namespace bird {
 
     Texture::~Texture() {
         delete m_pData;
+    }
+
+    void Texture::read() {
+
+    }
+
+    void Texture::write() {
+
     }
 
     TextureBuilder Texture::create(const std::string& path) {

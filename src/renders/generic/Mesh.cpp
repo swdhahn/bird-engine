@@ -16,6 +16,14 @@ namespace bird {
 
     Mesh::~Mesh() {}
 
+    void Mesh::read() {
+
+    }
+
+    void Mesh::write() {
+
+    }
+
     const Buffer<uint32_t>* Mesh::getIndexBuffer() const {
         return m_indexBuffer.get();
     }
@@ -30,6 +38,14 @@ namespace bird {
 
     const Buffer<float, 2>* Mesh::getTextureCoordBuffer() const {
         return m_textureCoordBuffer.get();
+    }
+
+    void Mesh::setMaterial(const std::shared_ptr<Material>& material) {
+        m_material = material;
+    }
+
+    const std::shared_ptr<Material>& Mesh::getMaterial() const {
+        return m_material;
     }
 
     MeshBuilder::MeshBuilder() {}
@@ -56,28 +72,25 @@ namespace bird {
         return *this;
     }
 
+    MeshBuilder& MeshBuilder::setMaterial(std::shared_ptr<Material> material) {
+        m_material = material;
+        return *this;
+    }
+
     std::shared_ptr<Mesh> MeshBuilder::build() {
         std::shared_ptr<Mesh> ptr = nullptr;
 
-        switch(GraphicsPipeline::getGraphicsPipelineType()) {
+        switch(CURRENT_GRAPHICS_PIPELINE) {
             case GRAPHICS_PIPELINE_OPENGL:
                 ptr = std::make_shared<gl::GLMesh>(std::move(m_indexBuffer), std::move(m_vertexBuffer), std::move(m_normalBuffer), std::move(m_textureCoordBuffer));
                 break;
             default:
                 throw std::runtime_error("No other graphics pipelines currently support shaders...");
         }
-        return std::move(ptr);
+        if(m_material != nullptr)
+            ptr->setMaterial(m_material);
+
+        return ptr;
     }
-
-    MeshBuilder& MeshBuilder::loadOBJ(const char* path) {
-        return *this;
-    }
-
-
-    MeshBuilder& MeshBuilder::loadGLTF(const char* path) {
-        return *this;
-    }
-
-
 
 }

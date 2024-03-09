@@ -4,6 +4,9 @@
 
 #include "AssetLoader.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "../util/stb_image.h"
+
 namespace bird {
 
     enum AssetType {
@@ -17,7 +20,7 @@ namespace bird {
     };
 
     std::vector<std::vector<const char*>> supportedFileTypes {
-            {".png", ".jpg", ".jpeg"}, // Textures
+            {".png", ".jpg", ".jpeg", ".tga", ".bmp", ".psd", ".gif", ".hdr", ".pic", ".pnm"}, // Textures
             {".obj", ".fbx", ".gltf"}, // 3D models
             {".gltf"}, // Scenes
             {".wav", ".mp3", ".ogg"}, // Sounds
@@ -41,7 +44,9 @@ namespace bird {
             std::string filePath = entry.path().c_str();
             for(;i < supportedFileTypes.size(); i++) {
                 for(const auto& ext : supportedFileTypes[i]) {
-                    if(entry.path().extension() == ext) {
+                    std::string mp = entry.path().extension();
+                    std::transform(mp.begin(), mp.end(), mp.begin(), [](unsigned char c){ return std::tolower(c); });
+                    if(mp == ext) {
                         fileSupported = true;
                         break;
                     }
@@ -194,12 +199,120 @@ namespace bird {
 
         file.close();
         std::cout << "File saved" << std::endl;
+        aiColor3D eColor(0.f, 0.f, 0.f);
 
+        // material order: diffuse, specular, ambient, shininess, opacity, emission, reflectivity
+
+        for(int i = 0; i < scene->mNumMaterials; i++) {
+            std::fstream mf((path + std::to_string(i)) + ".mat.bird", std::ios::out | std::ios::binary);
+
+            mf.write((char*)&scene->mMaterials[i]->mNumProperties, sizeof(uint16_t));
+            mf.write((char*)&scene->mMaterials[i]->mNumProperties, sizeof(uint16_t));
+            aiMaterial* aiMat = scene->mMaterials[i];
+            aiColor3D color(0.f, 0.f, 0.f);
+            float shininess, opacity, reflectivity, zero = 0;
+
+            // Diffuse color
+            if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_DIFFUSE, color)) {
+                mf.write((char*)&color, 3 * sizeof(float));
+            } else {
+                mf.write((char*)&eColor, 3 * sizeof(float));
+            }
+
+            // Specular color
+            if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_SPECULAR, color)) {
+                mf.write((char*)&color, 3 * sizeof(float));
+            } else {
+                mf.write((char*)&eColor, 3 * sizeof(float));
+            }
+
+            // Ambient color
+            if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_AMBIENT, color)) {
+                mf.write((char*)&color, 3 * sizeof(float));
+            } else {
+                mf.write((char*)&eColor, 3 * sizeof(float));
+            }
+
+            // Shininess
+            if (AI_SUCCESS == aiMat->Get(AI_MATKEY_SHININESS, shininess)) {
+                mf.write((char*)&shininess, sizeof(float));
+            } else {
+                mf.write((char*)&zero, sizeof(float));
+            }
+
+            // Opacity
+            if (AI_SUCCESS == aiMat->Get(AI_MATKEY_OPACITY, opacity)) {
+                mf.write((char*)&opacity, sizeof(float));
+            } else {
+                mf.write((char*)&zero, sizeof(float));
+            }
+
+            // Emission
+            if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_EMISSIVE, color)) {
+                mf.write((char*)&color, 3 * sizeof(float));
+            } else {
+                mf.write((char*)&eColor, 3 * sizeof(float));
+            }
+
+            // Reflectivity
+            if (AI_SUCCESS == aiMat->Get(AI_MATKEY_REFLECTIVITY, reflectivity)) {
+                mf.write((char*)&reflectivity, sizeof(float));
+            } else {
+                mf.write((char*)&zero, sizeof(float));
+            }
+            uint8_t totalTexCount = 0; // max 256 textures per material
+            for (unsigned int t = aiTextureType_DIFFUSE; t <= aiTextureType_UNKNOWN; ++t) {
+                aiTextureType texType = static_cast<aiTextureType>(t);
+                totalTexCount += aiMat->GetTextureCount(texType);
+            }
+
+            mf.write((char*)&totalTexCount, sizeof(uint8_t));
+
+            aiString path;
+            for (unsigned int t = aiTextureType_DIFFUSE; t <= aiTextureType_UNKNOWN; ++t) {
+                aiTextureType texType = static_cast<aiTextureType>(t);
+                unsigned int texCount = aiMat->GetTextureCount(texType);
+                for (unsigned int i = 0; i < texCount; ++i) {
+                    if (AI_SUCCESS == aiMat->GetTexture(texType, i, &path)) {
+                        mf.write((char*)&path.length, sizeof(uint16_t));
+                        mf.write((char*)path.C_Str(), path.length);
+                    }
+                }
+            }
+
+            mf.close();
+        }
+
+        std::cout << "Model Materials Saved!" << std::endl;
 
     }
 
     void AssetLoader::loadTexture(std::string& path) {
+        if(std::filesystem::exists(path + ".bird")) {
+            return;
+        }
         // load texture
+        int32_t width, height, channels;
+        std::cout << "Compiling Image: " << path << std::endl;
+
+        // Load the image
+        uint8_t *img = stbi_load(path.c_str(), &width, &height, &channels, 0);
+
+        if (img == NULL) {
+            std::cout << "Error in loading the image: " << path << std::endl;
+        }
+
+        std::cout << "Image Compiled. Saving file" << std::endl;
+        std::fstream file(path + ".bird", std::ios::out | std::ios::binary);
+
+        file.write((char*) &width, sizeof(int32_t));
+        file.write((char*) &height, sizeof(int32_t));
+        file.write((char*) &channels, sizeof(int32_t));
+        file.write((char*) img, width * height * channels * sizeof(uint8_t));
+
+        std::cout << "Image saved." << std::endl;
+
+        stbi_image_free(img);
     }
 
     void AssetLoader::loadSound(std::string& path) {

@@ -7,7 +7,7 @@
 namespace bird {
 
     WorldObject::WorldObject()
-    : m_worldPosition(), m_worldRotation(), m_localPosition(), m_localRotation(), m_scale(1),
+    : m_worldPosition(), m_worldRotation(glm::quat(1.0, 0.0, 0.0, 0.0)), m_localPosition(), m_localRotation(glm::quat(1.0, 0.0, 0.0, 0.0)), m_scale(1),
     m_transformMatrix(1), m_needsMatrixUpdate(true), m_id(++s_uniqueIdentificationIndex)
     {}
 
@@ -43,7 +43,7 @@ namespace bird {
         return m_worldPosition;
     }
 
-    void WorldObject::setWorldPosition(const Vector3 &mWorldPosition) {
+    void WorldObject::setWorldPosition(Vector3 mWorldPosition) {
         m_worldPosition = mWorldPosition;
         m_needsMatrixUpdate = true;
     }
@@ -52,7 +52,7 @@ namespace bird {
         return m_localPosition;
     }
 
-    void WorldObject::setLocalPosition(const Vector3 &mLocalPosition) {
+    void WorldObject::setLocalPosition(Vector3 mLocalPosition) {
         m_localPosition = mLocalPosition;
         m_needsMatrixUpdate = true;
     }
@@ -61,7 +61,7 @@ namespace bird {
         return m_worldRotation;
     }
 
-    void WorldObject::setWorldRotation(const Quaternion &mWorldRotation) {
+    void WorldObject::setWorldRotation(Quaternion mWorldRotation) {
         m_worldRotation = mWorldRotation;
         m_needsMatrixUpdate = true;
     }
@@ -70,7 +70,7 @@ namespace bird {
         return m_localRotation;
     }
 
-    void WorldObject::setLocalRotation(const Quaternion &mLocalRotation) {
+    void WorldObject::setLocalRotation(Quaternion mLocalRotation) {
         m_localRotation = mLocalRotation;
         m_needsMatrixUpdate = true;
     }
@@ -79,7 +79,7 @@ namespace bird {
         return m_transformMatrix;
     }
 
-    void WorldObject::setTransformMatrix(const Matrix4 &transformMatrix) {
+    void WorldObject::setTransformMatrix(Matrix4 transformMatrix) {
         m_transformMatrix = transformMatrix;
         m_needsMatrixUpdate = true;
     }
@@ -96,7 +96,7 @@ namespace bird {
         return m_scale;
     }
 
-    void WorldObject::setScale(const Vector3 &scale) {
+    void WorldObject::setScale(Vector3 scale) {
         m_scale = scale;
     }
 

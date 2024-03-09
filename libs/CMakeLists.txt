@@ -37,12 +37,6 @@ ExternalProject_Add(ASSIMP
         -Werror
         -Wdeprecated-declarations
         )
-ExternalProject_Add(DevIL
-        URL "https://github.com/DentonW/DevIL/archive/refs/tags/v1.8.0.tar.gz"
-        PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/DevIL
-        CMAKE_ARGS
-        "-DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>"
-        )
 ExternalProject_Add(VOLK
         URL "https://github.com/zeux/volk/archive/refs/tags/1.3.250.tar.gz"
         PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/VOLK
@@ -63,8 +57,6 @@ ExternalProject_Add(SPIRV_CROSS
         "-DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>"
         )
 
-#https://github.com/KhronosGroup/SPIRV-Cross/archive/refs/tags/MoltenVK-1.1.5.tar.gz
-
 ExternalProject_Add(SHADERC
         URL "https://github.com/google/shaderc/archive/refs/tags/v2023.6.tar.gz"
         PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/SHADERC
@@ -81,3 +73,24 @@ ExternalProject_Add_Step(SHADERC git-deps
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/SHADERC/src/SHADERC/utils/git-sync-deps
         COMMENT "Downloading Dependencies"
         )
+
+#ExternalProject_Add(SAIL
+#        GIT_REPOSITORY "https://github.com/HappySeaFox/sail.git"
+#        GIT_TAG v0.9.1
+#        PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/SAIL
+#        CMAKE_ARGS
+#        -DSAIL_BUILD_APPS=OFF
+#        -DSAIL_BUILD_EXAMPLES=OFF
+#        #-DBUILD_SHARED_LIBS=OFF
+#        "-DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>"
+#        )
+#
+#ExternalProject_Add_Step(SAIL comp-deps
+#        DEPENDERS build
+#        DEPENDEES patch
+#        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/SAIL/src/SAIL/extra/build
+#        COMMENT "Downloading Dependencies"
+#        )
+
+
+

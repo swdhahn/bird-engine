@@ -8,15 +8,17 @@
 #include <cstdint>
 #include <string>
 #include "../../util/Constants.h"
-#include "../../util/stb_image.h"
-#include "../GraphicsPipeline.h"
+
+#include "../../util/Resource.h"
 
 namespace bird {
 
     enum TextureFormat {
-        FORMAT_HAS_MIPMAPS = 0x1,
-        FORMAT_8RGBA = 0x2,
-        FORMAT_16RGBA = 0x4
+        FORMAT_HAS_MIPMAPS = 1,
+        FORMAT_8G = 1 << 1,
+        FORMAT_8GA = 1 << 2,
+        FORMAT_8RGB = 1 << 3,
+        FORMAT_8RGBA = 1 << 4
     };
 
     class Texture;
@@ -29,7 +31,7 @@ namespace bird {
         TextureBuilder& filterLinear();
         TextureBuilder& filterNearest();
 
-        std::unique_ptr<Texture> build();
+        std::shared_ptr<Texture> build();
     private:
         void* m_pData = nullptr;
         uint32_t m_width, m_height, m_channels;
@@ -50,10 +52,13 @@ namespace bird {
      * of an image.
      *
      */
-    class Texture {
+    class Texture : public Resource {
     public:
         explicit Texture(void* data, uint32_t width, uint32_t height, TextureFormat format);
         virtual ~Texture();
+
+        void read();
+        void write();
 
         static TextureBuilder create(const std::string& path);
         static TextureBuilder create(void* data, uint32_t width, uint32_t height, TextureFormat format);

@@ -25,19 +25,6 @@ namespace bird::gl {
             throw std::runtime_error("Couldn't initialize GLEW!");
         }
 
-
-        m_shader = ShaderBuilder()
-                .attachShaderFile("assets/shaders/default_vertex.glsl", VERTEX)
-                .attachShaderFile("assets/shaders/default_fragment.glsl", FRAGMENT)
-                .create();//*/
-
-        /*m_shader = ShaderBuilder()
-                .attachShaderFile("shaders/vertex.glsl", VERTEX)
-                .attachShaderFile("shaders/fragment.glsl", FRAGMENT)
-                .create();//*/
-
-        ((GLShader*)m_shader.get())->bind();
-
         glEnable(GL_DEPTH_TEST);
 
     }
@@ -59,17 +46,27 @@ namespace bird::gl {
 
         // render entities
 
-        m_shader->loadPerspectiveMatrix(m_camera->getPerspectiveMatrix());
-        m_shader->loadViewMatrix(m_camera->getTransformMatrix());
+
 
         for(int i = 0; i < entities.size(); i++) {
             ModelEntity* e = entities[i];
             for(int j = 0; j < e->getMeshes().size(); j++) {
                 GLMesh* m = (GLMesh*)e->getMeshes()[j].get();
+                const std::shared_ptr<Material> mat = e->getMeshes()[j]->getMaterial();
+                GLShader* shader = (GLShader*)mat->getShader().get();
+                shader->bind();
                 glBindVertexArray(m->getVAO());
                 // TODO: Uniform buffer objects and textures
-                m_shader->loadModelMatrix(e->getTransformMatrix());
+                shader->loadPerspectiveMatrix(m_camera->getPerspectiveMatrix());
+                shader->loadViewMatrix(m_camera->getTransformMatrix());
+                shader->loadModelMatrix(e->getTransformMatrix());
 
+                if(mat != nullptr) {
+                    for(int k = 0; k < mat->getTextures().size(); k++) {
+                        glActiveTexture(GL_TEXTURE0 + k);
+                        ((GLTexture*) mat->getTextures()[k].get())->bind();
+                    }
+                }
                 glDrawElements(GL_TRIANGLES, e->getMeshes()[j]->getIndexBuffer()->getBufferSize(), GL_UNSIGNED_INT, 0);
             }
         }

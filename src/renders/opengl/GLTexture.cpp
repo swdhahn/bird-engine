@@ -3,6 +3,7 @@
 //
 
 #include "GLTexture.h"
+#include "../GraphicsConstants.h"
 
 namespace bird::gl {
 

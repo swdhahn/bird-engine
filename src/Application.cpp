@@ -7,6 +7,7 @@
 namespace bird {
 
     Input* INPUT = nullptr;
+    ResourceManager* RESOURCE_MANAGER = nullptr;
 
     Application::Application(Scene& scene) : m_scene(&scene) {}
 
@@ -16,6 +17,7 @@ namespace bird {
         m_graphicsPipeline = new gl::GLPipeline();
         m_graphicsPipeline->init();
         INPUT = new Input(m_graphicsPipeline->getWindow().get());
+        RESOURCE_MANAGER = new ResourceManager();
 
         INPUT->addAction(Action("move_forward").addKey(KEY_W));
         INPUT->addAction(Action("move_backward").addKey(KEY_S));

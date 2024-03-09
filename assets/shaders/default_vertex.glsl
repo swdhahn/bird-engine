@@ -13,9 +13,7 @@ layout(push_constant, std430) uniform Uniforms
     mat4 perspective;
     mat4 view;
     mat4 model;
-    vec4 lightPos;
-    float xx;
-    int yy;
+    vec4 lightDir;
 } registerMapped;
 
 void main() {

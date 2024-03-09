@@ -8,17 +8,11 @@
 #include <fstream>
 #include <../renders/generic/Buffer.h>
 #include <../renders/GraphicsPipeline.h>
-#include "../renders/opengl/GLBuffer.h"
+#include <../renders/opengl/GLBuffer.h>
 
-/*
- * Assets are the resources that the game uses.
- * This includes textures, models, sounds, shaders,
- * and materials.
- *
- * The Assets class is responsible for loading and
- * unloading assets. Also storing assets in an optimized
- * way for both file storage and memory storage.
- */
+#include <../renders/generic/Texture.h>
+
+
 
 namespace bird {
 
@@ -81,44 +75,16 @@ namespace bird {
     };
 
     namespace Assets {
-        void loadTexture(std::string path);
+        std::shared_ptr<Texture> loadTexture(std::string path);
         std::vector<std::shared_ptr<Mesh>> loadMesh(std::string path);
         void loadSound(std::string path);
         void loadShader(std::string path);
-        void loadMaterial(std::string path);
+        std::shared_ptr<Material> loadMaterial(std::string path);
         void loadCustom(std::string path);
 
     }
 
-    template <typename T, uint8_t t_attributeSize = 3>
-    std::unique_ptr<Buffer<T, t_attributeSize>> createBuffer(BufferMode mode, size_t size) {
-        std::unique_ptr<Buffer<T, t_attributeSize>> ptr = nullptr;
 
-        switch(GraphicsPipeline::getGraphicsPipelineType()) {
-            case GRAPHICS_PIPELINE_OPENGL:
-                ptr = std::make_unique<bird::gl::GLBuffer<T, t_attributeSize>>(mode, size);
-
-                break;
-            default:
-                throw std::runtime_error("No other graphics pipelines currently support shaders...");
-        }
-        return ptr;
-    }
-
-    template <typename T, uint8_t t_attributeSize = 3>
-    std::unique_ptr<Buffer<T, t_attributeSize>> createBuffer(BufferMode mode, std::unique_ptr<T[]> pData, size_t size) {
-        std::unique_ptr<Buffer<T, t_attributeSize>> ptr = nullptr;
-
-        switch(GraphicsPipeline::getGraphicsPipelineType()) {
-            case GRAPHICS_PIPELINE_OPENGL:
-                ptr = std::make_unique<bird::gl::GLBuffer<T, t_attributeSize>>(mode, std::move(pData), size);
-
-                break;
-            default:
-                throw std::runtime_error("No other graphics pipelines currently support shaders...");
-        }
-        return std::move(ptr);
-    }
 
 }
 

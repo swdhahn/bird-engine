@@ -17,13 +17,12 @@ namespace bird::gl {
         ~GLBuffer();
 
         void initialize() override;
+        void initialize(std::unique_ptr<T[]> pData, size_t size) override;
         void update(T* pData, size_t size, uint32_t offset) override;
 
-        const uint32_t& getGLBasicBufferType() const;
     private:
         uint32_t m_bufferId;
         uint32_t m_bufferTarget;
-        uint32_t m_glBasicBufferType;
 
     };
     template <typename T, uint8_t t_attributeSize> GLBuffer<T, t_attributeSize>::GLBuffer(BufferMode bufferMode, size_t size)
@@ -31,26 +30,6 @@ namespace bird::gl {
     template <typename T, uint8_t t_attributeSize> GLBuffer<T, t_attributeSize>::GLBuffer(BufferMode bufferMode, std::unique_ptr<T[]> pData, size_t size)
             : Buffer<T, t_attributeSize>(bufferMode, std::move(pData), size), m_bufferId(0) {
         glGenBuffers(1, &m_bufferId);
-
-        if(typeid(T) == typeid(int8_t)) {
-            m_glBasicBufferType = GL_BYTE;
-        } else if(typeid(T) == typeid(uint8_t)) {
-            m_glBasicBufferType = GL_UNSIGNED_BYTE;
-        } else if(typeid(T) == typeid(int16_t)) {
-            m_glBasicBufferType = GL_SHORT;
-        } else if(typeid(T) == typeid(uint16_t)) {
-            m_glBasicBufferType = GL_UNSIGNED_SHORT;
-        } else if(typeid(T) == typeid(int32_t)) {
-            m_glBasicBufferType = GL_INT;
-        } else if(typeid(T) == typeid(uint32_t)) {
-            m_glBasicBufferType = GL_UNSIGNED_INT;
-        } else if(typeid(T) == typeid(float)) {
-            m_glBasicBufferType = GL_FLOAT;
-        } else if(typeid(T) == typeid(double)) {
-            m_glBasicBufferType = GL_DOUBLE;
-        } else {
-            std::cout << "You did not choose an OpenGL Buffer type! Functionality is limited, I hope you know what you're doing!" << std::endl;
-        }
 
 
         if(bufferMode & BUFFER_ARRAY) {
@@ -62,10 +41,11 @@ namespace bird::gl {
         } else if(bufferMode & BUFFER_UNIFORM) {
             m_bufferTarget = BUFFER_UNIFORM;
         } else {
-            throw std::invalid_argument("You must declare buffer's target in bufferMode parameter: BUFFER_ARRAY, etc..");
+            throw std::invalid_argument("You must declare buffer's target in bufferMode parameter: BUFFER_ARRAY, BUFFER_ELEMENT_ARRAY, BUFFER_TEXTURE, or BUFFER_UNIFORM.");
         }
         if(bufferMode & BUFFER_MAPPED) {
             //Buffer<T, t_attributeSize>::m_pData = glMapBuffer(m_bufferTarget, GL_WRITE_ONLY);
+            std::cout << "Sorry! Buffer mapping is not implemented!!" << std::endl;
         } else if(!(bufferMode & BUFFER_STAGED | bufferMode & BUFFER_MAPPED)) {
             throw std::invalid_argument("You must declare buffer as BUFFER_MAPPED or BUFFER_STAGED in bufferMode parameter.");
         }
@@ -76,6 +56,15 @@ namespace bird::gl {
     }
 
     template <typename T, uint8_t t_attributeSize> void GLBuffer<T, t_attributeSize>::initialize() {
+        glBindBuffer(m_bufferTarget, m_bufferId);
+        glBufferData(m_bufferTarget, Buffer<T, t_attributeSize>::m_size * sizeof(T), Buffer<T, t_attributeSize>::m_pData.get(), GL_STATIC_DRAW);
+        if(m_bufferTarget == BUFFER_UNIFORM) {
+            glBindBufferRange(m_bufferTarget, 0, m_bufferId, 0, Buffer<T, t_attributeSize>::m_size * sizeof(T));
+        }
+    }
+
+    template <typename T, uint8_t t_attributeSize> void GLBuffer<T, t_attributeSize>::initialize(std::unique_ptr<T[]> pData, size_t size) {
+        Buffer<T, t_attributeSize>::m_pData = std::move(pData);
         glBindBuffer(m_bufferTarget, m_bufferId);
         glBufferData(m_bufferTarget, Buffer<T, t_attributeSize>::m_size * sizeof(T), Buffer<T, t_attributeSize>::m_pData.get(), GL_STATIC_DRAW);
     }
@@ -89,10 +78,6 @@ namespace bird::gl {
             //memcpy(Buffer<T, t_attributeSize>::m_pData, pData + offset, size * sizeof(T));
         }
 
-    }
-
-    template <typename T, uint8_t t_attributeSize> const uint32_t& GLBuffer<T, t_attributeSize>::getGLBasicBufferType() const {
-        return m_glBasicBufferType;
     }
 
 } // bird

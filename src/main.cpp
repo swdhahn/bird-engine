@@ -2,8 +2,8 @@
 #include <iostream>
 #include <vector>
 #include "Application.h"
-#include "ApplicationVK.h"
-#include "util/Assets.h"
+//#include "ApplicationVK.h"
+//#include "util/Assets.h"
 
 /*
  *
@@ -14,6 +14,7 @@
  * 1. We loop through shaders. loop through materials in each shader.
  * 2. We loop through models. Connect pair shader material and material for each mesh. Loop through meshes.
  *
+ * shader -> entity -> mesh -> material
  *
  */
 
@@ -58,9 +59,29 @@ class MainScene : public bird::Scene {
 public:
 
     void init() override {
-        // mesh = bird::Assets::loadMesh("assets/models/Lowpoly_tree_sample.obj");
-        mesh = bird::Assets::loadMesh("assets/models/bugatti/bugatti.obj");
-        // mesh = bird::Assets::loadMesh("assets/models/cube.obj");
+        std::shared_ptr<bird::Shader> shader = bird::RESOURCE_MANAGER->loadShader(bird::ShaderBuilder()
+                .attachShaderFile("assets/shaders/default_vertex.glsl", bird::ShaderPipeline::VERTEX)
+                .attachShaderFile("assets/shaders/default_fragment.glsl", bird::ShaderPipeline::FRAGMENT));
+         mesh = bird::RESOURCE_MANAGER->loadMesh("assets/models/Lowpoly_tree_sample.obj");
+         /*std::shared_ptr<bird::Material> mat = std::make_shared<bird::Material>();
+         mat->addTexture(bird::Assets::loadTexture("assets/textures/texture.jpg"));
+         std::shared_ptr<bird::Material> defaultMat = std::make_shared<bird::Material>();
+         defaultMat->addTexture(bird::Assets::loadTexture("assets/textures/waterfall.png"));*/
+         //mesh[0]->setMaterial(mat);
+        //mesh = bird::RESOURCE_MANAGER->loadMesh("assets/models/bugatti/bugatti.obj");
+        std::shared_ptr<bird::Material> mat = std::make_shared<bird::Material>();
+        mat->addTexture(bird::RESOURCE_MANAGER->loadTexture("assets/textures/texture.jpg"));
+        mat->setShader(shader);
+         for(int i = 0; i < mesh.size(); i++) {
+             if(mesh[i]->getMaterial() == nullptr) {
+                 mesh[i]->setMaterial(mat);
+             } else {
+                 mesh[i]->getMaterial()->addTexture(bird::RESOURCE_MANAGER->loadTexture("assets/textures/waterfall.png"));
+                 mesh[i]->getMaterial()->setShader(shader);
+             }
+         }
+        //mesh = bird::Assets::loadMesh("assets/models/cube.obj");
+
 
         e = new TestEntity(mesh);
 

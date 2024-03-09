@@ -3,7 +3,6 @@
 //
 
 #include "Shader.h"
-#include "../GraphicsPipeline.h"
 #include "GLShader.h"
 
 namespace bird {
@@ -12,7 +11,7 @@ namespace bird {
 
         std::unique_ptr<Shader> ptr = nullptr;
 
-        switch(GraphicsPipeline::getGraphicsPipelineType()) {
+        switch(CURRENT_GRAPHICS_PIPELINE) {
             case GRAPHICS_PIPELINE_OPENGL:
                 ptr = std::make_unique<gl::GLShader>(m_shaderFiles);
 
@@ -36,6 +35,14 @@ namespace bird {
     }
 
     Shader::~Shader() {
+
+    }
+
+    void Shader::write() {
+
+    }
+
+    void Shader::read() {
 
     }
 
