@@ -25,7 +25,10 @@ namespace bird::gl {
             throw std::runtime_error("Couldn't initialize GLEW!");
         }
 
+        initializeGraphicSpecifics();
+
         glEnable(GL_DEPTH_TEST);
+        glEnable(GL_DEBUG_OUTPUT);
 
     }
 
@@ -46,7 +49,11 @@ namespace bird::gl {
 
         // render entities
 
+        GlobalUBOData global;
+        MaterialUBOData matData;
 
+        global.perspective = m_camera->getPerspectiveMatrix();
+        global.view = m_camera->getTransformMatrix();
 
         for(int i = 0; i < entities.size(); i++) {
             ModelEntity* e = entities[i];
@@ -56,10 +63,27 @@ namespace bird::gl {
                 GLShader* shader = (GLShader*)mat->getShader().get();
                 shader->bind();
                 glBindVertexArray(m->getVAO());
+
+                global.model = e->getTransformMatrix();
+
+                m_globalUBO->update(&global, 1, 0);
+
+                //std::cout << "Material:" << mat.get()->getDiffuseColor() << std::endl;
+
+                matData.color = mat.get()->getDiffuseColor();
+                matData.specularColor = mat.get()->getSpecularColor();
+                matData.ambientColor = mat.get()->getAmbientColor();
+                matData.shininess = mat.get()->getShininess();
+
+                m_materialUBO->update(&matData, 1, 0);
+
+                //glGetBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(MaterialUBOData), &data);
+                //std::cout << "Material:" << data.color << std::endl;
+
                 // TODO: Uniform buffer objects and textures
-                shader->loadPerspectiveMatrix(m_camera->getPerspectiveMatrix());
-                shader->loadViewMatrix(m_camera->getTransformMatrix());
-                shader->loadModelMatrix(e->getTransformMatrix());
+                //shader->loadPerspectiveMatrix(m_camera->getPerspectiveMatrix());
+                //shader->loadViewMatrix(m_camera->getTransformMatrix());
+                //shader->loadModelMatrix(e->getTransformMatrix());
 
                 if(mat != nullptr) {
                     for(int k = 0; k < mat->getTextures().size(); k++) {

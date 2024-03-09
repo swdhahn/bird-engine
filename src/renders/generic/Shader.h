@@ -61,7 +61,7 @@ class Shader : public Resource {
     std::vector<uint32_t> compileShader(const std::string& source, const std::string& source_name, const std::string& prevSource,
                                        shaderc_shader_kind kind,
                                        bool optimize = false);
-    std::string decompileShader_glsl(std::vector<uint32_t> spirv_binary, const std::string& prevShaderSource, ShaderPipeline pipeline);
+    std::pair<std::string, std::vector<std::pair<uint32_t, std::string>>> decompileShader_glsl(std::vector<uint32_t> spirv_binary, const std::string& prevShaderSource, ShaderPipeline pipeline);
 
 } // bird
 

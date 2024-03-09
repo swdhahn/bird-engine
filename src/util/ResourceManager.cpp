@@ -107,7 +107,7 @@ namespace bird {
             std::unique_ptr<bird::Buffer<uint32_t>> indexBuffer = createBuffer<uint32_t>(static_cast<bird::BufferMode>(bird::BUFFER_STAGED | bird::BUFFER_ELEMENT_ARRAY), std::move(indices), indexCount);
             std::unique_ptr<bird::Buffer<float>> vertexBuffer = createBuffer<float>(static_cast<bird::BufferMode>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY), std::move(vertices), vertexCount * vertexSize);
             std::unique_ptr<bird::Buffer<float>> normalBuffer = createBuffer<float>(static_cast<bird::BufferMode>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY), std::move(normals), normalCount * vertexSize);
-            std::unique_ptr<bird::Buffer<float, 2>> textureCoordBuffer = createBuffer<float, 2>(static_cast<bird::BufferMode>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY), std::move(textureCoords), textureCoordCount);
+            std::unique_ptr<bird::Buffer<float, 2>> textureCoordBuffer = createBuffer<float, 2>(static_cast<bird::BufferMode>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY), std::move(textureCoords), textureCoordCount * vertexSize);
             bird::MeshBuilder mb = bird::MeshBuilder();
             mb.setIndexBuffer(std::move(indexBuffer))
                     .setVertexBuffer(std::move(vertexBuffer))
@@ -152,6 +152,8 @@ namespace bird {
         file.read(reinterpret_cast<char*>(&mat->m_emission), sizeof(float) * 3);
         file.read(reinterpret_cast<char*>(&mat->m_reflectivity), sizeof(float));
 
+        std::cout << "Diffuse: " << mat->m_diffuseColor << std::endl;
+
         uint8_t textureCount = 0;
         file.read(reinterpret_cast<char*>(&textureCount), sizeof(uint8_t));
         for(int i = 0; i < textureCount; i++) {
@@ -167,7 +169,6 @@ namespace bird {
 
             std::shared_ptr<Texture> tex = loadTexture("../" + texPath);
             mat->addTexture(tex);
-            addResource(texPath, tex, TEXTURE);
 
         }
 

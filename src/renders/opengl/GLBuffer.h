@@ -28,9 +28,8 @@ namespace bird::gl {
     template <typename T, uint8_t t_attributeSize> GLBuffer<T, t_attributeSize>::GLBuffer(BufferMode bufferMode, size_t size)
             : GLBuffer(bufferMode, nullptr, size) {}
     template <typename T, uint8_t t_attributeSize> GLBuffer<T, t_attributeSize>::GLBuffer(BufferMode bufferMode, std::unique_ptr<T[]> pData, size_t size)
-            : Buffer<T, t_attributeSize>(bufferMode, std::move(pData), size), m_bufferId(0) {
+            : Buffer<T, t_attributeSize>(bufferMode, std::move(pData), size), m_bufferId(0), m_bufferTarget(0) {
         glGenBuffers(1, &m_bufferId);
-
 
         if(bufferMode & BUFFER_ARRAY) {
             m_bufferTarget = GL_ARRAY_BUFFER;
@@ -39,7 +38,7 @@ namespace bird::gl {
         } else if(bufferMode & BUFFER_TEXTURE) {
             m_bufferTarget = BUFFER_TEXTURE;
         } else if(bufferMode & BUFFER_UNIFORM) {
-            m_bufferTarget = BUFFER_UNIFORM;
+            m_bufferTarget = GL_UNIFORM_BUFFER;
         } else {
             throw std::invalid_argument("You must declare buffer's target in bufferMode parameter: BUFFER_ARRAY, BUFFER_ELEMENT_ARRAY, BUFFER_TEXTURE, or BUFFER_UNIFORM.");
         }
@@ -49,6 +48,7 @@ namespace bird::gl {
         } else if(!(bufferMode & BUFFER_STAGED | bufferMode & BUFFER_MAPPED)) {
             throw std::invalid_argument("You must declare buffer as BUFFER_MAPPED or BUFFER_STAGED in bufferMode parameter.");
         }
+
     }
 
     template <typename T, uint8_t t_attributeSize> GLBuffer<T, t_attributeSize>::~GLBuffer() {
@@ -58,8 +58,8 @@ namespace bird::gl {
     template <typename T, uint8_t t_attributeSize> void GLBuffer<T, t_attributeSize>::initialize() {
         glBindBuffer(m_bufferTarget, m_bufferId);
         glBufferData(m_bufferTarget, Buffer<T, t_attributeSize>::m_size * sizeof(T), Buffer<T, t_attributeSize>::m_pData.get(), GL_STATIC_DRAW);
-        if(m_bufferTarget == BUFFER_UNIFORM) {
-            glBindBufferRange(m_bufferTarget, 0, m_bufferId, 0, Buffer<T, t_attributeSize>::m_size * sizeof(T));
+        if(m_bufferTarget == GL_UNIFORM_BUFFER) {
+            glBindBufferRange(m_bufferTarget, Buffer<T, t_attributeSize>::m_bindingPoint, m_bufferId, 0, Buffer<T, t_attributeSize>::m_size * sizeof(T));
         }
     }
 
@@ -67,6 +67,10 @@ namespace bird::gl {
         Buffer<T, t_attributeSize>::m_pData = std::move(pData);
         glBindBuffer(m_bufferTarget, m_bufferId);
         glBufferData(m_bufferTarget, Buffer<T, t_attributeSize>::m_size * sizeof(T), Buffer<T, t_attributeSize>::m_pData.get(), GL_STATIC_DRAW);
+
+        if(m_bufferTarget == GL_UNIFORM_BUFFER) {
+            glBindBufferRange(m_bufferTarget, Buffer<T, t_attributeSize>::m_bindingPoint, m_bufferId, 0, Buffer<T, t_attributeSize>::m_size * sizeof(T));
+        }
     }
 
     template <typename T, uint8_t t_attributeSize> void GLBuffer<T, t_attributeSize>::update(T* pData, size_t size, uint32_t offset) {

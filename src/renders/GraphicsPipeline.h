@@ -14,12 +14,27 @@
 
 namespace bird {
 
+    struct GlobalUBOData {
+        Matrix4 perspective;
+        Matrix4 view;
+        Matrix4 model;
+    };
+
+    struct MaterialUBOData {
+        Vector3 color;
+        Vector3 specularColor;
+        Vector3 ambientColor;
+        float shininess;
+    };
+
     class GraphicsPipeline {
     public:
         GraphicsPipeline(GraphicsPipelineType graphicsPipeline);
         virtual ~GraphicsPipeline();
         virtual void init() = 0;
         virtual void cleanUp() = 0;
+
+        void initializeGraphicSpecifics();
 
         virtual void renderRootScene(const Scene* scene) = 0;
 
@@ -33,6 +48,8 @@ namespace bird {
         std::unique_ptr<Window> m_pWindow = nullptr;
         Camera* m_camera;
         DefaultCamera* m_defaultCamera;
+        std::unique_ptr<Buffer<MaterialUBOData>> m_materialUBO;
+        std::unique_ptr<Buffer<GlobalUBOData>> m_globalUBO;
 
         void getModelEntities(const Scene* const scene, std::vector<ModelEntity*>& entities) const;
 

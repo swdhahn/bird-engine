@@ -39,9 +39,13 @@ namespace bird {
         uint8_t getAttributeSize() const {
             return t_attributeSize;
         }
+        void setBindingPoint(uint32_t bindingPoint) {
+            m_bindingPoint = bindingPoint;
+        }
 
     protected:
         size_t m_size;
+        uint32_t m_bindingPoint;
         BufferMode m_bufferMode;
         std::unique_ptr<T[]> m_pData;
 
@@ -50,7 +54,7 @@ namespace bird {
     template <typename T, uint8_t t_attributeSize> Buffer<T, t_attributeSize>::Buffer(BufferMode mode, size_t size)
             : Buffer(mode, std::make_unique<T[]>(new T[size]), size) {}
     template <typename T, uint8_t t_attributeSize> Buffer<T, t_attributeSize>::Buffer(BufferMode mode, std::unique_ptr<T[]> pData, size_t size)
-            : m_size(size), m_bufferMode(mode), m_pData(std::move(pData)) {}
+            : m_size(size), m_bufferMode(mode), m_pData(std::move(pData)), m_bindingPoint(0) {}
     template <typename T, uint8_t t_attributeSize> Buffer<T, t_attributeSize>::~Buffer() {}
 
     template <typename T, uint8_t t_attributeSize> const size_t& Buffer<T, t_attributeSize>::getBufferSize() const {

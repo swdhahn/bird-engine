@@ -89,7 +89,6 @@ namespace bird {
         shaderc::Compiler compiler;
         shaderc::CompileOptions options;
 
-
         //std::string source = readFileToString(source_name);
 
         // Like -DMY_DEFINE=1
@@ -109,9 +108,16 @@ namespace bird {
         return {module.cbegin(), module.cend()};
     }
 
-    std::string decompileShader_glsl(std::vector<uint32_t> spirv_binary, const std::string& prevShaderSource, ShaderPipeline pipeline) {
+    std::pair<std::string, std::vector<std::pair<uint32_t, std::string>>> decompileShader_glsl(std::vector<uint32_t> spirv_binary, const std::string& prevShaderSource, ShaderPipeline pipeline) {
         spirv_cross::CompilerGLSL glsl(std::move(spirv_binary));
         auto resources = glsl.get_shader_resources();
+
+        std::vector<std::pair<uint32_t, std::string>> uniform_buffers(resources.uniform_buffers.size());
+
+        for(int i = 0; i < resources.uniform_buffers.size(); i++) {
+            uniform_buffers[i] = std::pair<uint32_t, std::string>(glsl.get_decoration(resources.uniform_buffers[i].id, spv::DecorationBinding), resources.uniform_buffers[i].name);
+        }
+
 
         // Set some options.
         spirv_cross::CompilerGLSL::Options options;
@@ -122,7 +128,7 @@ namespace bird {
         glsl.set_common_options(options);
 
         // Compile to GLSL, ready to give to GL driver.
-        return glsl.compile();
+        return std::pair<std::string, std::vector<std::pair<uint32_t, std::string>>>(glsl.compile(), uniform_buffers);
     }
 
 } // bird

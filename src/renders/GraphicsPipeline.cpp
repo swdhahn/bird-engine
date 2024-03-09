@@ -12,10 +12,22 @@ namespace bird {
         CURRENT_GRAPHICS_PIPELINE = graphicsPipeline;
         m_defaultCamera = new DefaultCamera(1280, 720); // TODO: Make this configurable
         m_camera = m_defaultCamera;
+
     }
 
     GraphicsPipeline::~GraphicsPipeline() {
         delete m_defaultCamera;
+    }
+
+    void GraphicsPipeline::initializeGraphicSpecifics() {
+        std::unique_ptr<GlobalUBOData[]> globalUBOData = std::make_unique<GlobalUBOData[]>(1);
+        m_globalUBO = createBuffer<GlobalUBOData>(static_cast<BufferMode>(BUFFER_UNIFORM | BUFFER_STAGED), std::move(globalUBOData), 1);
+        m_globalUBO->setBindingPoint(0);
+        m_globalUBO->initialize();
+        std::unique_ptr<MaterialUBOData[]> material = std::make_unique<MaterialUBOData[]>(1);
+        m_materialUBO = createBuffer<MaterialUBOData>(static_cast<BufferMode>(BUFFER_UNIFORM | BUFFER_STAGED), std::move(material), 1);
+        m_materialUBO->setBindingPoint(1);
+        m_materialUBO->initialize();
     }
 
     std::unique_ptr<Window>& GraphicsPipeline::getWindow() {

@@ -206,31 +206,29 @@ namespace bird {
         for(int i = 0; i < scene->mNumMaterials; i++) {
             std::fstream mf((path + std::to_string(i)) + ".mat.bird", std::ios::out | std::ios::binary);
 
-            mf.write((char*)&scene->mMaterials[i]->mNumProperties, sizeof(uint16_t));
-            mf.write((char*)&scene->mMaterials[i]->mNumProperties, sizeof(uint16_t));
             aiMaterial* aiMat = scene->mMaterials[i];
             aiColor3D color(0.f, 0.f, 0.f);
             float shininess, opacity, reflectivity, zero = 0;
 
             // Diffuse color
             if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_DIFFUSE, color)) {
-                mf.write((char*)&color, 3 * sizeof(float));
+                mf.write((char*)&color.r, 3 * sizeof(float));
             } else {
-                mf.write((char*)&eColor, 3 * sizeof(float));
+                mf.write((char*)&eColor.r, 3 * sizeof(float));
             }
 
             // Specular color
             if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_SPECULAR, color)) {
-                mf.write((char*)&color, 3 * sizeof(float));
+                mf.write((char*)&color.r, 3 * sizeof(float));
             } else {
-                mf.write((char*)&eColor, 3 * sizeof(float));
+                mf.write((char*)&eColor.r, 3 * sizeof(float));
             }
 
             // Ambient color
             if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_AMBIENT, color)) {
-                mf.write((char*)&color, 3 * sizeof(float));
+                mf.write((char*)&color.r, 3 * sizeof(float));
             } else {
-                mf.write((char*)&eColor, 3 * sizeof(float));
+                mf.write((char*)&eColor.r, 3 * sizeof(float));
             }
 
             // Shininess
@@ -249,9 +247,9 @@ namespace bird {
 
             // Emission
             if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_EMISSIVE, color)) {
-                mf.write((char*)&color, 3 * sizeof(float));
+                mf.write((char*)&color.r, 3 * sizeof(float));
             } else {
-                mf.write((char*)&eColor, 3 * sizeof(float));
+                mf.write((char*)&eColor.r, 3 * sizeof(float));
             }
 
             // Reflectivity
@@ -324,6 +322,7 @@ namespace bird {
     }
 
     void AssetLoader::loadMaterial(std::string& path) {
+        return;
         // load material
         // load model
         if(std::filesystem::exists(path + ".bird")) {

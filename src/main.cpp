@@ -74,10 +74,12 @@ public:
         mat->setShader(shader);
          for(int i = 0; i < mesh.size(); i++) {
              if(mesh[i]->getMaterial() == nullptr) {
-                 mesh[i]->setMaterial(mat);
+                 //mesh[i]->setMaterial(mat);
              } else {
                  mesh[i]->getMaterial()->addTexture(bird::RESOURCE_MANAGER->loadTexture("assets/textures/waterfall.png"));
                  mesh[i]->getMaterial()->setShader(shader);
+                 //std::cout << "Material:" << mesh[i]->getMaterial()->getDiffuseColor() << std::endl;
+                 //mesh[i]->getMaterial()->setDiffuseColor(bird::Vector3(1, 0, 0));
              }
          }
         //mesh = bird::Assets::loadMesh("assets/models/cube.obj");
