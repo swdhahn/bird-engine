@@ -4,6 +4,9 @@ libs/bin/*
 !libs/CMakeLists.txt
 cmake-build-debug/
 cmake-build-release/
+
+build/
+
 .idea/
 .DS_STORE
 
