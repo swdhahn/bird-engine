@@ -8,114 +8,117 @@
 
 namespace bird {
 
-    std::unique_ptr<Shader> ShaderBuilder::create() {
+std::unique_ptr<Shader> ShaderBuilder::create() {
 
-        std::unique_ptr<Shader> ptr = nullptr;
+  std::unique_ptr<Shader> ptr = nullptr;
 
-        switch(GraphicsPipeline::getGraphicsPipelineType()) {
-            case GRAPHICS_PIPELINE_OPENGL:
-                ptr = std::make_unique<gl::GLShader>(m_shaderFiles);
+  switch (GraphicsPipeline::getGraphicsPipelineType()) {
+  case GRAPHICS_PIPELINE_OPENGL:
+    ptr = std::make_unique<gl::GLShader>(m_shaderFiles);
 
-                break;
-            default:
-                throw std::runtime_error("No other graphics pipelines currently support shaders...");
-        }
+    break;
+  default:
+    throw std::runtime_error(
+        "No other graphics pipelines currently support shaders...");
+  }
 
-        m_shaderFiles.clear();
+  m_shaderFiles.clear();
 
-        return std::move(ptr);
-    }
+  return std::move(ptr);
+}
 
-    ShaderBuilder& ShaderBuilder::attachShaderFile(std::string fileName, const ShaderPipeline shaderStage) {
-        m_shaderFiles.push_back(std::pair<std::string, ShaderPipeline>(fileName, shaderStage));
-        return *this;
-    }
+ShaderBuilder &
+ShaderBuilder::attachShaderFile(std::string fileName,
+                                const ShaderPipeline shaderStage) {
+  m_shaderFiles.push_back(
+      std::pair<std::string, ShaderPipeline>(fileName, shaderStage));
+  return *this;
+}
 
-    Shader::Shader() {
+Shader::Shader() {}
 
-    }
+Shader::~Shader() {}
 
-    Shader::~Shader() {
+void Shader::initResources(std::vector<uint32_t> spirv_binary) {
+  spirv_cross::Compiler comp(std::move(spirv_binary));
 
-    }
+  spirv_cross::ShaderResources res = comp.get_shader_resources();
 
-    void Shader::initResources(std::vector<uint32_t> spirv_binary) {
-        spirv_cross::Compiler comp(std::move(spirv_binary));
+  spirv_cross::BufferRange ranges =
+      comp.get_active_buffer_ranges(res.push_constant_buffers.front().id)
+          .front();
 
-        spirv_cross::ShaderResources res = comp.get_shader_resources();
+  for (int i = 0; i < res.push_constant_buffers.size(); i++) {
+    std::cout << res.push_constant_buffers[i].name << "  "
+              << res.push_constant_buffers[i].type_id << "   "
+              << res.push_constant_buffers[i].id << "   " << std::endl;
+  }
+  //*/
+}
 
-        spirv_cross::BufferRange ranges = comp.get_active_buffer_ranges(res.push_constant_buffers.front().id).front();
+std::string preprocessShader(const std::string &source_name,
+                             shaderc_shader_kind kind,
+                             const std::string &source) {
+  shaderc::Compiler compiler;
+  shaderc::CompileOptions options;
 
-        for(int i = 0; i < res.push_constant_buffers.size(); i++) {
-            std::cout << res.push_constant_buffers[i].name << "  "
-            << res.push_constant_buffers[i].type_id  << "   "
-            << res.push_constant_buffers[i].id  << "   "
-            << std::endl;
-        }
-        //*/
-    }
+  // Like -DMY_DEFINE=1
+  // options.AddMacroDefinition("MY_DEFINE", "1");
 
+  shaderc::PreprocessedSourceCompilationResult result =
+      compiler.PreprocessGlsl(source, kind, source_name.c_str(), options);
 
-    std::string preprocessShader(const std::string& source_name, shaderc_shader_kind kind,
-                                 const std::string& source) {
-        shaderc::Compiler compiler;
-        shaderc::CompileOptions options;
+  if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
+    std::cerr << result.GetErrorMessage();
+    return "";
+  }
 
-        // Like -DMY_DEFINE=1
-        //options.AddMacroDefinition("MY_DEFINE", "1");
+  return {result.cbegin(), result.cend()};
+}
 
-        shaderc::PreprocessedSourceCompilationResult result =
-                compiler.PreprocessGlsl(source, kind, source_name.c_str(), options);
+std::vector<uint32_t> compileShader(const std::string &source_name,
+                                    const std::string &source,
+                                    const std::string &prevSource,
+                                    shaderc_shader_kind kind, bool optimize) {
+  shaderc::Compiler compiler;
+  shaderc::CompileOptions options;
 
+  // std::string source = readFileToString(source_name);
 
-        if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
-            std::cerr << result.GetErrorMessage();
-            return "";
-        }
+  // Like -DMY_DEFINE=1
+  // options.AddMacroDefinition("MY_DEFINE", "1");
+  if (optimize)
+    options.SetOptimizationLevel(shaderc_optimization_level_size);
+  options.SetPreserveBindings(true);
+  options.SetGenerateDebugInfo();
 
-        return {result.cbegin(), result.cend()};
-    }
+  shaderc::SpvCompilationResult module =
+      compiler.CompileGlslToSpv(source, kind, (source_name).c_str(), options);
 
-    std::vector<uint32_t> compileShader(const std::string& source_name, const std::string& source, const std::string& prevSource,
-                                        shaderc_shader_kind kind,
-                                        bool optimize) {
-        shaderc::Compiler compiler;
-        shaderc::CompileOptions options;
+  if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
+    std::cerr << module.GetErrorMessage();
+    return std::vector<uint32_t>();
+  }
 
+  return {module.cbegin(), module.cend()};
+}
 
-        //std::string source = readFileToString(source_name);
+std::string decompileShader_glsl(std::vector<uint32_t> spirv_binary,
+                                 const std::string &prevShaderSource,
+                                 ShaderPipeline pipeline) {
+  spirv_cross::CompilerGLSL glsl(std::move(spirv_binary));
+  auto resources = glsl.get_shader_resources();
 
-        // Like -DMY_DEFINE=1
-        //options.AddMacroDefinition("MY_DEFINE", "1");
-        if (optimize) options.SetOptimizationLevel(shaderc_optimization_level_size);
-        options.SetPreserveBindings(true);
-        options.SetGenerateDebugInfo();
+  // Set some options.
+  spirv_cross::CompilerGLSL::Options options;
+  options.enable_420pack_extension = false;
+  options.version = 330;
+  options.es = false;
+  // options.separate_shader_objects = true;
+  glsl.set_common_options(options);
 
-        shaderc::SpvCompilationResult module =
-                compiler.CompileGlslToSpv(source, kind, (source_name).c_str(), options);
+  // Compile to GLSL, ready to give to GL driver.
+  return glsl.compile();
+}
 
-        if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
-            std::cerr << module.GetErrorMessage();
-            return std::vector<uint32_t>();
-        }
-
-        return {module.cbegin(), module.cend()};
-    }
-
-    std::string decompileShader_glsl(std::vector<uint32_t> spirv_binary, const std::string& prevShaderSource, ShaderPipeline pipeline) {
-        spirv_cross::CompilerGLSL glsl(std::move(spirv_binary));
-        auto resources = glsl.get_shader_resources();
-
-        // Set some options.
-        spirv_cross::CompilerGLSL::Options options;
-        options.enable_420pack_extension = false;
-        options.version = 330;
-        options.es = false;
-        //options.separate_shader_objects = true;
-        glsl.set_common_options(options);
-
-        // Compile to GLSL, ready to give to GL driver.
-        return glsl.compile();
-    }
-
-} // bird
+} // namespace bird

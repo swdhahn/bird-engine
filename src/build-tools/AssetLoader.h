@@ -5,40 +5,40 @@
 #ifndef BIRD_ASSETLOADER_H
 #define BIRD_ASSETLOADER_H
 
-#include <iostream>
-#include <fstream>
 #include <assimp/Importer.hpp>
-#include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <assimp/scene.h>
+#include <fstream>
+#include <iostream>
+#include <vector>
 
 #include <filesystem>
 
 namespace bird {
 
-    extern std::vector<std::vector<const char*>> supportedFileTypes;
+extern std::vector<std::vector<const char *>> supportedFileTypes;
 
-    class AssetLoader {
-    public:
-        AssetLoader();
-        ~AssetLoader();
+class AssetLoader {
+public:
+  AssetLoader();
+  ~AssetLoader();
 
-        void init(std::string assetPath);
+  void init(std::string assetPath);
 
-        void loadAsset();
+  void loadAsset();
 
-        void loadScene(std::string& path);
-        void loadModel(std::string& path);
-        void loadTexture(std::string& path);
-        void loadSound(std::string& path);
-        void loadShader(std::string& path);
-        void loadMaterial(std::string& path);
-        void loadCustom(std::string& path);
+  void loadScene(std::string &path);
+  void loadModel(std::string &path);
+  void loadTexture(std::string &path);
+  void loadSound(std::string &path);
+  void loadShader(std::string &path);
+  void loadMaterial(std::string &path);
+  void loadCustom(std::string &path);
 
-    private:
-        Assimp::Importer importer;
+private:
+  Assimp::Importer importer;
+};
 
-    };
+} // namespace bird
 
-} // bird
-
-#endif //BIRD_ASSETLOADER_H
+#endif // BIRD_ASSETLOADER_H

@@ -5,66 +5,69 @@
 #ifndef BIRD_WORLDOBJECT_H
 #define BIRD_WORLDOBJECT_H
 
-#include "../util/Math.h"
 #include "../util/Input.h"
+#include "../util/Math.h"
+
+#include <bits/stdc++.h>
 
 namespace bird {
 
-    extern Input* INPUT;
+extern Input *INPUT;
 
-    class WorldObject {
-    public:
-        WorldObject();
-        virtual ~WorldObject() {};
+class WorldObject {
+public:
+  WorldObject();
+  virtual ~WorldObject() {};
 
-        virtual void init() = 0;
-        virtual void deinit() = 0;
+  virtual void init() = 0;
+  virtual void deinit() = 0;
 
-        const uint64_t& getID() const;
-        bool operator==(const WorldObject& e);
+  const uint64_t &getID() const;
+  bool operator==(const WorldObject &e);
 
-        void translate(const Vector3& delta);
-        void translateLocal(const Vector3& delta);
-        void rotate(const Vector3& axis, const float& angle);
-        void rotateLocal(const Vector3& axis, const float& angle);
+  void translate(const Vector3 &delta);
+  void translateLocal(const Vector3 &delta);
+  void rotate(const Vector3 &axis, const float &angle);
+  void rotateLocal(const Vector3 &axis, const float &angle);
 
-        const Vector3 &getWorldPosition() const;
-        void setWorldPosition(const Vector3 &worldPosition);
-        const Vector3 &getLocalPosition() const;
-        void setLocalPosition(const Vector3 &localPosition);
-        const Quaternion &getWorldRotation() const;
-        void setWorldRotation(const Quaternion &worldRotation);
-        const Quaternion &getLocalRotation() const;
-        void setLocalRotation(const Quaternion &localRotation);
-        const Matrix4 &getTransformMatrix() const;
-        const Vector3 &getScale() const;
-        void setScale(const Vector3 &scale);
+  const Vector3 &getWorldPosition() const;
+  void setWorldPosition(const Vector3 &worldPosition);
+  const Vector3 &getLocalPosition() const;
+  void setLocalPosition(const Vector3 &localPosition);
+  const Quaternion &getWorldRotation() const;
+  void setWorldRotation(const Quaternion &worldRotation);
+  const Quaternion &getLocalRotation() const;
+  void setLocalRotation(const Quaternion &localRotation);
+  const Matrix4 &getTransformMatrix() const;
+  const Vector3 &getScale() const;
+  void setScale(const Vector3 &scale);
 
-        void setTransformMatrix(const Matrix4 &transformMatrix);
+  void setTransformMatrix(const Matrix4 &transformMatrix);
 
-        void updateTransformationMatrix();
-        bool needsMatrixUpdate() const;
-    protected:
-        // Unique id for world objects
-        uint64_t m_id;
-        Vector3 m_worldPosition;
-        Vector3 m_localPosition;
-        Vector3 m_scale;
-        Quaternion m_worldRotation;
-        Quaternion m_localRotation;
-        Matrix4 m_transformMatrix;
+  void updateTransformationMatrix();
+  bool needsMatrixUpdate() const;
 
-        /**
-         * Must make this variable true whenever any position or rotation is changed.
-         * This way, the rotation and position changes will occur during rendering and Matrix
-         * related calculations.
-         */
-        bool m_needsMatrixUpdate;
+protected:
+  // Unique id for world objects
+  uint64_t m_id;
+  Vector3 m_worldPosition;
+  Vector3 m_localPosition;
+  Vector3 m_scale;
+  Quaternion m_worldRotation;
+  Quaternion m_localRotation;
+  Matrix4 m_transformMatrix;
 
-    private:
-        inline static uint64_t s_uniqueIdentificationIndex = 0;
-    };
+  /**
+   * Must make this variable true whenever any position or rotation is changed.
+   * This way, the rotation and position changes will occur during rendering and
+   * Matrix related calculations.
+   */
+  bool m_needsMatrixUpdate;
 
-} // bird
+private:
+  inline static uint64_t s_uniqueIdentificationIndex = 0;
+};
 
-#endif //BIRD_WORLDOBJECT_H
+} // namespace bird
+
+#endif // BIRD_WORLDOBJECT_H

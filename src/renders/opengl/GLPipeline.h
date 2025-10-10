@@ -5,31 +5,30 @@
 #ifndef BIRD_GLPIPELINE_H
 #define BIRD_GLPIPELINE_H
 
+#include "../../util/File.h"
 #include "../GraphicsPipeline.h"
 #include "GLMesh.h"
 #include "GLShader.h"
-#include "../../util/File.h"
 
 namespace bird::gl {
 
-    class GLPipeline : public GraphicsPipeline {
-    public:
-        GLPipeline();
-        ~GLPipeline() override;
-        void init() override;
-        void cleanUp() override;
+class GLPipeline : public GraphicsPipeline {
+public:
+  GLPipeline();
+  ~GLPipeline() override;
+  void init() override;
+  void cleanUp() override;
 
-        void renderRootScene(const Scene* scene) override;
+  void renderRootScene(const Scene *scene) override;
 
-        std::string getName() const override;
+  std::string getName() const override;
 
-    private:
-        std::unique_ptr<Shader> m_shader;
+  std::unique_ptr<Shader> m_shader;
 
-        void renderScene(const Scene* scene);
+private:
+  void renderScene(const Scene *scene);
+};
 
-    };
+} // namespace bird::gl
 
-} // bird
-
-#endif //BIRD_GLPIPELINE_H
+#endif // BIRD_GLPIPELINE_H
