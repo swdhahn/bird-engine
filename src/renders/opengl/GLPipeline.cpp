@@ -50,6 +50,7 @@ void GLPipeline::renderScene(const Scene* scene) {
 
 	global.perspective = m_camera->getPerspectiveMatrix();
 	global.view = m_camera->getTransformMatrix();
+	global.viewPos = Vector4(m_camera->getWorldPosition(), 0.0);
 
 	for (int i = 0; i < entities.size(); i++) {
 		ModelEntity* e = entities[i];
@@ -73,7 +74,7 @@ void GLPipeline::renderScene(const Scene* scene) {
 			matData.ambientColor = mat.get()->getAmbientColor();
 			matData.shininess = mat.get()->getShininess();
 
-			// m_materialUBO->update(&matData, 1, 0);
+			m_materialUBO->update(&matData, 1, 0);
 
 			// glGetBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(MaterialUBOData),
 			// &data); std::cout << "Material:" << data.color << std::endl;

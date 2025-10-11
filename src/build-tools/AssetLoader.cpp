@@ -203,7 +203,7 @@ void AssetLoader::loadModel(std::string& path) {
 
 		aiMaterial* aiMat = scene->mMaterials[i];
 		aiColor3D color(0.f, 0.f, 0.f);
-		float shininess, opacity, reflectivity, zero = 0;
+		float shininess = 32, opacity = 1.0, reflectivity = 0.0, zero = 0;
 
 		// Diffuse color
 		if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_DIFFUSE, color)) {
@@ -216,28 +216,32 @@ void AssetLoader::loadModel(std::string& path) {
 		if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_SPECULAR, color)) {
 			mf.write((char*)&color.r, 3 * sizeof(float));
 		} else {
+			eColor = aiColor3D(1.0);
 			mf.write((char*)&eColor.r, 3 * sizeof(float));
+			eColor = aiColor3D(0.0);
 		}
 
 		// Ambient color
 		if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_AMBIENT, color)) {
 			mf.write((char*)&color.r, 3 * sizeof(float));
 		} else {
+			eColor = aiColor3D(1.0);
 			mf.write((char*)&eColor.r, 3 * sizeof(float));
+			eColor = aiColor3D(0.0);
 		}
 
 		// Shininess
 		if (AI_SUCCESS == aiMat->Get(AI_MATKEY_SHININESS, shininess)) {
 			mf.write((char*)&shininess, sizeof(float));
 		} else {
-			mf.write((char*)&zero, sizeof(float));
+			mf.write((char*)&shininess, sizeof(float));
 		}
 
 		// Opacity
 		if (AI_SUCCESS == aiMat->Get(AI_MATKEY_OPACITY, opacity)) {
 			mf.write((char*)&opacity, sizeof(float));
 		} else {
-			mf.write((char*)&zero, sizeof(float));
+			mf.write((char*)&opacity, sizeof(float));
 		}
 
 		// Emission
@@ -251,7 +255,7 @@ void AssetLoader::loadModel(std::string& path) {
 		if (AI_SUCCESS == aiMat->Get(AI_MATKEY_REFLECTIVITY, reflectivity)) {
 			mf.write((char*)&reflectivity, sizeof(float));
 		} else {
-			mf.write((char*)&zero, sizeof(float));
+			mf.write((char*)&reflectivity, sizeof(float));
 		}
 		uint8_t totalTexCount = 0;	// max 256 textures per material
 		for (unsigned int t = aiTextureType_DIFFUSE; t <= aiTextureType_UNKNOWN;

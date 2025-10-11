@@ -125,12 +125,12 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 		std::unique_ptr<bird::Buffer<float>> normalBuffer =
 			createBuffer<float>(static_cast<bird::BufferMode>(
 									bird::BUFFER_STAGED | bird::BUFFER_ARRAY),
-								std::move(normals), normalCount * vertexSize);
+								std::move(normals), normalCount * normalSize);
 		std::unique_ptr<bird::Buffer<float, 2>> textureCoordBuffer =
 			createBuffer<float, 2>(
 				static_cast<bird::BufferMode>(bird::BUFFER_STAGED |
 											  bird::BUFFER_ARRAY),
-				std::move(textureCoords), textureCoordCount * vertexSize);
+				std::move(textureCoords), textureCoordCount * textureCoordSize);
 		bird::MeshBuilder mb = bird::MeshBuilder();
 		mb.setIndexBuffer(std::move(indexBuffer))
 			.setVertexBuffer(std::move(vertexBuffer))
@@ -176,8 +176,6 @@ std::shared_ptr<Material> ResourceManager::loadMaterial(std::string path) {
 	file.read(reinterpret_cast<char*>(&mat->m_opacity), sizeof(float));
 	file.read(reinterpret_cast<char*>(&mat->m_emission), sizeof(float) * 3);
 	file.read(reinterpret_cast<char*>(&mat->m_reflectivity), sizeof(float));
-
-	std::cout << "Diffuse: " << mat->m_diffuseColor << std::endl;
 
 	uint8_t textureCount = 0;
 	file.read(reinterpret_cast<char*>(&textureCount), sizeof(uint8_t));

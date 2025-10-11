@@ -55,26 +55,21 @@ class MainScene : public bird::Scene {
 		std::shared_ptr<bird::Shader> shader =
 			bird::RESOURCE_MANAGER->loadShader(
 				bird::ShaderBuilder()
-					.attachShaderFile("assets/shaders/default_vertex.glsl",
+					.attachShaderFile("assets/shaders/default.vert",
 									  bird::ShaderPipeline::VERTEX)
-					.attachShaderFile("assets/shaders/default_fragment.glsl",
+					.attachShaderFile("assets/shaders/default.frag",
 									  bird::ShaderPipeline::FRAGMENT));
+		// mesh = bird::RESOURCE_MANAGER->loadMesh("assets/models/cube.obj");
 		mesh = bird::RESOURCE_MANAGER->loadMesh(
-			"assets/models/Lowpoly_tree_sample.obj");
-		// mesh = bird::Assets::loadMesh("assets/models/cube.obj");
+			"assets/models/bugatti/bugatti.obj");
 		std::shared_ptr<bird::Material> mat =
 			std::make_shared<bird::Material>();
-		mat->addTexture(
-			bird::RESOURCE_MANAGER->loadTexture("assets/textures/texture.jpg"));
 		mat->setShader(shader);
-		mesh[0]->setMaterial(mat);
-		/*for (int i = 0; i < mesh.size(); i++) {
+		// mesh[0]->setMaterial(mat);
+		for (int i = 0; i < mesh.size(); i++) {
 			if (mesh[i]->getMaterial() == nullptr) {
 				mesh[i]->setMaterial(mat);
 			} else {
-				mesh[i]->getMaterial()->addTexture(
-					bird::RESOURCE_MANAGER->loadTexture(
-						"assets/textures/waterfall.png"));
 				mesh[i]->getMaterial()->setShader(shader);
 				// std::cout << "Material:" <<
 				// mesh[i]->getMaterial()->getDiffuseColor()
@@ -82,7 +77,7 @@ class MainScene : public bird::Scene {
 				// mesh[i]->getMaterial()->setDiffuseColor(bird::Vector3(1, 0,
 				// 0));
 			}
-		}*/
+		}
 
 		e = new TestEntity(mesh);
 		e->translate(bird::Vector3(0, 0, 0));
