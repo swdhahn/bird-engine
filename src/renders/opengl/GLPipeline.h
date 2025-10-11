@@ -9,26 +9,25 @@
 #include "../GraphicsPipeline.h"
 #include "GLMesh.h"
 #include "GLShader.h"
+#include "GLTexture.h"
 
 namespace bird::gl {
 
 class GLPipeline : public GraphicsPipeline {
-public:
-  GLPipeline();
-  ~GLPipeline() override;
-  void init() override;
-  void cleanUp() override;
+   public:
+	GLPipeline();
+	~GLPipeline() override;
+	void init() override;
+	void cleanUp() override;
 
-  void renderRootScene(const Scene *scene) override;
+	void renderRootScene(const Scene* scene) override;
 
-  std::string getName() const override;
+	std::string getName() const override;
 
-  std::unique_ptr<Shader> m_shader;
-
-private:
-  void renderScene(const Scene *scene);
+   private:
+	void renderScene(const Scene* scene);
 };
 
-} // namespace bird::gl
+}  // namespace bird::gl
 
-#endif // BIRD_GLPIPELINE_H
+#endif	// BIRD_GLPIPELINE_H

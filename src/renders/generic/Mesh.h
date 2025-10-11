@@ -8,10 +8,11 @@
 #include <cstdint>
 #include <array>
 #include "Buffer.h"
+#include "Material.h"
 
 namespace bird {
 
-    class Mesh {
+    class Mesh : public Resource {
     public:
         /**
          * This creates a mesh object. DO NOT CALL THIS DIRECTLY.
@@ -33,16 +34,24 @@ namespace bird {
          */
         virtual void updateMesh() = 0;
 
+        void read();
+        void write();
+
         const Buffer<uint32_t>* getIndexBuffer() const;
         const Buffer<float>* getVertexBuffer() const;
         const Buffer<float>* getNormalBuffer() const;
         const Buffer<float, 2>* getTextureCoordBuffer() const;
+
+        void setMaterial(const std::shared_ptr<Material>& material);
+        const std::shared_ptr<Material>& getMaterial() const;
 
     protected:
         std::unique_ptr<Buffer<uint32_t>> m_indexBuffer = nullptr;
         std::unique_ptr<Buffer<float>> m_vertexBuffer = nullptr;
         std::unique_ptr<Buffer<float>> m_normalBuffer = nullptr;
         std::unique_ptr<Buffer<float, 2>> m_textureCoordBuffer = nullptr;
+
+        std::shared_ptr<Material> m_material = nullptr;
 
     };
 
@@ -60,23 +69,7 @@ namespace bird {
         MeshBuilder& setVertexBuffer(std::unique_ptr<Buffer<float>> vertexBuffer);
         MeshBuilder& setNormalBuffer(std::unique_ptr<Buffer<float>> normalBuffer);
         MeshBuilder& setTextureCoordBuffer(std::unique_ptr<Buffer<float, 2>> textureCoordBuffer);
-
-        /**
-         * This sets all buffers. If the buffers have already been set,
-         * they will be destroyed and replaced with the new buffers.
-         * @param path - path to the file
-         * @return - the MeshBuilder object, then you can call build()
-         * to create the mesh.
-         */
-        MeshBuilder& loadOBJ(const char* path);
-        /**
-         * This sets all buffers. If the buffers have already been set,
-         * they will be destroyed and replaced with the new buffers.
-         * @param path - path to the file
-         * @return - the MeshBuilder object, then you can call build()
-         * to create the mesh.
-         */
-        MeshBuilder& loadGLTF(const char* path);
+        MeshBuilder& setMaterial(std::shared_ptr<Material> material);
 
         /**
          * This creates the mesh object and returns it.
@@ -89,6 +82,7 @@ namespace bird {
         std::unique_ptr<Buffer<float>> m_vertexBuffer = nullptr;
         std::unique_ptr<Buffer<float>> m_normalBuffer = nullptr;
         std::unique_ptr<Buffer<float, 2>> m_textureCoordBuffer = nullptr;
+        std::shared_ptr<Material> m_material = nullptr;
 
 
 

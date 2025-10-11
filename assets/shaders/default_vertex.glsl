@@ -8,19 +8,24 @@ layout(location = 0) out vec3 fragPos;
 layout(location = 1) out vec2 fragTexCoord;
 layout(location = 2) out vec3 fragNormal;
 
-layout(push_constant, std430) uniform Uniforms
+/*layout(push_constant, std430) uniform Uniforms
 {
     mat4 perspective;
     mat4 view;
     mat4 model;
-    vec4 lightPos;
-    float xx;
-    int yy;
-} registerMapped;
+    vec4 lightDir;
+} registerMapped;*/
+
+layout(std140, binding = 0) uniform Global {
+    mat4 perspective;
+    mat4 view;
+    mat4 model;
+    //vec4 lightDir;
+};
 
 void main() {
-    gl_Position = registerMapped.perspective * registerMapped.view * registerMapped.model * vec4(position, 1.0f);
+    gl_Position = perspective * view * model * vec4(position, 1.0f);
     fragTexCoord = texCoord;
     fragNormal = normal;
-    fragPos = vec3(registerMapped.model * vec4(position, 1.0f));
+    fragPos = vec3(model * vec4(position, 1.0f));
 }

@@ -9,8 +9,9 @@
 #include <string>
 #include <shaderc/shaderc.hpp>
 #include <spirv_cross/spirv_glsl.hpp>
-#include "../GraphicsPipeline.h"
+#include "../GraphicsConstants.h"
 #include "../../util/File.h"
+#include "../../util/Resource.h"
 
 namespace bird {
 
@@ -31,15 +32,16 @@ namespace bird {
         std::unique_ptr<Shader> create();
         ShaderBuilder& attachShaderFile(std::string fileName, const ShaderPipeline shaderStage);
 
-    private:
         std::vector<std::pair<std::string, ShaderPipeline>> m_shaderFiles;
-
     };
 
-    class Shader {
+class Shader : public Resource {
     public:
         Shader();
         virtual ~Shader();
+
+        void write() override;
+        void read() override;
 
         void initResources(std::vector<uint32_t> spirv_binary);
         virtual void loadPerspectiveMatrix(Matrix4 perspectiveMatrix) = 0;
@@ -59,7 +61,7 @@ namespace bird {
     std::vector<uint32_t> compileShader(const std::string& source, const std::string& source_name, const std::string& prevSource,
                                        shaderc_shader_kind kind,
                                        bool optimize = false);
-    std::string decompileShader_glsl(std::vector<uint32_t> spirv_binary, const std::string& prevShaderSource, ShaderPipeline pipeline);
+    std::pair<std::string, std::vector<std::pair<uint32_t, std::string>>> decompileShader_glsl(std::vector<uint32_t> spirv_binary, const std::string& prevShaderSource, ShaderPipeline pipeline);
 
 } // bird
 

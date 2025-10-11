@@ -12,6 +12,7 @@ namespace bird::gl {
         int success;
         char infoLog[512];
         std::string prev_shader_source = "";
+        std::vector<std::pair<uint32_t, std::string>> uniformBuffers;
         for(int i = 0; i < shaderFiles.size(); i++) {
             shaderc_shader_kind shaderc_shader_type;
             uint32_t gl_shader_type;
@@ -39,7 +40,22 @@ namespace bird::gl {
 
             //initResources(spirvComped);
 
-            std::string shader_source = decompileShader_glsl(spirvComped, prev_shader_source, shaderFiles[i].second);
+            std::pair<std::string, std::vector<std::pair<uint32_t, std::string>>> decompShader = decompileShader_glsl(spirvComped, prev_shader_source, shaderFiles[i].second);
+            std::string shader_source = decompShader.first;
+            for(int i = 0; i < decompShader.second.size(); i++) {
+                bool flag = false;
+                for(int j = 0; j < uniformBuffers.size(); j++) {
+                    if(uniformBuffers[j].second == decompShader.second[i].second) {
+                        if(uniformBuffers[j].first != decompShader.second[i].first) {
+                            throw std::runtime_error("Uniform buffer index mismatch. Make sure all uniform buffers have the same index across all shaders.");
+                        }
+                        flag = true;
+                    }
+                }
+                if(flag)
+                    continue;
+                uniformBuffers.push_back(decompShader.second[i]);
+            }
             prev_shader_source = shader_source;
             std::cout << "----\n" << shader_source << "\n----\n";
 
@@ -71,8 +87,14 @@ namespace bird::gl {
             glDeleteShader(shader_ids[i]);
         }
         glValidateProgram(m_programId);
-
+        //bind();
         unbind();
+
+        for(int i = 0; i < uniformBuffers.size(); i++) {
+            uint32_t block_index = glGetUniformBlockIndex(m_programId, uniformBuffers[i].second.c_str());
+            glUniformBlockBinding(m_programId, block_index, uniformBuffers[i].first);
+            std::cout << "Uniform block index: " << uniformBuffers[i].first << "  " << uniformBuffers[i].second << std::endl;
+        }
 
     }
 

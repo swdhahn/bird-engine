@@ -6,14 +6,10 @@
 
 #include "AssetLoader.h"
 
-
-
-
 int main(int argc, char* argv[]) {
+	bird::AssetLoader loader;
 
-    bird::AssetLoader loader;
+	loader.init("assets");
 
-    loader.init("../assets");
-
-    return 0;
+	return 0;
 }

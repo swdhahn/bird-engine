@@ -12,10 +12,10 @@ namespace bird {
             throw std::runtime_error("GLFW could not be initialized!");
         }
 
-        if(GraphicsPipeline::getGraphicsPipelineType() == GRAPHICS_PIPELINE_VULKAN) {
+        if(CURRENT_GRAPHICS_PIPELINE == GRAPHICS_PIPELINE_VULKAN) {
             glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
             m_pWindow = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
-        } else if(GraphicsPipeline::getGraphicsPipelineType() == GRAPHICS_PIPELINE_OPENGL) {
+        } else if(CURRENT_GRAPHICS_PIPELINE == GRAPHICS_PIPELINE_OPENGL) {
             glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
             glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 #ifdef __APPLE__

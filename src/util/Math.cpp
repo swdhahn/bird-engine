@@ -8,16 +8,18 @@
 namespace bird {
 
     Matrix4 createTransformMatrix(WorldObject* obj) {
-        Matrix4 mat = glm::toMat4(obj->getWorldRotation() * obj->getLocalRotation());
+        Matrix4 mat = glm::translate(glm::mat4(1), obj->getWorldPosition() + obj->getLocalPosition());
         mat = glm::scale(mat, obj->getScale());
-        mat = glm::translate(mat, obj->getWorldPosition() + obj->getLocalPosition());
+        mat = mat * glm::toMat4(obj->getWorldRotation() * obj->getLocalRotation());
         return mat;
     }
 
     void updateTransformMatrix(WorldObject* obj, Matrix4* dst) {
-        *dst = glm::toMat4(obj->getWorldRotation() * obj->getLocalRotation());
+        *dst = glm::translate(glm::mat4(1), obj->getWorldPosition() + obj->getLocalPosition());
         *dst = glm::scale(*dst, obj->getScale());
-        *dst = glm::translate(*dst, obj->getWorldPosition() + obj->getLocalPosition());
+        *dst = *dst * glm::toMat4(obj->getWorldRotation() * obj->getLocalRotation());
+
+
     }
 
     Matrix4 createPerspectiveMatrix(uint32_t width, uint32_t height, float fov, float near, float far) {

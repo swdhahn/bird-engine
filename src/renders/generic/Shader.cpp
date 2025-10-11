@@ -3,7 +3,6 @@
 //
 
 #include "Shader.h"
-#include "../GraphicsPipeline.h"
 #include "GLShader.h"
 
 namespace bird {
@@ -12,7 +11,7 @@ std::unique_ptr<Shader> ShaderBuilder::create() {
 
   std::unique_ptr<Shader> ptr = nullptr;
 
-  switch (GraphicsPipeline::getGraphicsPipelineType()) {
+  switch (CURRENT_GRAPHICS_PIPELINE) {
   case GRAPHICS_PIPELINE_OPENGL:
     ptr = std::make_unique<gl::GLShader>(m_shaderFiles);
 
@@ -38,6 +37,10 @@ ShaderBuilder::attachShaderFile(std::string fileName,
 Shader::Shader() {}
 
 Shader::~Shader() {}
+
+void Shader::write() {}
+
+void Shader::read() {}
 
 void Shader::initResources(std::vector<uint32_t> spirv_binary) {
   spirv_cross::Compiler comp(std::move(spirv_binary));
@@ -103,11 +106,22 @@ std::vector<uint32_t> compileShader(const std::string &source_name,
   return {module.cbegin(), module.cend()};
 }
 
-std::string decompileShader_glsl(std::vector<uint32_t> spirv_binary,
-                                 const std::string &prevShaderSource,
-                                 ShaderPipeline pipeline) {
+std::pair<std::string, std::vector<std::pair<uint32_t, std::string>>>
+decompileShader_glsl(std::vector<uint32_t> spirv_binary,
+                     const std::string &prevShaderSource,
+                     ShaderPipeline pipeline) {
   spirv_cross::CompilerGLSL glsl(std::move(spirv_binary));
   auto resources = glsl.get_shader_resources();
+
+  std::vector<std::pair<uint32_t, std::string>> uniform_buffers(
+      resources.uniform_buffers.size());
+
+  for (int i = 0; i < resources.uniform_buffers.size(); i++) {
+    uniform_buffers[i] = std::pair<uint32_t, std::string>(
+        glsl.get_decoration(resources.uniform_buffers[i].id,
+                            spv::DecorationBinding),
+        resources.uniform_buffers[i].name);
+  }
 
   // Set some options.
   spirv_cross::CompilerGLSL::Options options;
@@ -118,7 +132,8 @@ std::string decompileShader_glsl(std::vector<uint32_t> spirv_binary,
   glsl.set_common_options(options);
 
   // Compile to GLSL, ready to give to GL driver.
-  return glsl.compile();
+  return std::pair<std::string, std::vector<std::pair<uint32_t, std::string>>>(
+      glsl.compile(), uniform_buffers);
 }
 
 } // namespace bird

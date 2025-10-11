@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 cmake_policy(SET CMP0135 NEW)
 
 include(ExternalProject)
+
 ExternalProject_Add(
   GLM
   URL "https://github.com/g-truc/glm/archive/refs/tags/0.9.9.8.tar.gz"
@@ -41,7 +42,6 @@ ExternalProject_Add(
   PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/VULKAN
   BUILD_COMMAND ""
   INSTALL_COMMAND "")
-
 ExternalProject_Add(
   SPIRV_CROSS
   URL "https://github.com/KhronosGroup/SPIRV-Cross/archive/refs/tags/MoltenVK-1.1.5.tar.gz"
@@ -63,3 +63,13 @@ ExternalProject_Add_Step(
   DEPENDEES patch
   COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/SHADERC/src/SHADERC/utils/git-sync-deps
   COMMENT "Downloading Dependencies")
+
+# ExternalProject_Add(SAIL GIT_REPOSITORY
+# "https://github.com/HappySeaFox/sail.git" GIT_TAG v0.9.1 PREFIX
+# ${CMAKE_CURRENT_SOURCE_DIR}/SAIL CMAKE_ARGS -DSAIL_BUILD_APPS=OFF
+# -DSAIL_BUILD_EXAMPLES=OFF #-DBUILD_SHARED_LIBS=OFF
+# "-DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>" )
+#
+# ExternalProject_Add_Step(SAIL comp-deps DEPENDERS build DEPENDEES patch
+# COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/SAIL/src/SAIL/extra/build COMMENT
+# "Downloading Dependencies" )

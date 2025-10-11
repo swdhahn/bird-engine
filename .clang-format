@@ -1,0 +1,13 @@
+# We'll use defaults from the LLVM style, but with 4 columns indentation.
+BasedOnStyle: Google
+IndentWidth: 4
+TabWidth: 4
+UseTab: Always
+
+DerivePointerAlignment: false
+PointerAlignment: Left
+AllowShortFunctionsOnASingleLine: Empty
+
+#Language: Cpp
+# Force pointers to the type for C++.
+#DerivePointerAlignment: false

@@ -10,6 +10,7 @@
 #include "GL/glew.h"
 #include "GLFW/glfw3.h"
 
+#include "../util/Math.h"
 #include <array>
 #include <bits/stdc++.h>
 #include <cstdint>
@@ -31,6 +32,8 @@ enum GraphicsPipelineType {
   GRAPHICS_PIPELINE_DIRECTX
 };
 
-}
+extern GraphicsPipelineType CURRENT_GRAPHICS_PIPELINE;
+
+} // namespace bird
 
 #endif // BIRD_GRAPHICSCONSTANTS_H
