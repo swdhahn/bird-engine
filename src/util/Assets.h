@@ -5,10 +5,10 @@
 #ifndef BIRD_ASSETS_H
 #define BIRD_ASSETS_H
 
-#include <../renders/GraphicsPipeline.h>
-#include <../renders/generic/Buffer.h>
-#include <../renders/generic/Texture.h>
-#include <../renders/opengl/GLBuffer.h>
+#include <renders/GraphicsPipeline.h>
+#include <renders/generic/Buffer.h>
+#include <renders/generic/Texture.h>
+#include <renders/opengl/GLBuffer.h>
 
 #include <fstream>
 

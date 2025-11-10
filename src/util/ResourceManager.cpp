@@ -44,8 +44,8 @@ std::shared_ptr<Texture> ResourceManager::loadTexture(std::string path) {
 		return std::shared_ptr<Texture>(0);
 	}
 	TextureFormat form = (TextureFormat)(1 << (channels));
-	std::cout << "Img: " << width << " " << height << " " << channels << " "
-			  << form << std::endl;
+	// std::cout << "Img: " << width << " " << height << " " << channels << " "
+	//		  << form << std::endl;
 
 	std::shared_ptr<Texture> tex =
 		TextureBuilder(data, width, height, form).build();
@@ -68,7 +68,6 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 	uint16_t meshCount = 0;
 	file.read(reinterpret_cast<char*>(&meshCount), sizeof(uint16_t));
 	std::vector<std::shared_ptr<Mesh>> meshes(meshCount);
-	std::cout << meshCount << std::endl;
 	for (int i = 0; i < meshCount; i++) {
 		std::unique_ptr<uint32_t[]> indices = nullptr;
 		uint32_t indexCount = 0;

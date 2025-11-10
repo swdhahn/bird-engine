@@ -7,14 +7,20 @@
 
 #include <bits/stdc++.h>
 
+#include <memory>
+
 #include "../util/Input.h"
 #include "../util/Math.h"
 #include "../util/ResourceManager.h"
+#include "components/Component.h"
 
 namespace bird {
 
 extern Input* INPUT;
 extern ResourceManager* RESOURCE_MANAGER;
+class Application;
+extern Application* APPLICATION;
+class Component;
 
 class WorldObject {
    public:
@@ -23,6 +29,7 @@ class WorldObject {
 
 	virtual void init() = 0;
 	virtual void deinit() = 0;
+	void _deinit();
 
 	const uint64_t& getID() const;
 	bool operator==(const WorldObject& e);
@@ -49,6 +56,9 @@ class WorldObject {
 	void updateTransformationMatrix();
 	bool needsMatrixUpdate() const;
 
+	void addComponent(std::unique_ptr<Component> component);
+	void removeComponent(Component* component);
+
    protected:
 	// Unique id for world objects
 	uint64_t m_id;
@@ -58,6 +68,8 @@ class WorldObject {
 	Quaternion m_worldRotation;
 	Quaternion m_localRotation;
 	Matrix4 m_transformMatrix;
+
+	std::vector<std::unique_ptr<Component>> m_components;
 
 	/**
 	 * Must make this variable true whenever any position or rotation is

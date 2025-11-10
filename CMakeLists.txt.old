@@ -5,6 +5,24 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(Bird)
 
+add_custom_target(
+  GenerateDependencies
+  COMMAND
+    cd ${CMAKE_SOURCE_DIR}/libs/bin && ${CMAKE_COMMAND} -G ${CMAKE_GENERATOR} ..
+    -DCMAKE_BUILD_TYPE=Release "-DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}" -G
+    ${CMAKE_GENERATOR} && ${CMAKE_COMMAND} --build .
+  VERBATIM)
+
+link_directories(libs/GLFW/lib libs/ASSIMP/lib libs/GLEW/lib libs/SHADERC/lib
+                 libs/SPIRV_CROSS/lib)
+
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libs/VOLK/src/VOLK")
+  add_subdirectory(libs/VOLK/src/VOLK)
+else()
+  message(STATUS "VOLK directory not found, skipping.")
+endif()
+
+# src/ApplicationVK.cpp src/ApplicationVK.h
 set(BIRD_FILES
     src/util/stb_image.h
     src/util/Constants.h
@@ -20,9 +38,11 @@ set(BIRD_FILES
     src/util/ResourceManager.h
     src/util/Resource.cpp
     src/util/Resource.h)
-add_library(Bird_core SHARED ${BIRD_FILES})
+add_library(Bird_core SHARED ${VOLK_SOURCE_FILE_PATH} ${BIRD_FILES})
 add_executable(Bird src/main.cpp)
+target_include_directories(Bird PRIVATE src/)
 target_link_libraries(Bird Bird_core)
+# add_dependencies(Bird GenerateDependencies)
 
 target_link_options(Bird_core PRIVATE -Wl,-Bsymbolic)
 set_target_properties(Bird_core PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
@@ -53,69 +73,61 @@ elseif(UNIX AND NOT APPLE)
            -lGL)
 endif()
 
-set(INSTALLED_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libs/install")
-set(CMAKE_PREFIX_PATH "${INSTALLED_LIB_PATH}")
+# add_library(include_lib PUBLIC
 
-find_package(glfw3 CONFIG REQUIRED)
-find_package(assimp CONFIG REQUIRED)
-find_package(GLEW REQUIRED)
-find_package(spirv_cross_core CONFIG REQUIRED)
-find_package(spirv_cross_glsl CONFIG REQUIRED)
-find_package(spirv_cross_cpp CONFIG REQUIRED)
-find_package(SPIRV-Tools CONFIG REQUIRED)
-find_package(Jolt CONFIG REQUIRED)
-
-add_library(shaderc::shaderc_combined STATIC IMPORTED)
-set_target_properties(
-  shaderc::shaderc_combined
-  PROPERTIES IMPORTED_LOCATION
-             "${INSTALLED_LIB_PATH}/lib/libshaderc_combined.a")
-set_target_properties(
-  shaderc::shaderc_combined PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
-                                       "${INSTALLED_LIB_PATH}/include")
-add_library(VOLK::volk STATIC IMPORTED)
-set_target_properties(
-  VOLK::volk PROPERTIES IMPORTED_LOCATION "${INSTALLED_LIB_PATH}/lib/libvolk.a")
-set_target_properties(VOLK::volk PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
-                                            "${INSTALLED_LIB_PATH}/include")
-message(STATUS "${CMAKE_CURRENT_SOURCE_DIR}")
-add_library(glm INTERFACE)
+include_directories(libs/GLM/src/GLM libs/SHADERC/include
+                    libs/SPIRV_CROSS/include)
 target_include_directories(
-  glm INTERFACE $<BUILD_INTERFACE:${INSTALLED_LIB_PATH}/include>
-                $<INSTALL_INTERFACE:include>)
+  Bird_core
+  PUBLIC $<INSTALL_INTERFACE:include>
+  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src>
+         # Or simply: PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src (if headers are
+         # here)
+         libs/GLM/src/GLM
+         libs/SHADERC/include
+         libs/SPIRV_CROSS/include
+         src/
+         libs/SHADERC/include
+         libs/SPIRV_CROSS/include)
 add_subdirectory(src/renders)
 include_directories(src/renders)
 add_subdirectory(src/scene)
 include_directories(src/scene)
+target_include_directories(
+  vulkan-renderer PUBLIC libs/VOLK/src/VOLK libs/VULKAN/src/VULKAN/include)
 
 target_link_libraries(
   Bird_core
-  PUBLIC stdc++ glm
-  PRIVATE glfw
-          assimp::assimp
-          VOLK::volk
-          Jolt::Jolt
-          renders
-          scene
-          shaderc::shaderc_combined
-          ${SPIRV_LIBRARIES}
-          spirv-cross-core
-          spirv-cross-glsl
-          spirv-cross-cpp)
+  PUBLIC scene
+         renders
+         stdc++
+         -lglfw3
+         -lassimp
+         -lglew
+         volk::volk
+         -lshaderc_combined
+         -lspirv-cross-core
+         -lspirv-cross-glsl)
 add_definitions(-Wno-deprecated-volatile)
 
 # Build Tools
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 add_subdirectory(src/build-tools)
 
+add_subdirectory(test)
+
 install(
   DIRECTORY src/
   DESTINATION include
   FILES_MATCHING
   PATTERN "*.h"
-  PATTERN "*.hpp")
+  PATTERN "*.hpp"
+  # This prevents installing the whole directory structure inside 'include' if
+  # you want headers directly under 'include' Use PATTERN "*" EXCLUDE ".*" if
+  # you want subdirectories
+)
 install(
-  TARGETS Bird_core Bird BuildTools glm
+  TARGETS Bird_core
   EXPORT Bird_Engine
   RUNTIME DESTINATION bin
   LIBRARY DESTINATION lib
@@ -127,5 +139,4 @@ install(
   EXPORT Bird_Engine
   FILE Bird_EngineConfig.cmake
   NAMESPACE Bird::
-  DESTINATION cmake/Bird_Engine)
-install(DIRECTORY libs/install/include/glm DESTINATION include/glm)
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Bird_Engine)

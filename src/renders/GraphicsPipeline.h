@@ -9,8 +9,8 @@
 
 #include "../scene/Camera.h"
 #include "../scene/DefaultCamera.h"
-#include "../scene/ModelEntity.h"
 #include "../scene/Scene.h"
+#include "../scene/components/MeshComponent.h"
 #include "Window.h"
 
 namespace bird {
@@ -45,6 +45,10 @@ class GraphicsPipeline {
 	std::unique_ptr<Window>& getWindow();
 
 	void setCamera(Camera* camera);
+	Camera* getCamera();
+
+	void addMesh(MeshComponent* mesh);
+	void removeMesh(MeshComponent* mesh);
 
    protected:
 	std::unique_ptr<Window> m_pWindow = nullptr;
@@ -53,8 +57,8 @@ class GraphicsPipeline {
 	std::unique_ptr<Buffer<MaterialUBOData>> m_materialUBO;
 	std::unique_ptr<Buffer<GlobalUBOData>> m_globalUBO;
 
-	void getModelEntities(const Scene* const scene,
-						  std::vector<ModelEntity*>& entities) const;
+	// std::list fix this
+	std::vector<MeshComponent*> m_meshes;
 };
 
 }  // namespace bird

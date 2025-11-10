@@ -1,11 +1,9 @@
+#include <dlfcn.h>
+
 #include <iostream>
-#include <stdexcept>
-#include <vector>
 
 #include "Application.h"
-#include "ApplicationVK.h"
-#include "util/Assets.h"
-
+#include "scene/Scene.h"
 /*
  *
  * 1. Shader has a list of materials
@@ -20,81 +18,6 @@
  *
  */
 
-class TestEntity : public bird::ModelEntity {
-   public:
-	TestEntity(std::vector<std::shared_ptr<bird::Mesh>> m)
-		: bird::ModelEntity(m) {}
-
-	~TestEntity() {}
-
-	void init() {}
-
-	void deinit() {}
-
-	void process(float delta) {
-		float speed = 10;
-		float rotSpeed = 10;
-		translate(bird::Vector3((-bird::INPUT->getActionValue("move_right") +
-								 bird::INPUT->getActionValue("move_left")) *
-									speed * delta,
-								(-bird::INPUT->getActionValue("move_up") +
-								 bird::INPUT->getActionValue("move_down")) *
-									speed * delta,
-								(-bird::INPUT->getActionValue("move_backward") +
-								 bird::INPUT->getActionValue("move_forward")) *
-									speed * delta));
-		float rotVal = -bird::INPUT->getActionValue("look_right") +
-					   bird::INPUT->getActionValue("look_left");
-		rotate(bird::Vector3(0, 1, 0), rotVal * rotSpeed * delta);
-	}
-};
-
-class MainScene : public bird::Scene {
-   public:
-	void init() override {
-		std::shared_ptr<bird::Shader> shader =
-			bird::RESOURCE_MANAGER->loadShader(
-				bird::ShaderBuilder()
-					.attachShaderFile("assets/shaders/default.vert",
-									  bird::ShaderPipeline::VERTEX)
-					.attachShaderFile("assets/shaders/default.frag",
-									  bird::ShaderPipeline::FRAGMENT));
-		// mesh = bird::RESOURCE_MANAGER->loadMesh("assets/models/cube.obj");
-		mesh = bird::RESOURCE_MANAGER->loadMesh(
-			"assets/models/bugatti/bugatti.obj");
-		std::shared_ptr<bird::Material> mat =
-			std::make_shared<bird::Material>();
-		mat->setShader(shader);
-		// mesh[0]->setMaterial(mat);
-		for (int i = 0; i < mesh.size(); i++) {
-			if (mesh[i]->getMaterial() == nullptr) {
-				mesh[i]->setMaterial(mat);
-			} else {
-				mesh[i]->getMaterial()->setShader(shader);
-				// std::cout << "Material:" <<
-				// mesh[i]->getMaterial()->getDiffuseColor()
-				// << std::endl;
-				// mesh[i]->getMaterial()->setDiffuseColor(bird::Vector3(1, 0,
-				// 0));
-			}
-		}
-
-		e = new TestEntity(mesh);
-		e->translate(bird::Vector3(0, 0, 0));
-		this->addEntity(e);
-	}
-
-	void deinit() override {
-		delete e;
-		delete e2;
-	}
-
-   private:
-	std::vector<std::shared_ptr<bird::Mesh>> mesh;
-	bird::ModelEntity* e = nullptr;
-	bird::ModelEntity* e2 = nullptr;
-};
-
 /* TODO:
  *
  * use glBufferSubData for updates and glBufferData for buffer
@@ -103,14 +26,39 @@ class MainScene : public bird::Scene {
  * Finish linear and bicubic/near interpolation for textures
  * Finish transformations
  *
+ * /home/swdhahn/Programming/cWorkspace/bird-engine/src/renders/generic/Texture.cpp: In destructor ‘virtual bird::Texture::~Texture()’:
+/home/swdhahn/Programming/cWorkspace/bird-engine/src/renders/generic/Texture.cpp:67:16:
+warning: deleting ‘void*’ is undefined [-Wdelete-incomplete] 67 |         delete
+m_pData; |                ^~~~~~~
+
  *
  */
-int main() {
-	/*bird::ApplicationVK app;
-	app.run();//*/
+int main(int argc, char** argv) {
+	if (argc < 2) {
+		std::cerr << "Please provide a path to your application" << std::endl;
+		exit(1);
+	}
+	void* app_handle = dlopen(argv[1], RTLD_NOW | RTLD_GLOBAL);
+	if (!app_handle) {
+		std::cerr << "Could not load app dynamic library: " << argv[1]
+				  << std::endl;
+		std::cerr << "dlopen error: " << dlerror() << std::endl;
+		exit(1);
+	}
+	bird::Scene* (*app_entry)();
+	void* app_entry_void = dlsym(app_handle, "app_entry");
+	if (app_entry_void != nullptr) {
+		app_entry = reinterpret_cast<bird::Scene* (*)()>(app_entry_void);
+	} else {
+		std::cerr << "Could not locate any 'bird::Scene* app_entry();'"
+				  << std::endl;
+		std::cerr << "dlsym error: " << dlerror() << std::endl;
+		dlclose(app_handle);
+		exit(1);
+	}
+	bird::Scene* scene = app_entry();
 
-	MainScene scene;
-	bird::Application app(scene);
+	bird::Application app(*scene);
 
 	try {
 		app.run();
@@ -119,5 +67,7 @@ int main() {
 		return EXIT_FAILURE;
 	}
 
-	return EXIT_SUCCESS;  //*/
+	dlclose(app_handle);
+
+	return 0;  //*/
 }

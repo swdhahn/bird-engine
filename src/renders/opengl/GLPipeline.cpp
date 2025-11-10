@@ -38,9 +38,6 @@ void GLPipeline::renderRootScene(const bird::Scene* scene) {
 }
 
 void GLPipeline::renderScene(const Scene* scene) {
-	std::vector<ModelEntity*> entities;
-	getModelEntities(scene, entities);
-
 	// cull entities here
 
 	// render entities
@@ -52,17 +49,20 @@ void GLPipeline::renderScene(const Scene* scene) {
 	global.view = m_camera->getTransformMatrix();
 	global.viewPos = Vector4(m_camera->getWorldPosition(), 0.0);
 
-	for (int i = 0; i < entities.size(); i++) {
-		ModelEntity* e = entities[i];
-		for (int j = 0; j < e->getMeshes().size(); j++) {
-			GLMesh* m = (GLMesh*)e->getMeshes()[j].get();
+	MeshComponent* mesh = nullptr;
+	WorldObject* obj = nullptr;
+	for (int i = 0; i < m_meshes.size(); i++) {
+		mesh = m_meshes[i];
+		obj = mesh->getParent();
+		for (int j = 0; j < mesh->getMeshes().size(); j++) {
+			GLMesh* m = (GLMesh*)mesh->getMeshes()[j].get();
 			const std::shared_ptr<Material> mat =
-				e->getMeshes()[j]->getMaterial();
+				mesh->getMeshes()[j]->getMaterial();
 			GLShader* shader = (GLShader*)mat->getShader().get();
 			shader->bind();
 			glBindVertexArray(m->getVAO());
 
-			global.model = e->getTransformMatrix();
+			global.model = obj->getTransformMatrix();
 
 			m_globalUBO->update(&global, 1, 0);
 
@@ -90,9 +90,10 @@ void GLPipeline::renderScene(const Scene* scene) {
 					((GLTexture*)mat->getTextures()[k].get())->bind();
 				}
 			}
-			glDrawElements(GL_TRIANGLES,
-						   e->getMeshes()[j]->getIndexBuffer()->getBufferSize(),
-						   GL_UNSIGNED_INT, 0);
+			glDrawElements(
+				GL_TRIANGLES,
+				mesh->getMeshes()[j]->getIndexBuffer()->getBufferSize(),
+				GL_UNSIGNED_INT, 0);
 		}
 	}
 	for (int i = 0; i < scene->getChildren().size(); i++) {

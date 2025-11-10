@@ -7,11 +7,12 @@
 
 #define PI 3.141592
 
-#include "glm/glm.hpp"
-#include "glm/gtc/quaternion.hpp"
-#include "glm/gtx/quaternion.hpp"
-#include <iostream>
 #include <stdint.h>
+
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <iostream>
 
 namespace bird {
 class WorldObject;
@@ -29,21 +30,21 @@ typedef glm::mat4x4 Matrix4;
 typedef glm::mat4x2 Matrix4x2;
 typedef glm::mat4x3 Matrix4x3;
 
-inline Quaternion fromAngleAxis(const float &angle, const Vector3 &axis) {
-  return glm::angleAxis(angle, axis);
+inline Quaternion fromAngleAxis(const float& angle, const Vector3& axis) {
+	return glm::angleAxis(angle, axis);
 }
 
-inline Matrix4 lookAt(const Vector3 &eyePos, const Vector3 &lookPos,
-                      const Vector3 &upDir) {
-  return glm::lookAt(eyePos, lookPos, upDir);
+inline Matrix4 lookAt(const Vector3& eyePos, const Vector3& lookPos,
+					  const Vector3& upDir) {
+	return glm::lookAt(eyePos, lookPos, upDir);
 }
 
-inline Quaternion lookAt(const Vector3 &direction, const Vector3 &upDir) {
-  return glm::quatLookAt(direction, upDir);
+inline Quaternion lookAt(const Vector3& direction, const Vector3& upDir) {
+	return glm::quatLookAt(direction, upDir);
 }
 
-Matrix4 createTransformMatrix(WorldObject *obj);
-void updateTransformMatrix(WorldObject *obj, Matrix4 *dst);
+Matrix4 createTransformMatrix(WorldObject* obj);
+void updateTransformMatrix(WorldObject* obj, Matrix4* dst);
 
 /**
  *
@@ -55,21 +56,21 @@ void updateTransformMatrix(WorldObject *obj, Matrix4 *dst);
  * @return Perspective matrix generated from this method
  */
 Matrix4 createPerspectiveMatrix(uint32_t width, uint32_t height, float fov,
-                                float near, float far);
+								float near, float far);
 
-std::ostream &operator<<(std::ostream &out, const Vector2 &s);
-std::ostream &operator<<(std::ostream &out, const Vector3 &s);
-std::ostream &operator<<(std::ostream &out, const Vector4 &s);
-std::ostream &operator<<(std::ostream &out, const Quaternion &s);
-std::ostream &operator<<(std::ostream &out, const Matrix2 &s);
-std::ostream &operator<<(std::ostream &out, const Matrix2x3 &s);
-std::ostream &operator<<(std::ostream &out, const Matrix3 &s);
-std::ostream &operator<<(std::ostream &out, const Matrix3x2 &s);
-std::ostream &operator<<(std::ostream &out, const Matrix3x4 &s);
-std::ostream &operator<<(std::ostream &out, const Matrix4 &s);
-std::ostream &operator<<(std::ostream &out, const Matrix4x2 &s);
-std::ostream &operator<<(std::ostream &out, const Matrix4x3 &s);
+std::ostream& operator<<(std::ostream& out, const Vector2& s);
+std::ostream& operator<<(std::ostream& out, const Vector3& s);
+std::ostream& operator<<(std::ostream& out, const Vector4& s);
+std::ostream& operator<<(std::ostream& out, const Quaternion& s);
+std::ostream& operator<<(std::ostream& out, const Matrix2& s);
+std::ostream& operator<<(std::ostream& out, const Matrix2x3& s);
+std::ostream& operator<<(std::ostream& out, const Matrix3& s);
+std::ostream& operator<<(std::ostream& out, const Matrix3x2& s);
+std::ostream& operator<<(std::ostream& out, const Matrix3x4& s);
+std::ostream& operator<<(std::ostream& out, const Matrix4& s);
+std::ostream& operator<<(std::ostream& out, const Matrix4x2& s);
+std::ostream& operator<<(std::ostream& out, const Matrix4x3& s);
 
-} // namespace bird
+}  // namespace bird
 
-#endif // BIRD_MATH_H
+#endif	// BIRD_MATH_H

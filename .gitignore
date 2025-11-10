@@ -1,6 +1,4 @@
 libs/*
-!libs/bin/
-libs/bin/*
 !libs/CMakeLists.txt
 cmake-build-debug/
 cmake-build-release/

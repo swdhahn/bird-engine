@@ -1,2 +1,1 @@
-
-add_library(metal-renderer STATIC MLPipeline.cpp MLPipeline.h)
+add_library(metal-renderer OBJECT MLPipeline.cpp MLPipeline.h)

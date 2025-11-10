@@ -4,6 +4,8 @@
 
 #include "GraphicsPipeline.h"
 
+#include <pstl/glue_algorithm_defs.h>
+
 namespace bird {
 
 GraphicsPipelineType CURRENT_GRAPHICS_PIPELINE = GRAPHICS_PIPELINE_NONE;
@@ -44,16 +46,16 @@ void GraphicsPipeline::setCamera(Camera* camera) {
 	m_camera = camera;
 }
 
-void GraphicsPipeline::getModelEntities(
-	const Scene* const scene, std::vector<ModelEntity*>& entities) const {
-	ModelEntity* e = nullptr;
-	for (int i = 0; i < scene->getEntities().size(); i++) {
-		e = dynamic_cast<ModelEntity*>(scene->getEntities()[i]);
-		if (e != nullptr) entities.push_back(e);
-	}
-	for (int i = 0; i < scene->getChildren().size(); i++) {
-		getModelEntities(scene->getChildren()[i], entities);
-	}
+Camera* GraphicsPipeline::getCamera() {
+	return m_camera;
 }
 
+void GraphicsPipeline::addMesh(MeshComponent* mesh) {
+	m_meshes.emplace_back(mesh);
+}
+
+void GraphicsPipeline::removeMesh(MeshComponent* mesh) {
+	m_meshes.erase(std::remove(m_meshes.begin(), m_meshes.end(), mesh),
+				   m_meshes.end());
+}
 }  // namespace bird

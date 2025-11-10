@@ -4,100 +4,131 @@
 
 #include "WorldObject.h"
 
+#include <pstl/glue_algorithm_defs.h>
+
 namespace bird {
 
-    WorldObject::WorldObject()
-    : m_worldPosition(), m_worldRotation(glm::quat(1.0, 0.0, 0.0, 0.0)), m_localPosition(), m_localRotation(glm::quat(1.0, 0.0, 0.0, 0.0)), m_scale(1),
-    m_transformMatrix(1), m_needsMatrixUpdate(true), m_id(++s_uniqueIdentificationIndex)
-    {}
+WorldObject::WorldObject()
+	: m_worldPosition(),
+	  m_worldRotation(glm::quat(1.0, 0.0, 0.0, 0.0)),
+	  m_localPosition(),
+	  m_localRotation(glm::quat(1.0, 0.0, 0.0, 0.0)),
+	  m_scale(1),
+	  m_transformMatrix(1),
+	  m_needsMatrixUpdate(true),
+	  m_components(),
+	  m_id(++s_uniqueIdentificationIndex) {}
 
-    const uint64_t& WorldObject::getID() const {
-        return m_id;
-    }
+void WorldObject::_deinit() {
+	deinit();
+	for (int i = 0; i < m_components.size(); i++) {
+		m_components[i]->deinit();
+	}
+}
 
-    bool WorldObject::operator==(const WorldObject& e) {
-        return e.getID() == m_id;
-    }
+const uint64_t& WorldObject::getID() const {
+	return m_id;
+}
 
-    void WorldObject::translate(const Vector3& delta) {
-        m_worldPosition += delta;
-        m_needsMatrixUpdate = true;
-    }
+bool WorldObject::operator==(const WorldObject& e) {
+	return e.getID() == m_id;
+}
 
-    void WorldObject::translateLocal(const Vector3& delta) {
-        m_localPosition += delta;
-        m_needsMatrixUpdate = true;
-    }
+void WorldObject::translate(const Vector3& delta) {
+	m_worldPosition += delta;
+	m_needsMatrixUpdate = true;
+}
 
-    void WorldObject::rotate(const Vector3& axis, const float& angle) {
-        m_worldRotation = fromAngleAxis(angle, axis) * m_worldRotation;
-        m_needsMatrixUpdate = true;
-    }
+void WorldObject::translateLocal(const Vector3& delta) {
+	m_localPosition += delta;
+	m_needsMatrixUpdate = true;
+}
 
-    void WorldObject::rotateLocal(const Vector3& axis, const float& angle) {
-        m_localRotation = fromAngleAxis(angle, axis) * m_localRotation;
-        m_needsMatrixUpdate = true;
-    }
+void WorldObject::rotate(const Vector3& axis, const float& angle) {
+	m_worldRotation = fromAngleAxis(angle, axis) * m_worldRotation;
+	m_needsMatrixUpdate = true;
+}
 
-    const Vector3 &WorldObject::getWorldPosition() const {
-        return m_worldPosition;
-    }
+void WorldObject::rotateLocal(const Vector3& axis, const float& angle) {
+	m_localRotation = fromAngleAxis(angle, axis) * m_localRotation;
+	m_needsMatrixUpdate = true;
+}
 
-    void WorldObject::setWorldPosition(Vector3 mWorldPosition) {
-        m_worldPosition = mWorldPosition;
-        m_needsMatrixUpdate = true;
-    }
+const Vector3& WorldObject::getWorldPosition() const {
+	return m_worldPosition;
+}
 
-    const Vector3 &WorldObject::getLocalPosition() const {
-        return m_localPosition;
-    }
+void WorldObject::setWorldPosition(Vector3 mWorldPosition) {
+	m_worldPosition = mWorldPosition;
+	m_needsMatrixUpdate = true;
+}
 
-    void WorldObject::setLocalPosition(Vector3 mLocalPosition) {
-        m_localPosition = mLocalPosition;
-        m_needsMatrixUpdate = true;
-    }
+const Vector3& WorldObject::getLocalPosition() const {
+	return m_localPosition;
+}
 
-    const Quaternion &WorldObject::getWorldRotation() const {
-        return m_worldRotation;
-    }
+void WorldObject::setLocalPosition(Vector3 mLocalPosition) {
+	m_localPosition = mLocalPosition;
+	m_needsMatrixUpdate = true;
+}
 
-    void WorldObject::setWorldRotation(Quaternion mWorldRotation) {
-        m_worldRotation = mWorldRotation;
-        m_needsMatrixUpdate = true;
-    }
+const Quaternion& WorldObject::getWorldRotation() const {
+	return m_worldRotation;
+}
 
-    const Quaternion &WorldObject::getLocalRotation() const {
-        return m_localRotation;
-    }
+void WorldObject::setWorldRotation(Quaternion mWorldRotation) {
+	m_worldRotation = mWorldRotation;
+	m_needsMatrixUpdate = true;
+}
 
-    void WorldObject::setLocalRotation(Quaternion mLocalRotation) {
-        m_localRotation = mLocalRotation;
-        m_needsMatrixUpdate = true;
-    }
+const Quaternion& WorldObject::getLocalRotation() const {
+	return m_localRotation;
+}
 
-    const Matrix4 &WorldObject::getTransformMatrix() const {
-        return m_transformMatrix;
-    }
+void WorldObject::setLocalRotation(Quaternion mLocalRotation) {
+	m_localRotation = mLocalRotation;
+	m_needsMatrixUpdate = true;
+}
 
-    void WorldObject::setTransformMatrix(Matrix4 transformMatrix) {
-        m_transformMatrix = transformMatrix;
-        m_needsMatrixUpdate = true;
-    }
+const Matrix4& WorldObject::getTransformMatrix() const {
+	return m_transformMatrix;
+}
 
-    void WorldObject::updateTransformationMatrix() {
-        updateTransformMatrix(this, &m_transformMatrix);
-    }
+void WorldObject::setTransformMatrix(Matrix4 transformMatrix) {
+	m_transformMatrix = transformMatrix;
+	m_needsMatrixUpdate = true;
+}
 
-    bool WorldObject::needsMatrixUpdate() const {
-        return m_needsMatrixUpdate;
-    }
+void WorldObject::updateTransformationMatrix() {
+	updateTransformMatrix(this, &m_transformMatrix);
+}
 
-    const Vector3 &WorldObject::getScale() const {
-        return m_scale;
-    }
+bool WorldObject::needsMatrixUpdate() const {
+	return m_needsMatrixUpdate;
+}
 
-    void WorldObject::setScale(Vector3 scale) {
-        m_scale = scale;
-    }
+const Vector3& WorldObject::getScale() const {
+	return m_scale;
+}
 
-} // bird
+void WorldObject::setScale(Vector3 scale) {
+	m_scale = scale;
+}
+
+void WorldObject::addComponent(std::unique_ptr<Component> component) {
+	Component* c = component.get();
+	m_components.emplace_back(std::move(component));
+	c->setParent(this);
+	c->init();
+}
+
+void WorldObject::removeComponent(Component* component) {
+	component->deinit();
+	m_components.erase(std::remove_if(m_components.begin(), m_components.end(),
+									  [&](std::unique_ptr<Component>& comp) {
+										  return (component == comp.get());
+									  }),
+					   m_components.begin());
+}
+
+}  // namespace bird

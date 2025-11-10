@@ -9,6 +9,7 @@ namespace bird {
 
 Input* INPUT = nullptr;
 ResourceManager* RESOURCE_MANAGER = nullptr;
+Application* APPLICATION = nullptr;
 
 Application::Application(Scene& scene) : m_scene(&scene) {}
 
@@ -19,6 +20,7 @@ void Application::init() {
 	m_graphicsPipeline->init();
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	RESOURCE_MANAGER = new ResourceManager();
+	APPLICATION = this;
 
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 
@@ -46,6 +48,10 @@ void Application::run() {
 	while (!m_graphicsPipeline->getWindow()->shouldWindowClose()) {
 		delta = (glfwGetTime() - lastTime);
 		lastTime = glfwGetTime();
+		m_graphicsPipeline->getCamera()->process(delta);
+		if (m_graphicsPipeline->getCamera()->needsMatrixUpdate()) {
+			m_graphicsPipeline->getCamera()->updateTransformationMatrix();
+		}
 		processScene(m_scene, delta);
 		m_graphicsPipeline->renderRootScene(m_scene);
 		INPUT->tick();
@@ -74,5 +80,16 @@ void Application::deinit() {
 	m_graphicsPipeline->cleanUp();
 	delete m_graphicsPipeline;
 }
+void Application::setCamera(bird::Camera* camera) {
+	m_graphicsPipeline->setCamera(camera);
+}
+bird::Camera* Application::getCamera() {
+	return m_graphicsPipeline->getCamera();
+}
+
+GraphicsPipeline* Application::getGraphicsPipeline() {
+	return m_graphicsPipeline;
+}
 
 }  // namespace bird
+//

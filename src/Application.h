@@ -8,27 +8,32 @@
 #include "renders/GraphicsPipeline.h"
 #include "renders/opengl/GLPipeline.h"
 #include "renders/vulkan/VKPipeline.h"
-#include "util/ResourceManager.h"
 #include "util/Input.h"
+#include "util/ResourceManager.h"
 
 namespace bird {
 
-    class Application {
-    public:
-        Application(Scene& scene);
-        ~Application();
+class Application {
+   public:
+	Application(Scene& scene);
+	~Application();
 
-        void init();
-        void deinit();
+	void init();
+	void deinit();
 
-        void run();
-        void processScene(Scene* scene, float delta);
-    private:
-        GraphicsPipeline* m_graphicsPipeline;
-        Scene* m_scene;
+	void run();
+	void processScene(Scene* scene, float delta);
 
-    };
+	void setCamera(Camera* camera);
+	Camera* getCamera();
 
-} // bird
+	GraphicsPipeline* getGraphicsPipeline();
 
-#endif //BIRD_APPLICATION_H
+   private:
+	GraphicsPipeline* m_graphicsPipeline;
+	Scene* m_scene;
+};
+
+}  // namespace bird
+
+#endif	// BIRD_APPLICATION_H
