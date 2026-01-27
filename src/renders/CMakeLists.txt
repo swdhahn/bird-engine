@@ -14,7 +14,9 @@ add_library(
   generic/Material.cpp
   generic/Material.h
   generic/Shader.cpp
-  generic/Shader.h)
+  generic/Shader.h
+  generic/FrameBuffer.h
+  generic/FrameBuffer.cpp)
 
 add_subdirectory(vulkan)
 

@@ -70,6 +70,10 @@ class Texture : public Resource {
 	static TextureBuilder create(void* data, uint32_t width, uint32_t height,
 								 TextureFormat format);
 
+	const TextureFormat& getFormat();
+	uint32_t getWidth();
+	uint32_t getHeight();
+
    protected:
 	void* m_pData;
 	uint32_t m_width, m_height;

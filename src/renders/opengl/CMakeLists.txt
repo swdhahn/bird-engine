@@ -9,5 +9,7 @@ add_library(
   GLMesh.cpp
   GLMesh.h
   GLShader.cpp
-  GLShader.h)
+  GLShader.h
+  GLFrameBuffer.h
+  GLFrameBuffer.cpp)
 set_target_properties(opengl-renderer PROPERTIES POSITION_INDEPENDENT_CODE TRUE)

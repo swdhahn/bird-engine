@@ -6,14 +6,21 @@
 
 #include <pstl/glue_algorithm_defs.h>
 
+#include <cstring>
+#include <memory>
+
+#include "generic/Mesh.h"
+
 namespace bird {
 
 GraphicsPipelineType CURRENT_GRAPHICS_PIPELINE = GRAPHICS_PIPELINE_NONE;
+uint32_t WINDOW_WIDTH = 1280;
+uint32_t WINDOW_HEIGHT = 720;
 
 GraphicsPipeline::GraphicsPipeline(GraphicsPipelineType graphicsPipeline) {
 	CURRENT_GRAPHICS_PIPELINE = graphicsPipeline;
-	m_defaultCamera =
-		new DefaultCamera(1280, 720);  // TODO: Make this configurable
+	m_defaultCamera = new DefaultCamera(
+		WINDOW_WIDTH, WINDOW_HEIGHT);  // TODO: Make this configurable
 	m_camera = m_defaultCamera;
 }
 
@@ -36,6 +43,47 @@ void GraphicsPipeline::initializeGraphicSpecifics() {
 		std::move(material), 1);
 	m_materialUBO->setBindingPoint(1);
 	m_materialUBO->initialize();
+
+	const float verticies[] = {
+		// Triangle 1
+		-1.0f, 1.0f, 0.0f,	 // 0: Top-Left
+		-1.0f, -1.0f, 0.0f,	 // 1: Bottom-Left
+		1.0f, 1.0f, 0.0f,	 // 2: Top-Right
+
+		// Triangle 2
+		1.0f, 1.0f, 0.0f,	 // 3: Top-Right (re-used)
+		-1.0f, -1.0f, 0.0f,	 // 4: Bottom-Left (re-used)
+		1.0f, -1.0f, 0.0f	 // 5: Bottom-Right
+	};
+	const float texCoords[] = {
+		// Triangle 1
+		0.0f, 1.0f,	 // 0: Top-Left
+		0.0f, 0.0f,	 // 1: Bottom-Left
+		1.0f, 1.0f,	 // 2: Top-Right
+
+		// Triangle 2
+		1.0f, 1.0f,	 // 3: Top-Right (re-used)
+		0.0f, 0.0f,	 // 4: Bottom-Left (re-used)
+		1.0f, 0.0f	 // 5: Bottom-Right
+	};
+	std::unique_ptr<float[]> vert =
+		std::make_unique<float[]>(sizeof(float) * 3 * 6);
+	memcpy(vert.get(), verticies, sizeof(float) * 3 * 6);
+	std::unique_ptr<float[]> tex =
+		std::make_unique<float[]>(sizeof(float) * 2 * 6);
+	memcpy(tex.get(), texCoords, sizeof(float) * 2 * 6);
+
+	std::unique_ptr<bird::Buffer<float>> vertexBuffer = createBuffer<float>(
+		static_cast<bird::BufferMode>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY),
+		std::move(vert), 3 * 6);
+	std::unique_ptr<bird::Buffer<float, 2>> texCoordBuffer =
+		createBuffer<float, 2>(static_cast<bird::BufferMode>(
+								   bird::BUFFER_STAGED | bird::BUFFER_ARRAY),
+							   std::move(tex), 2 * 6);
+	m_quad_mesh = MeshBuilder()
+					  .setVertexBuffer(std::move(vertexBuffer))
+					  .setTextureCoordBuffer(std::move(texCoordBuffer))
+					  .build();
 }
 
 std::unique_ptr<Window>& GraphicsPipeline::getWindow() {

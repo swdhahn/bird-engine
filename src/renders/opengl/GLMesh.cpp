@@ -15,7 +15,9 @@ GLMesh::GLMesh(std::unique_ptr<Buffer<uint32_t>> indexBuffer,
 	glGenVertexArrays(1, &m_vao);
 	glBindVertexArray(m_vao);
 
-	m_indexBuffer->initialize();
+	if (m_indexBuffer != nullptr && m_indexBuffer->getBufferSize() > 0) {
+		m_indexBuffer->initialize();
+	}
 
 	glEnableVertexAttribArray(0);
 
@@ -23,19 +25,24 @@ GLMesh::GLMesh(std::unique_ptr<Buffer<uint32_t>> indexBuffer,
 	glVertexAttribPointer(
 		0, m_vertexBuffer->getAttributeSize(), GL_FLOAT, GL_FALSE,
 		m_vertexBuffer->getAttributeSize() * sizeof(float), (void*)0);
-	if (m_normalBuffer->getBufferSize() > 0) {
-		glEnableVertexAttribArray(1);
+	int nextIndex = 1;
+	if (m_normalBuffer != nullptr && m_normalBuffer->getBufferSize() > 0) {
+		glEnableVertexAttribArray(nextIndex);
 		m_normalBuffer->initialize();
 		glVertexAttribPointer(
-			1, m_normalBuffer->getAttributeSize(), GL_FLOAT, GL_FALSE,
+			nextIndex, m_normalBuffer->getAttributeSize(), GL_FLOAT, GL_FALSE,
 			m_normalBuffer->getAttributeSize() * sizeof(float), (void*)0);
+		nextIndex++;
 	}
-	if (m_textureCoordBuffer->getBufferSize() > 0) {
-		glEnableVertexAttribArray(2);
+	if (m_textureCoordBuffer != nullptr &&
+		m_textureCoordBuffer->getBufferSize() > 0) {
+		glEnableVertexAttribArray(nextIndex);
 		m_textureCoordBuffer->initialize();
 		glVertexAttribPointer(
-			2, m_textureCoordBuffer->getAttributeSize(), GL_FLOAT, GL_FALSE,
-			m_textureCoordBuffer->getAttributeSize() * sizeof(float), (void*)0);
+			nextIndex, m_textureCoordBuffer->getAttributeSize(), GL_FLOAT,
+			GL_FALSE, m_textureCoordBuffer->getAttributeSize() * sizeof(float),
+			(void*)0);
+		nextIndex++;
 	}
 }
 

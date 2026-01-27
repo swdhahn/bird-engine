@@ -32,6 +32,8 @@ enum GraphicsPipelineType {
 };
 
 extern GraphicsPipelineType CURRENT_GRAPHICS_PIPELINE;
+extern uint32_t WINDOW_WIDTH;
+extern uint32_t WINDOW_HEIGHT;
 
 }  // namespace bird
 
