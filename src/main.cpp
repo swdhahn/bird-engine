@@ -38,9 +38,23 @@ int main(int argc, char** argv) {
 		std::cerr << "Please provide a path to your application" << std::endl;
 		exit(1);
 	}
-	void* app_handle = dlopen(argv[1], RTLD_NOW | RTLD_GLOBAL);
+	std::string path(argv[1]);
+	path +=
+#if defined(_WIN32) || defined(_WIN64)
+		".dll";
+#elif defined(__APPLE__)
+			".dylib";
+#elif defined(__linux__) || defined(__unix__)
+			".so";
+#else
+					".so";
+#endif
+
+
+
+	void* app_handle = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);
 	if (!app_handle) {
-		std::cerr << "Could not load app dynamic library: " << argv[1]
+		std::cerr << "Could not load app dynamic library: " << path
 				  << std::endl;
 		std::cerr << "dlopen error: " << dlerror() << std::endl;
 		exit(1);
