@@ -24,7 +24,10 @@ add_library(Bird_core SHARED ${BIRD_FILES})
 add_executable(Bird src/main.cpp)
 target_link_libraries(Bird Bird_core)
 
-target_link_options(Bird_core PRIVATE -Wl,-Bsymbolic)
+target_link_options(
+  Bird_core PRIVATE
+  # Only apply -Bsymbolic on Linux and Android (ELF systems)
+  $<$<PLATFORM_ID:Linux,Android>:-Wl,-Bsymbolic>)
 set_target_properties(Bird_core PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 
 if(APPLE)
