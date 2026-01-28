@@ -5,6 +5,7 @@
 #ifndef BIRD_GRAPHICSPIPELINE_H
 #define BIRD_GRAPHICSPIPELINE_H
 
+#include <memory>
 #include <string>
 
 #include "../scene/Camera.h"
@@ -12,6 +13,7 @@
 #include "../scene/Scene.h"
 #include "../scene/components/MeshComponent.h"
 #include "Window.h"
+#include "generic/FrameBuffer.h"
 
 namespace bird {
 
@@ -59,6 +61,8 @@ class GraphicsPipeline {
 
 	// std::list fix this
 	std::vector<MeshComponent*> m_meshes;
+	std::vector<std::unique_ptr<FrameBuffer>> m_framebuffers;
+	std::shared_ptr<Mesh> m_quad_mesh;
 };
 
 }  // namespace bird

@@ -6,6 +6,10 @@
 
 #include <memory>
 
+#include "../generic/FrameBuffer.h"
+#include "GLFrameBuffer.h"
+#include "GLMesh.h"
+
 namespace bird::gl {
 
 GLPipeline::GLPipeline() : GraphicsPipeline(GRAPHICS_PIPELINE_OPENGL) {}
@@ -13,7 +17,7 @@ GLPipeline::GLPipeline() : GraphicsPipeline(GRAPHICS_PIPELINE_OPENGL) {}
 GLPipeline::~GLPipeline() {}
 
 void GLPipeline::init() {
-	m_pWindow = std::make_unique<Window>(1280, 720, "Window");
+	m_pWindow = std::make_unique<Window>(WINDOW_WIDTH, WINDOW_HEIGHT, "Window");
 
 	glewExperimental = true;
 	int code = 0;
@@ -26,13 +30,46 @@ void GLPipeline::init() {
 
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_DEBUG_OUTPUT);
+
+	FrameBufferBuilder builder;
+	builder.addTextureAttachment(
+		TextureBuilder(nullptr, WINDOW_WIDTH, WINDOW_HEIGHT, FORMAT_8RGBA)
+			.build());
+	builder.setShader(
+		ShaderBuilder()
+			.attachShaderFile("assets/shaders/passthrough.vert", VERTEX)
+			.attachShaderFile("assets/shaders/passthrough.frag", FRAGMENT)
+			.create());
+	builder.addOpts(FRAMEBUFFER_OPT_DEPTH | FRAMEBUFFER_OPT_STENCIL);
+	m_framebuffers.emplace_back(builder.build());
 }
 
 void GLPipeline::renderRootScene(const bird::Scene* scene) {
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glClearColor(0, 0, 0, 1);
+	glEnable(GL_DEPTH_TEST);
+	glClearColor(1, 0, 0, 1);
 
+	m_framebuffers.at(0).get()->bind(nullptr);
 	renderScene(scene);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+	((GLFrameBuffer*)m_framebuffers.at(0).get())->bindAttachments();
+
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glDisable(GL_BLEND);
+	glDisable(GL_SCISSOR_TEST);	 // <--- Likely Culprit
+	glDisable(GL_STENCIL_TEST);	 // <--- Possible Culprit
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE,
+				GL_TRUE);  // <--- Ensure we can write
+	glDepthMask(GL_TRUE);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glBindVertexArray(((GLMesh*)m_quad_mesh.get())->getVAO());
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+	glActiveTexture(GL_TEXTURE0);
+
+	glfwSwapBuffers(m_pWindow->getGLFWWindow());
 }
 
 void GLPipeline::renderScene(const Scene* scene) {
