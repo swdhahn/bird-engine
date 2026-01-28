@@ -61,8 +61,7 @@ void Shader::initResources(std::vector<uint32_t> spirv_binary) {
 	//*/
 }
 
-std::string preprocessShader(const std::string& source_name,
-							 shaderc_shader_kind kind,
+std::string preprocessShader(const std::string& source_name, int32_t kind,
 							 const std::string& source) {
 	shaderc::Compiler compiler;
 	shaderc::CompileOptions options;
@@ -71,7 +70,8 @@ std::string preprocessShader(const std::string& source_name,
 	// options.AddMacroDefinition("MY_DEFINE", "1");
 
 	shaderc::PreprocessedSourceCompilationResult result =
-		compiler.PreprocessGlsl(source, kind, source_name.c_str(), options);
+		compiler.PreprocessGlsl(source, (shaderc_shader_kind)kind,
+								source_name.c_str(), options);
 
 	if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
 		std::cerr << result.GetErrorMessage();
@@ -83,8 +83,8 @@ std::string preprocessShader(const std::string& source_name,
 
 std::vector<uint32_t> compileShader(const std::string& source_name,
 									const std::string& source,
-									const std::string& prevSource,
-									shaderc_shader_kind kind, bool optimize) {
+									const std::string& prevSource, int32_t kind,
+									bool optimize) {
 	shaderc::Compiler compiler;
 	shaderc::CompileOptions options;
 
@@ -96,8 +96,8 @@ std::vector<uint32_t> compileShader(const std::string& source_name,
 	options.SetPreserveBindings(true);
 	options.SetGenerateDebugInfo();
 
-	shaderc::SpvCompilationResult module =
-		compiler.CompileGlslToSpv(source, kind, (source_name).c_str(), options);
+	shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(
+		source, (shaderc_shader_kind)kind, (source_name).c_str(), options);
 
 	if (module.GetCompilationStatus() != shaderc_compilation_status_success) {
 		std::cerr << module.GetErrorMessage();

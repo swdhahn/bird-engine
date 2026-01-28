@@ -10,20 +10,22 @@
 
 namespace bird::gl {
 
-    class GLMesh : public Mesh {
-    public:
-        GLMesh(std::unique_ptr<Buffer<uint32_t>> indexBuffer, std::unique_ptr<Buffer<float>> vertexBuffer,
-                std::unique_ptr<Buffer<float>> normalBuffer, std::unique_ptr<Buffer<float, 2>> textureCoordBuffer);
-        ~GLMesh();
+class GLMesh : public Mesh {
+   public:
+	GLMesh(std::unique_ptr<Buffer<uint32_t>> indexBuffer,
+		   std::unique_ptr<Buffer<float>> vertexBuffer,
+		   std::unique_ptr<Buffer<float>> normalBuffer,
+		   std::unique_ptr<Buffer<float, 2>> textureCoordBuffer);
+	~GLMesh();
 
-        void updateMesh() override;
+	void updateMesh() override;
 
-        const uint32_t& getVAO() const;
-    private:
-        uint32_t m_vao;
+	const uint32_t& getVAO() const;
 
-    };
+   private:
+	uint32_t m_vao;
+};
 
-} // bird
+}  // namespace bird::gl
 
-#endif //BIRD_GLMESH_H
+#endif	// BIRD_GLMESH_H

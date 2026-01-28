@@ -5,8 +5,6 @@
 #ifndef BIRD_SHADER_H
 #define BIRD_SHADER_H
 
-#include <shaderc/shaderc.hpp>
-#include <spirv_cross/spirv_glsl.hpp>
 #include <string>
 #include <vector>
 
@@ -51,13 +49,11 @@ class Shader : public Resource {
 	std::vector<std::string> m_variableNames;
 };
 
-std::string preprocessShader(const std::string& source_name,
-							 shaderc_shader_kind kind,
+std::string preprocessShader(const std::string& source_name, int32_t kind,
 							 const std::string& source);
 std::vector<uint32_t> compileShader(const std::string& source,
 									const std::string& source_name,
-									const std::string& prevSource,
-									shaderc_shader_kind kind,
+									const std::string& prevSource, int32_t kind,
 									bool optimize = false);
 std::pair<std::string, std::vector<std::pair<uint32_t, std::string>>>
 decompileShader_glsl(std::vector<uint32_t> spirv_binary,

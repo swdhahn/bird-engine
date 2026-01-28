@@ -5,8 +5,6 @@
 #ifndef BIRD_VKCONSTANTS_H
 #define BIRD_VKCONSTANTS_H
 
-#include <volk.h>
-
 #include "../GraphicsConstants.h"
 
 namespace bird::vk {

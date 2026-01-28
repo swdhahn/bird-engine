@@ -1,50 +1,36 @@
-//
-// Created by Seth Hahn on 11/18/22.
-//
-
 #ifndef BIRD_BUFFERTEMPLATE_H
 #define BIRD_BUFFERTEMPLATE_H
 
-#include "../GraphicsConstants.h"
+#include "../opengl/GLBuffer.h"
+#include "RawBuffer.h"
 
 namespace bird {
-
-enum BufferMode {
-	// equivalent to
-	BUFFER_MAPPED = 1,
-	BUFFER_STAGED = 2,
-	BUFFER_ARRAY = 4,
-	BUFFER_ELEMENT_ARRAY = 8,
-	BUFFER_TEXTURE = 16,
-	BUFFER_UNIFORM = 32
-
-};
-
-class RawBuffer {
-public:
-	//RawBuffer(int size, void* data, int attributeSize);
-	//~RawBuffer();
-
-private:
-
-
-};
-
 template <typename T, uint8_t t_attributeSize = 3>
 class Buffer {
    public:
-	Buffer(BufferMode mode, size_t size);
-	Buffer(BufferMode mode, std::unique_ptr<T[]> pData, size_t size);
-	virtual ~Buffer();
+	Buffer(std::unique_ptr<RawBuffer> bufferData);
+	Buffer(std::unique_ptr<T[]> m_pData, std::unique_ptr<RawBuffer> bufferData);
+	~Buffer();
 
-	static RawBuffer* createBuffer(uint32_t size, BufferMode mode, uint8_t attributeSize);
+	void initialize() {
+		m_rawBuffer->initialize();
+	}
 
-	virtual void initialize() = 0;
-	virtual void initialize(std::unique_ptr<T[]> pData, size_t size) = 0;
-	virtual void update(T* pData, size_t size, uint32_t offset) = 0;
+	void initialize(std::unique_ptr<T[]> pData, size_t size) {
+		m_pData = std::move(pData);
+		m_rawBuffer->initialize((void*)pData.get(), size);
+	}
 
-	const size_t& getBufferSize() const;
-	const BufferMode& getBufferMode() const;
+	void update(T* pData, size_t size, uint32_t offset) {
+		m_rawBuffer->update((void*)pData, size, offset);
+	}
+
+	const size_t& getBufferSize() const {
+		return m_rawBuffer->m_size;
+	}
+	const BufferMode& getBufferMode() const {
+		return m_rawBuffer->m_bufferMode;
+	}
 	/**
 	 * @return the size of each attribute. The count of objects in
 	 * buffer is [getBufferSize() / getAttributeSize();]
@@ -53,38 +39,65 @@ class Buffer {
 		return t_attributeSize;
 	}
 	void setBindingPoint(uint32_t bindingPoint) {
-		m_bindingPoint = bindingPoint;
+		m_rawBuffer->m_bindingPoint = bindingPoint;
 	}
 
 	std::unique_ptr<T[]> m_pData;
 
    protected:
-	size_t m_size;
-	uint32_t m_bindingPoint;
-	BufferMode m_bufferMode;
+	std::unique_ptr<RawBuffer> m_rawBuffer;
 };
 
 template <typename T, uint8_t t_attributeSize>
-Buffer<T, t_attributeSize>::Buffer(BufferMode mode, size_t size)
-	: Buffer(mode, std::make_unique<T[]>(new T[size]), size) {}
+
+Buffer<T, t_attributeSize>::Buffer(std::unique_ptr<RawBuffer> bufferData)
+	: Buffer(std::unique_ptr<T[]>(bufferData->m_pData), bufferData) {
+	m_rawBuffer->m_dataSize = t_attributeSize;
+}
 template <typename T, uint8_t t_attributeSize>
-Buffer<T, t_attributeSize>::Buffer(BufferMode mode, std::unique_ptr<T[]> pData,
-								   size_t size)
-	: m_size(size),
-	  m_bufferMode(mode),
-	  m_pData(std::move(pData)),
-	  m_bindingPoint(0) {}
+Buffer<T, t_attributeSize>::Buffer(std::unique_ptr<T[]> pData,
+								   std::unique_ptr<RawBuffer> bufferData)
+	: m_rawBuffer(std::move(bufferData)), m_pData(std::move(pData)) {
+	m_rawBuffer->m_dataSize = t_attributeSize;
+}
 template <typename T, uint8_t t_attributeSize>
 Buffer<T, t_attributeSize>::~Buffer() {}
 
-template <typename T, uint8_t t_attributeSize>
-const size_t& Buffer<T, t_attributeSize>::getBufferSize() const {
-	return m_size;
+template <typename T, uint8_t t_attributeSize = 3>
+std::unique_ptr<Buffer<T, t_attributeSize>> createBuffer(BufferMode mode,
+														 size_t size) {
+	std::unique_ptr<Buffer<T, t_attributeSize>> ptr = nullptr;
+
+	switch (CURRENT_GRAPHICS_PIPELINE) {
+		case GRAPHICS_PIPELINE_OPENGL:
+			ptr = std::make_unique<bird::Buffer<T, t_attributeSize>>(
+				std::make_unique<bird::gl::GLBuffer>(mode, size));
+
+			break;
+		default:
+			throw std::runtime_error(
+				"No other graphics pipelines currently support shaders...");
+	}
+	return ptr;
 }
 
-template <typename T, uint8_t t_attributeSize>
-const BufferMode& Buffer<T, t_attributeSize>::getBufferMode() const {
-	return m_bufferMode;
+template <typename T, uint8_t t_attributeSize = 3>
+std::unique_ptr<Buffer<T, t_attributeSize>> createBuffer(
+	BufferMode mode, std::unique_ptr<T[]> pData, size_t size) {
+	std::unique_ptr<Buffer<T, t_attributeSize>> ptr = nullptr;
+
+	switch (CURRENT_GRAPHICS_PIPELINE) {
+		case GRAPHICS_PIPELINE_OPENGL:
+			ptr = std::make_unique<bird::Buffer<T, t_attributeSize>>(
+				std::move(pData),
+				std::make_unique<bird::gl::GLBuffer>(mode, size));
+
+			break;
+		default:
+			throw std::runtime_error(
+				"No other graphics pipelines currently support shaders...");
+	}
+	return std::move(ptr);
 }
 
 }  // namespace bird

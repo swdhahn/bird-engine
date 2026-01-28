@@ -4,9 +4,10 @@
 
 #include "GLShader.h"
 
+#include <GL/glew.h>
+
 #include <shaderc/shaderc.hpp>
 #include <spirv_cross/spirv_glsl.hpp>
-
 
 namespace bird::gl {
 

@@ -7,7 +7,6 @@
 
 #include "renders/GraphicsPipeline.h"
 #include "renders/opengl/GLPipeline.h"
-#include "renders/vulkan/VKPipeline.h"
 #include "util/Input.h"
 #include "util/ResourceManager.h"
 

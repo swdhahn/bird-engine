@@ -3,58 +3,62 @@
 //
 
 #include "Window.h"
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+
 #include "GraphicsPipeline.h"
 
 namespace bird {
 
-    Window::Window(uint32_t width, uint32_t height, std::string title) {
-        if(!glfwInit()) {
-            throw std::runtime_error("GLFW could not be initialized!");
-        }
+Window::Window(uint32_t width, uint32_t height, std::string title) {
+	if (!glfwInit()) {
+		throw std::runtime_error("GLFW could not be initialized!");
+	}
 
-        if(CURRENT_GRAPHICS_PIPELINE == GRAPHICS_PIPELINE_VULKAN) {
-            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-            m_pWindow = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
-        } else if(CURRENT_GRAPHICS_PIPELINE == GRAPHICS_PIPELINE_OPENGL) {
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+	if (CURRENT_GRAPHICS_PIPELINE == GRAPHICS_PIPELINE_VULKAN) {
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		m_pWindow =
+			glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
+	} else if (CURRENT_GRAPHICS_PIPELINE == GRAPHICS_PIPELINE_OPENGL) {
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 #ifdef __APPLE__
-            glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
-            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-            m_pWindow = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
+		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+		m_pWindow =
+			glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
 
-            glfwMakeContextCurrent(m_pWindow);
-            int fwidth, fheight;
-            glfwGetFramebufferSize(m_pWindow, &fwidth, &fheight);
-            glViewport(0, 0, fwidth, fheight);
-        } else {
-            throw std::invalid_argument("Graphics Pipeline is not supported!");
-        }
-    }
+		glfwMakeContextCurrent(m_pWindow);
+		int fwidth, fheight;
+		glfwGetFramebufferSize(m_pWindow, &fwidth, &fheight);
+		glViewport(0, 0, fwidth, fheight);
+	} else {
+		throw std::invalid_argument("Graphics Pipeline is not supported!");
+	}
+}
 
-    bool Window::shouldWindowClose() const {
-        return glfwWindowShouldClose(m_pWindow);
-    }
+bool Window::shouldWindowClose() const {
+	return glfwWindowShouldClose(m_pWindow);
+}
 
-    void Window::pollWindow() const {
-    	glfwSwapBuffers(getGLFWWindow());
-        glfwPollEvents();
-    }
+void Window::pollWindow() const {
+	glfwSwapBuffers(getGLFWWindow());
+	glfwPollEvents();
+}
 
-	double Window::getGLFWTime() {
-    	return glfwGetTime();
-    }
+double Window::getGLFWTime() {
+	return glfwGetTime();
+}
 
-    GLFWwindow* const Window::getGLFWWindow() const {
-        return m_pWindow;
-    }
+GLFWwindow* const Window::getGLFWWindow() const {
+	return m_pWindow;
+}
 
-    Window::~Window() {
-        glfwDestroyWindow(m_pWindow);
-        glfwTerminate();
-    }
+Window::~Window() {
+	glfwDestroyWindow(m_pWindow);
+	glfwTerminate();
+}
 
-} // bird
+}  // namespace bird

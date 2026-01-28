@@ -4,6 +4,8 @@
 
 #include "GLPipeline.h"
 
+#include <GL/glew.h>
+
 #include <memory>
 
 #include "../generic/FrameBuffer.h"
@@ -46,9 +48,10 @@ void GLPipeline::init() {
 
 void GLPipeline::renderRootScene(const bird::Scene* scene) {
 	glEnable(GL_DEPTH_TEST);
-	glClearColor(1, 0, 0, 1);
 
 	m_framebuffers.at(0).get()->bind(nullptr);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER);
+	glClearColor(0.2, 0, 0, 1);
 	renderScene(scene);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -56,20 +59,10 @@ void GLPipeline::renderRootScene(const bird::Scene* scene) {
 	((GLFrameBuffer*)m_framebuffers.at(0).get())->bindAttachments();
 
 	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_CULL_FACE);
-	glDisable(GL_BLEND);
-	glDisable(GL_SCISSOR_TEST);	 // <--- Likely Culprit
-	glDisable(GL_STENCIL_TEST);	 // <--- Possible Culprit
-	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE,
-				GL_TRUE);  // <--- Ensure we can write
-	glDepthMask(GL_TRUE);
 	glClear(GL_COLOR_BUFFER_BIT);
 	glBindVertexArray(((GLMesh*)m_quad_mesh.get())->getVAO());
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glActiveTexture(GL_TEXTURE0);
-
-	glfwSwapBuffers(m_pWindow->getGLFWWindow());
 }
 
 void GLPipeline::renderScene(const Scene* scene) {
