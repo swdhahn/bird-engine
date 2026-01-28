@@ -5,5 +5,8 @@
 #include "Buffer.h"
 
 namespace bird {
+	static RawBuffer* createBuffer(uint32_t size, BufferMode mode, uint8_t attributeSize) {
+
+	}
 
 } // bird

@@ -4,6 +4,7 @@
 
 #include "GLMesh.h"
 
+
 namespace bird::gl {
 
 GLMesh::GLMesh(std::unique_ptr<Buffer<uint32_t>> indexBuffer,

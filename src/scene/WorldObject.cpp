@@ -4,8 +4,6 @@
 
 #include "WorldObject.h"
 
-#include <pstl/glue_algorithm_defs.h>
-
 namespace bird {
 
 WorldObject::WorldObject()

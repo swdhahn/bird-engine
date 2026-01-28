@@ -3,6 +3,8 @@
 //
 
 #include "Window.h"
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
 #include "GraphicsPipeline.h"
 
 namespace bird {
@@ -38,7 +40,12 @@ namespace bird {
     }
 
     void Window::pollWindow() const {
+    	glfwSwapBuffers(getGLFWWindow());
         glfwPollEvents();
+    }
+
+	double Window::getGLFWTime() {
+    	return glfwGetTime();
     }
 
     GLFWwindow* const Window::getGLFWWindow() const {

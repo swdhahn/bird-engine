@@ -5,8 +5,13 @@
 #ifndef BIRD_GRAPHICSCONSTANTS_H
 #define BIRD_GRAPHICSCONSTANTS_H
 
-#include <bits/stdc++.h>
-#include <memory.h>
+#include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <memory>
 
 #include <array>
 #include <cstdint>
@@ -18,8 +23,7 @@
 #include <vector>
 
 #include "../util/Math.h"
-#include "GL/glew.h"
-#include "GLFW/glfw3.h"
+
 
 namespace bird {
 

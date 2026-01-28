@@ -5,8 +5,13 @@
 #ifndef BIRD_TEXTURE_H
 #define BIRD_TEXTURE_H
 
-#include <bits/stdc++.h>
-
+#include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <memory>
 #include <cstdint>
 #include <string>
 

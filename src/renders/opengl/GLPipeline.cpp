@@ -33,8 +33,6 @@ void GLPipeline::renderRootScene(const bird::Scene* scene) {
 	glClearColor(0, 0, 0, 1);
 
 	renderScene(scene);
-
-	glfwSwapBuffers(m_pWindow->getGLFWWindow());
 }
 
 void GLPipeline::renderScene(const Scene* scene) {

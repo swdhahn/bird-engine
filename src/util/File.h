@@ -5,7 +5,13 @@
 #ifndef BIRD_FILE_H
 #define BIRD_FILE_H
 
-#include <bits/stdc++.h>
+#include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <memory>
 #include <fstream>
 #include <iostream>
 #include <memory.h>

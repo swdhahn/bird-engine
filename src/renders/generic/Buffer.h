@@ -20,12 +20,24 @@ enum BufferMode {
 
 };
 
+class RawBuffer {
+public:
+	//RawBuffer(int size, void* data, int attributeSize);
+	//~RawBuffer();
+
+private:
+
+
+};
+
 template <typename T, uint8_t t_attributeSize = 3>
 class Buffer {
    public:
 	Buffer(BufferMode mode, size_t size);
 	Buffer(BufferMode mode, std::unique_ptr<T[]> pData, size_t size);
 	virtual ~Buffer();
+
+	static RawBuffer* createBuffer(uint32_t size, BufferMode mode, uint8_t attributeSize);
 
 	virtual void initialize() = 0;
 	virtual void initialize(std::unique_ptr<T[]> pData, size_t size) = 0;

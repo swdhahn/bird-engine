@@ -5,8 +5,13 @@
 #ifndef BIRD_WORLDOBJECT_H
 #define BIRD_WORLDOBJECT_H
 
-#include <bits/stdc++.h>
-
+#include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <cmath>
+#include <map>
+#include <memory>
 #include <memory>
 
 #include "../util/Input.h"

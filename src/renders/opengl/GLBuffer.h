@@ -8,6 +8,7 @@
 #include <typeindex>
 
 #include "../generic/Buffer.h"
+#include <GL/glew.h>
 
 namespace bird::gl {
 

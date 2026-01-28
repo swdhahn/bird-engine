@@ -4,8 +4,6 @@
 
 #include "GraphicsPipeline.h"
 
-#include <pstl/glue_algorithm_defs.h>
-
 namespace bird {
 
 GraphicsPipelineType CURRENT_GRAPHICS_PIPELINE = GRAPHICS_PIPELINE_NONE;

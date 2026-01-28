@@ -4,6 +4,8 @@
 
 #include "GLTexture.h"
 #include "../GraphicsConstants.h"
+#include <GL/glew.h>
+
 
 namespace bird::gl {
 

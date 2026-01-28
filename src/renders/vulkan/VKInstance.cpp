@@ -4,6 +4,7 @@
 
 #include "VKInstance.h"
 #include "VKPipeline.h"
+#include <GLFW/glfw3.h>
 
 namespace bird::vk {
 

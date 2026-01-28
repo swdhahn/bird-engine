@@ -7,6 +7,7 @@
 #include <shaderc/shaderc.hpp>
 #include <spirv_cross/spirv_glsl.hpp>
 
+
 namespace bird::gl {
 
 GLShader::GLShader(

@@ -9,7 +9,6 @@
 
 #include "../renders/generic/Buffer.h"
 #include "../renders/GraphicsConstants.h"
-#include "../renders/opengl/GLBuffer.h"
 
 #include "../renders/generic/Texture.h"
 #include "../renders/generic/Shader.h"

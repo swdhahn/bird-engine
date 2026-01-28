@@ -42,12 +42,12 @@ void Application::init() {
 void Application::run() {
 	init();
 
-	double lastTime = glfwGetTime();
+	double lastTime = Window::getGLFWTime();
 	float delta = 0.0f;
 
 	while (!m_graphicsPipeline->getWindow()->shouldWindowClose()) {
-		delta = (glfwGetTime() - lastTime);
-		lastTime = glfwGetTime();
+		delta = (Window::getGLFWTime() - lastTime);
+		lastTime = Window::getGLFWTime();
 		m_graphicsPipeline->getCamera()->process(delta);
 		if (m_graphicsPipeline->getCamera()->needsMatrixUpdate()) {
 			m_graphicsPipeline->getCamera()->updateTransformationMatrix();

@@ -7,6 +7,9 @@
 
 #include "GraphicsConstants.h"
 
+
+struct GLFWwindow;
+
 namespace bird {
 
     class Window {
@@ -16,6 +19,7 @@ namespace bird {
 
         bool shouldWindowClose() const;
         void pollWindow() const;
+    	double static getGLFWTime();
 
         GLFWwindow* const getGLFWWindow() const;
 
