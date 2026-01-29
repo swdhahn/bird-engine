@@ -120,6 +120,6 @@ class MainScene : public bird::Scene {
 	POVCamera* cam = nullptr;
 };
 
-extern "C" bird::Scene* app_entry() {
+extern "C" BIRD_API_EXPORT bird::Scene* app_entry() {
 	return new MainScene;
 }

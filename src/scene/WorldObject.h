@@ -1,6 +1,14 @@
-//
-// Created by Seth Hahn on 11/30/22.
-//
+#if defined(_WIN32) || defined(_MSC_VER)
+    #ifdef BIRD_CORE_EXPORTS
+        #define BIRD_API __declspec(dllexport)
+    #else
+        #define BIRD_API __declspec(dllimport)
+    #endif
+	#define BIRD_API_EXPORT __declspec(dllexport)
+#else
+    // For GCC/Linux, BIRD_API does nothing (default visibility)
+    #define BIRD_API 
+#endif
 
 #ifndef BIRD_WORLDOBJECT_H
 #define BIRD_WORLDOBJECT_H
@@ -21,10 +29,10 @@
 
 namespace bird {
 
-extern Input* INPUT;
-extern ResourceManager* RESOURCE_MANAGER;
+extern BIRD_API Input* INPUT;
+extern BIRD_API ResourceManager* RESOURCE_MANAGER;
 class Application;
-extern Application* APPLICATION;
+extern BIRD_API Application* APPLICATION;
 class Component;
 
 class WorldObject {
