@@ -44,7 +44,7 @@ bool Window::shouldWindowClose() const {
 }
 
 void Window::pollWindow() const {
-	glfwSwapBuffers(getGLFWWindow());
+	glfwSwapBuffers(m_pWindow);
 	glfwPollEvents();
 }
 

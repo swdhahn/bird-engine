@@ -19,18 +19,16 @@ GLFrameBuffer::GLFrameBuffer(
 		tex->bind();
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glGenerateMipmap(GL_TEXTURE_2D);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i,
 							   GL_TEXTURE_2D, tex->getTextureID(), 0);
 		tex->unbind();
 	}
 
-	/*GLenum* buffers = new GLenum[textureAttachments.size()];
+	std::vector<GLenum> buffers(textureAttachments.size());
 	for (int i = 0; i < textureAttachments.size(); i++) {
 		buffers[i] = GL_COLOR_ATTACHMENT0 + i;
 	}
-	glDrawBuffers(textureAttachments.size(), buffers);
-	delete[] buffers;*/
+	glDrawBuffers(textureAttachments.size(), buffers.data());
 
 	bool hasDepth = (opts & FRAMEBUFFER_OPT_DEPTH);
 	bool hasStencil = (opts & FRAMEBUFFER_OPT_STENCIL);

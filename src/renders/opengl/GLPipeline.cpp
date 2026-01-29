@@ -31,6 +31,7 @@ void GLPipeline::init() {
 	initializeGraphicSpecifics();
 
 	glEnable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
 	glEnable(GL_DEBUG_OUTPUT);
 
 	FrameBufferBuilder builder;
@@ -40,7 +41,7 @@ void GLPipeline::init() {
 	builder.setShader(
 		ShaderBuilder()
 			.attachShaderFile("assets/shaders/passthrough.vert", VERTEX)
-			.attachShaderFile("assets/shaders/passthrough.frag", FRAGMENT)
+			.attachShaderFile("assets/shaders/fxaa.frag", FRAGMENT)
 			.create());
 	builder.addOpts(FRAMEBUFFER_OPT_DEPTH | FRAMEBUFFER_OPT_STENCIL);
 	m_framebuffers.emplace_back(builder.build());
@@ -50,19 +51,24 @@ void GLPipeline::renderRootScene(const bird::Scene* scene) {
 	glEnable(GL_DEPTH_TEST);
 
 	m_framebuffers.at(0).get()->bind(nullptr);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER);
+
 	glClearColor(0.2, 0, 0, 1);
 	renderScene(scene);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	((GLFrameBuffer*)m_framebuffers.at(0).get())->bindAttachments();
 
 	glDisable(GL_DEPTH_TEST);
-	glClear(GL_COLOR_BUFFER_BIT);
 	glBindVertexArray(((GLMesh*)m_quad_mesh.get())->getVAO());
 	glDrawArrays(GL_TRIANGLES, 0, 6);
-	glActiveTexture(GL_TEXTURE0);
+	glBindVertexArray(0);
+	auto& attachments = m_framebuffers.at(0)->getColorAttachments();
+	for (int i = 0; i < attachments.size(); i++) {
+		glActiveTexture(GL_TEXTURE0 + i);
+		glBindTexture(GL_TEXTURE_2D, 0);  // Unbind each texture
+	}
 }
 
 void GLPipeline::renderScene(const Scene* scene) {

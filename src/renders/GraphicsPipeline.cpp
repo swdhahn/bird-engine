@@ -4,7 +4,6 @@
 
 #include "GraphicsPipeline.h"
 
-
 #include <cstring>
 #include <memory>
 

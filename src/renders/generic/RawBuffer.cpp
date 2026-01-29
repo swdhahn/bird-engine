@@ -8,8 +8,6 @@
 #include "Buffer.h"
 namespace bird {
 
-RawBuffer::RawBuffer(BufferMode mode, size_t size)
-	: m_bufferMode(mode), m_size(size) {}
 RawBuffer::RawBuffer(BufferMode mode, void* pData, size_t size)
 	: m_pData(pData), m_size(size), m_bufferMode(mode) {}
 RawBuffer::~RawBuffer() {}
