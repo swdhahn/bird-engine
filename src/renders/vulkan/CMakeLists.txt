@@ -20,3 +20,6 @@ add_library(
   VKTexture.cpp
   VKTexture.h)
 set_target_properties(vulkan-renderer PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+if(MSVC)
+    set_target_properties(vulkan-renderer PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+endif()

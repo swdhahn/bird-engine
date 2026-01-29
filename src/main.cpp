@@ -1,9 +1,54 @@
-#include <dlfcn.h>
-
 #include <iostream>
 
 #include "Application.h"
 #include "scene/Scene.h"
+
+// --- Platform Specific Includes & Macros ---
+#if defined(_WIN32) || defined(_WIN64)
+	#include <windows.h>
+
+	// Windows Definitions
+	#define LIB_HANDLE HMODULE
+	#define LIB_OPEN(path) LoadLibraryA(path)
+	#define LIB_SYM(handle, name) GetProcAddress(handle, name)
+	#define LIB_CLOSE(handle) FreeLibrary(handle)
+
+	// Helper to get a readable string from Windows errors
+	std::string GetPlatformError() {
+		DWORD error = GetLastError();
+		if (error == 0) return "Unknown Error";
+		LPSTR messageBuffer = nullptr;
+		size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+									 NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
+		std::string message(messageBuffer, size);
+		LocalFree(messageBuffer);
+		return message;
+	}
+
+// Windows usually needs an extension for LoadLibrary, unlike dlopen which sometimes guesses
+const std::string LIB_EXT = ".dll";
+
+#else
+#include <dlfcn.h>
+
+// POSIX Definitions (Linux/macOS)
+#define LIB_HANDLE void*
+#define LIB_OPEN(path) dlopen(path, RTLD_NOW | RTLD_GLOBAL)
+#define LIB_SYM(handle, name) dlsym(handle, name)
+#define LIB_CLOSE(handle) dlclose(handle)
+
+std::string GetPlatformError() {
+	const char* err = dlerror();
+	return err ? std::string(err) : "Unknown Error";
+}
+
+#if defined(__APPLE__)
+const std::string LIB_EXT = ".dylib";
+#else
+const std::string LIB_EXT = ".so";
+#endif
+#endif
+
 /*
  *
  * 1. Shader has a list of materials
@@ -39,35 +84,26 @@ int main(int argc, char** argv) {
 		exit(1);
 	}
 	std::string path(argv[1]);
-	path +=
-#if defined(_WIN32) || defined(_WIN64)
-		".dll";
-#elif defined(__APPLE__)
-			".dylib";
-#elif defined(__linux__) || defined(__unix__)
-			".so";
-#else
-					".so";
-#endif
+	path += LIB_EXT;
 
 
 
-	void* app_handle = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);
+	LIB_HANDLE app_handle = LIB_OPEN(path.c_str());
 	if (!app_handle) {
 		std::cerr << "Could not load app dynamic library: " << path
 				  << std::endl;
-		std::cerr << "dlopen error: " << dlerror() << std::endl;
+		std::cerr << "dlopen error: " << GetPlatformError() << std::endl;
 		exit(1);
 	}
 	bird::Scene* (*app_entry)();
-	void* app_entry_void = dlsym(app_handle, "app_entry");
-	if (app_entry_void != nullptr) {
-		app_entry = reinterpret_cast<bird::Scene* (*)()>(app_entry_void);
+	auto app_entry_raw = LIB_SYM(app_handle, "app_entry");
+	if (app_entry_raw != nullptr) {
+		app_entry = reinterpret_cast<bird::Scene* (*)()>(app_entry_raw);
 	} else {
 		std::cerr << "Could not locate any 'bird::Scene* app_entry();'"
 				  << std::endl;
-		std::cerr << "dlsym error: " << dlerror() << std::endl;
-		dlclose(app_handle);
+		std::cerr << "dlsym error: " << GetPlatformError() << std::endl;
+		LIB_CLOSE(app_handle);
 		exit(1);
 	}
 	bird::Scene* scene = app_entry();
@@ -81,7 +117,7 @@ int main(int argc, char** argv) {
 		return EXIT_FAILURE;
 	}
 
-	dlclose(app_handle);
+	LIB_CLOSE(app_handle);
 
 	return 0;  //*/
 }

@@ -14,7 +14,7 @@ namespace bird::gl {
 GLShader::GLShader(
 	std::vector<std::pair<std::string, ShaderPipeline>> shaderFiles) {
 	m_programId = glCreateProgram();
-	uint32_t shader_ids[shaderFiles.size()];
+	std::vector<uint32_t> shader_ids(shaderFiles.size());
 	int success;
 	char infoLog[512];
 	std::string prev_shader_source = "";

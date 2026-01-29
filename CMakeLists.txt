@@ -20,7 +20,10 @@ set(BIRD_FILES
     src/util/ResourceManager.h
     src/util/Resource.cpp
     src/util/Resource.h)
-add_library(Bird_core SHARED ${BIRD_FILES})
+add_library(Bird_core SHARED ${BIRD_FILES} 
+    $<TARGET_OBJECTS:renders>
+    $<TARGET_OBJECTS:opengl-renderer>
+    $<TARGET_OBJECTS:scene>)
 add_executable(Bird src/main.cpp)
 target_link_libraries(Bird Bird_core)
 
@@ -41,7 +44,13 @@ if(APPLE)
            "-framework Metal"
            "-framework QuartzCore")
 elseif(WIN32)
-  target_link_libraries(Bird_core PUBLIC -luser32 -lkernel32 -lopengl32)
+  if(MSVC)
+    target_link_libraries(Bird_core PUBLIC user32 kernel32 opengl32)
+    set_target_properties(Bird_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+  else()
+    target_link_libraries(Bird_core PUBLIC -luser32 -lkernel32 -lopengl32)
+
+  endif()
 elseif(UNIX AND NOT APPLE)
   find_package(X11 REQUIRED)
   target_link_libraries(
@@ -90,17 +99,30 @@ if(TARGET libglew_static AND APPLE)
   endif()
 endif()
 
+if(MSVC)
+    # Visual Studio / MSVC specific
+    set(LIB_EXT ".lib")
+    set(LIB_PREFIX "")      # MSVC often outputs "volk.lib"
+    set(BUILD_SUBDIR "/$<CONFIG>") # Handles /Debug or /Release subfolders
+    message(STATUS "Configuring for MSVC (Windows)")
+else()
+    # Linux / Mac / Unix / MinGW
+    set(LIB_EXT ".a")
+    set(LIB_PREFIX "lib")
+    set(BUILD_SUBDIR "")
+endif()
+
 add_library(shaderc::shaderc_combined STATIC IMPORTED)
 set_target_properties(
   shaderc::shaderc_combined
   PROPERTIES IMPORTED_LOCATION
-             "${INSTALLED_LIB_PATH}/lib/libshaderc_combined.a")
+             "${INSTALLED_LIB_PATH}/lib/${LIB_PREFIX}shaderc_combined${LIB_EXT}")
 set_target_properties(
   shaderc::shaderc_combined PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
                                        "${INSTALLED_LIB_PATH}/include")
 add_library(VOLK::volk STATIC IMPORTED)
 set_target_properties(
-  VOLK::volk PROPERTIES IMPORTED_LOCATION "${INSTALLED_LIB_PATH}/lib/libvolk.a")
+  VOLK::volk PROPERTIES IMPORTED_LOCATION "${INSTALLED_LIB_PATH}/lib/${LIB_PREFIX}volk${LIB_EXT}")
 set_target_properties(VOLK::volk PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
                                             "${INSTALLED_LIB_PATH}/include")
 message(STATUS "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -115,20 +137,22 @@ include_directories(src/scene)
 
 target_link_libraries(
   Bird_core
-  PUBLIC stdc++ glm
+  PUBLIC  glm 
   PRIVATE glfw
+          libglew_static
           assimp::assimp
           VOLK::volk
           Jolt::Jolt
-          renders
-          scene
           shaderc::shaderc_combined
           ${SPIRV_LIBRARIES}
           spirv-cross-core
           spirv-cross-glsl
           spirv-cross-cpp)
 
-add_definitions(-Wno-deprecated-volatile)
+target_compile_definitions(Bird_core PRIVATE BIRD_CORE_EXPORTS)
+if(NOT MSVC)
+  add_definitions(-Wno-deprecated-volatile)
+endif()
 
 # Build Tools
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})

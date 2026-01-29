@@ -1,5 +1,5 @@
 add_library(
-  scene STATIC
+  scene OBJECT
   Scene.cpp
   Scene.h
   WorldObject.cpp
@@ -17,3 +17,6 @@ add_subdirectory(components)
 
 target_link_libraries(scene PRIVATE glm)
 set_target_properties(scene PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+if(MSVC)
+    set_target_properties(scene PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+endif()
