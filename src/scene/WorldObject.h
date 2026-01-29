@@ -1,26 +1,26 @@
 #if defined(_WIN32) || defined(_MSC_VER)
-    #ifdef BIRD_CORE_EXPORTS
-        #define BIRD_API __declspec(dllexport)
-    #else
-        #define BIRD_API __declspec(dllimport)
-    #endif
-	#define BIRD_API_EXPORT __declspec(dllexport)
+#ifdef BIRD_CORE_EXPORTS
+#define BIRD_API __declspec(dllexport)
 #else
-    // For GCC/Linux, BIRD_API does nothing (default visibility)
-    #define BIRD_API 
+#define BIRD_API __declspec(dllimport)
+#endif
+#define BIRD_API_EXPORT __declspec(dllexport)
+#else
+// For GCC/Linux, BIRD_API does nothing (default visibility)
+#define BIRD_API
+#define BIRD_API_EXPORT
 #endif
 
 #ifndef BIRD_WORLDOBJECT_H
 #define BIRD_WORLDOBJECT_H
 
-#include <iostream>
-#include <vector>
-#include <string>
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <map>
 #include <memory>
-#include <memory>
+#include <string>
+#include <vector>
 
 #include "../util/Input.h"
 #include "../util/Math.h"
