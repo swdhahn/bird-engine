@@ -1,0 +1,6 @@
+#ifndef BIRD_PHYSICSPIPELINE_H
+#define BIRD_PHYSICSPIPELINE_H
+
+namespace bird {}
+
+#endif	// !BIRD_PHYSICSPIPELINE_H
