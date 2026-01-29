@@ -35,10 +35,10 @@ void AssetLoader::init(std::string assetPath) {
 		}
 		int i = 0;
 		bool fileSupported = false;
-		std::string filePath = entry.path().c_str();
+		std::string filePath = entry.path().string();
 		for (; i < supportedFileTypes.size(); i++) {
 			for (const auto& ext : supportedFileTypes[i]) {
-				std::string mp = entry.path().extension();
+				std::string mp = entry.path().extension().string();
 				std::transform(mp.begin(), mp.end(), mp.begin(),
 							   [](unsigned char c) { return std::tolower(c); });
 				if (mp == ext) {

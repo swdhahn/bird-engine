@@ -7,4 +7,4 @@ find_package(assimp CONFIG REQUIRED)
 
 add_executable(BuildTools build-tools.cpp AssetLoader.cpp AssetLoader.h
                           ../util/stb_image.h)
-target_link_libraries(BuildTools stdc++ ${ASSIMP_LIBRARIES})
+target_link_libraries(BuildTools ${ASSIMP_LIBRARIES})

@@ -115,7 +115,7 @@ include_directories(src/scene)
 
 target_link_libraries(
   Bird_core
-  PUBLIC stdc++ glm
+  PUBLIC glm
   PRIVATE glfw
           assimp::assimp
           VOLK::volk
