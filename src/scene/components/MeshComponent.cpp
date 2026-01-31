@@ -19,8 +19,6 @@ void MeshComponent::deinit() {
 	APPLICATION->getGraphicsPipeline()->removeMesh(this);
 }
 
-void MeshComponent::process(float delta) {}
-
 std::vector<std::shared_ptr<Mesh>>& MeshComponent::getMeshes() {
 	return m_meshes;
 }

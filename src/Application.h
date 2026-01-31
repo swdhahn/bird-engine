@@ -5,6 +5,9 @@
 #ifndef BIRD_APPLICATION_H
 #define BIRD_APPLICATION_H
 
+#include <memory>
+
+#include "physics/PhysicsPipeline.h"
 #include "renders/GraphicsPipeline.h"
 #include "renders/opengl/GLPipeline.h"
 #include "util/Input.h"
@@ -27,9 +30,11 @@ class Application {
 	Camera* getCamera();
 
 	GraphicsPipeline* getGraphicsPipeline();
+	PhysicsPipeline* getPhysicsPipeline();
 
    private:
-	GraphicsPipeline* m_graphicsPipeline;
+	std::unique_ptr<GraphicsPipeline> m_graphicsPipeline;
+	std::unique_ptr<PhysicsPipeline> m_physicsPipeline;
 	Scene* m_scene;
 };
 

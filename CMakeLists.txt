@@ -20,10 +20,10 @@ set(BIRD_FILES
     src/util/ResourceManager.h
     src/util/Resource.cpp
     src/util/Resource.h)
-add_library(Bird_core SHARED ${BIRD_FILES} 
-    $<TARGET_OBJECTS:renders>
-    $<TARGET_OBJECTS:opengl-renderer>
-    $<TARGET_OBJECTS:scene>)
+add_library(
+  Bird_core SHARED
+  ${BIRD_FILES} $<TARGET_OBJECTS:renders> $<TARGET_OBJECTS:opengl-renderer>
+  $<TARGET_OBJECTS:scene> $<TARGET_OBJECTS:physics>)
 add_executable(Bird src/main.cpp)
 target_link_libraries(Bird Bird_core)
 
@@ -100,29 +100,31 @@ if(TARGET libglew_static AND APPLE)
 endif()
 
 if(MSVC)
-    # Visual Studio / MSVC specific
-    set(LIB_EXT ".lib")
-    set(LIB_PREFIX "")      # MSVC often outputs "volk.lib"
-    set(BUILD_SUBDIR "/$<CONFIG>") # Handles /Debug or /Release subfolders
-    message(STATUS "Configuring for MSVC (Windows)")
+  # Visual Studio / MSVC specific
+  set(LIB_EXT ".lib")
+  set(LIB_PREFIX "") # MSVC often outputs "volk.lib"
+  set(BUILD_SUBDIR "/$<CONFIG>") # Handles /Debug or /Release subfolders
+  message(STATUS "Configuring for MSVC (Windows)")
 else()
-    # Linux / Mac / Unix / MinGW
-    set(LIB_EXT ".a")
-    set(LIB_PREFIX "lib")
-    set(BUILD_SUBDIR "")
+  # Linux / Mac / Unix / MinGW
+  set(LIB_EXT ".a")
+  set(LIB_PREFIX "lib")
+  set(BUILD_SUBDIR "")
 endif()
 
 add_library(shaderc::shaderc_combined STATIC IMPORTED)
 set_target_properties(
   shaderc::shaderc_combined
   PROPERTIES IMPORTED_LOCATION
-             "${INSTALLED_LIB_PATH}/lib/${LIB_PREFIX}shaderc_combined${LIB_EXT}")
+             "${INSTALLED_LIB_PATH}/lib/${LIB_PREFIX}shaderc_combined${LIB_EXT}"
+)
 set_target_properties(
   shaderc::shaderc_combined PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
                                        "${INSTALLED_LIB_PATH}/include")
 add_library(VOLK::volk STATIC IMPORTED)
 set_target_properties(
-  VOLK::volk PROPERTIES IMPORTED_LOCATION "${INSTALLED_LIB_PATH}/lib/${LIB_PREFIX}volk${LIB_EXT}")
+  VOLK::volk PROPERTIES IMPORTED_LOCATION
+                        "${INSTALLED_LIB_PATH}/lib/${LIB_PREFIX}volk${LIB_EXT}")
 set_target_properties(VOLK::volk PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
                                             "${INSTALLED_LIB_PATH}/include")
 message(STATUS "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -134,10 +136,12 @@ add_subdirectory(src/renders)
 include_directories(src/renders)
 add_subdirectory(src/scene)
 include_directories(src/scene)
+add_subdirectory(src/physics)
+include_directories(src/physics)
 
 target_link_libraries(
   Bird_core
-  PUBLIC  glm 
+  PUBLIC glm
   PRIVATE glfw
           libglew_static
           assimp::assimp

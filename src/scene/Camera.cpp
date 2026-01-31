@@ -6,18 +6,16 @@
 
 namespace bird {
 
-    Camera::Camera(uint32_t width, uint32_t height) : Entity() {
-        m_perspectiveMatrix = createPerspectiveMatrix(width, height, 70.0f, 0.1f, 1000.0f);
-        translate({0.0f, 0.0f, -5.0f});
-        updateTransformationMatrix();
-    }
-
-    Camera::~Camera() {
-
-    }
-
-    const Matrix4 &Camera::getPerspectiveMatrix() const {
-        return m_perspectiveMatrix;
-    }
-
+Camera::Camera(uint32_t width, uint32_t height) : Entity() {
+	m_perspectiveMatrix = createPerspectiveMatrix(width, height, 70.0f, 0.1f, 1000.0f);
+	translate({0.0f, 0.0f, 5.0f});
+	updateTransformationMatrix();
 }
+
+Camera::~Camera() {}
+
+const Matrix4& Camera::getPerspectiveMatrix() const {
+	return m_perspectiveMatrix;
+}
+
+}  // namespace bird

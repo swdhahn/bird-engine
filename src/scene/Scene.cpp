@@ -4,37 +4,52 @@
 
 #include "Scene.h"
 
+#include <memory>
+
+#include "Entity.h"
+
 namespace bird {
 
 Scene::Scene() {}
 
-void Scene::addEntity(Entity* entity) {
-	m_entities.push_back(entity);
-	entity->init();
+void Scene::addEntity(std::unique_ptr<Entity> entity) {
+	entity->setScene(this);
+	Entity* e = entity.get();
+	m_entities.push_back(std::move(entity));
+	e->init();
 }
 
-void Scene::removeEntity(Entity* entity) {
-	m_entities.erase(std::remove(m_entities.begin(), m_entities.end(), entity),
-					 m_entities.end());
+std::unique_ptr<Entity> Scene::removeEntity(Entity* entity) {
+	auto ne = std::find_if(m_entities.begin(), m_entities.end(),
+			[entity](const std::unique_ptr<Entity>& s) { return s->getID() == entity->getID(); });
+	std::unique_ptr<Entity> e = std::move(*ne);
+	m_entities.erase(ne, m_entities.end());
 	entity->_deinit();
+
+	return e;
 }
 
-void Scene::addChild(Scene* scene) {
-	m_children.push_back(scene);
-	scene->init();
+void Scene::addChild(std::unique_ptr<Scene> scene) {
+	Scene* s = scene.get();
+	m_children.push_back(std::move(scene));
+	s->init();
 }
 
-void Scene::removeChild(Scene* scene) {
-	m_children.erase(std::remove(m_children.begin(), m_children.end(), scene),
-					 m_children.end());
+std::unique_ptr<Scene> Scene::removeChild(Scene* scene) {
+	auto ne = std::find_if(m_children.begin(), m_children.end(),
+			[scene](const std::unique_ptr<Scene>& s) { return s->getID() == scene->getID(); });
+	std::unique_ptr<Scene> s = std::move(*ne);
+	m_children.erase(ne, m_children.end());
+
 	scene->deinit();
+	return s;
 }
 
-std::vector<Scene*> Scene::getChildren() const {
+const std::vector<std::unique_ptr<Scene>>& Scene::getChildren() const {
 	return m_children;
 }
 
-std::vector<Entity*> Scene::getEntities() const {
+const std::vector<std::unique_ptr<Entity>>& Scene::getEntities() const {
 	return m_entities;
 }
 

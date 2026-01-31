@@ -36,13 +36,11 @@ void GLPipeline::init() {
 
 	FrameBufferBuilder builder;
 	builder.addTextureAttachment(
-		TextureBuilder(nullptr, WINDOW_WIDTH, WINDOW_HEIGHT, FORMAT_8RGBA)
-			.build());
-	builder.setShader(
-		ShaderBuilder()
-			.attachShaderFile("assets/shaders/passthrough.vert", VERTEX)
-			.attachShaderFile("assets/shaders/fxaa.frag", FRAGMENT)
-			.create());
+			TextureBuilder(nullptr, WINDOW_WIDTH, WINDOW_HEIGHT, FORMAT_8RGBA).build());
+	builder.setShader(ShaderBuilder()
+					.attachShaderFile("assets/shaders/passthrough.vert", VERTEX)
+					.attachShaderFile("assets/shaders/fxaa.frag", FRAGMENT)
+					.create());
 	builder.addOpts(FRAMEBUFFER_OPT_DEPTH | FRAMEBUFFER_OPT_STENCIL);
 	m_framebuffers.emplace_back(builder.build());
 }
@@ -80,7 +78,7 @@ void GLPipeline::renderScene(const Scene* scene) {
 	MaterialUBOData matData;
 
 	global.perspective = m_camera->getPerspectiveMatrix();
-	global.view = m_camera->getTransformMatrix();
+	global.view = glm::inverse(m_camera->getTransformMatrix());
 	global.viewPos = Vector4(m_camera->getWorldPosition(), 0.0);
 
 	MeshComponent* mesh = nullptr;
@@ -90,13 +88,13 @@ void GLPipeline::renderScene(const Scene* scene) {
 		obj = mesh->getParent();
 		for (int j = 0; j < mesh->getMeshes().size(); j++) {
 			GLMesh* m = (GLMesh*)mesh->getMeshes()[j].get();
-			const std::shared_ptr<Material> mat =
-				mesh->getMeshes()[j]->getMaterial();
+			const std::shared_ptr<Material> mat = mesh->getMeshes()[j]->getMaterial();
 			GLShader* shader = (GLShader*)mat->getShader().get();
 			shader->bind();
 			glBindVertexArray(m->getVAO());
 
 			global.model = obj->getTransformMatrix();
+			global.norm = glm::transpose(glm::inverse(glm::mat3(obj->getTransformMatrix())));
 
 			m_globalUBO->update(&global, 1, 0);
 
@@ -124,15 +122,13 @@ void GLPipeline::renderScene(const Scene* scene) {
 					((GLTexture*)mat->getTextures()[k].get())->bind();
 				}
 			}
-			glDrawElements(
-				GL_TRIANGLES,
-				mesh->getMeshes()[j]->getIndexBuffer()->getBufferSize(),
-				GL_UNSIGNED_INT, 0);
+			glDrawElements(GL_TRIANGLES, mesh->getMeshes()[j]->getIndexBuffer()->getBufferSize(),
+					GL_UNSIGNED_INT, 0);
 		}
 	}
 	for (int i = 0; i < scene->getChildren().size(); i++) {
 		// cull scene here
-		renderScene(scene->getChildren()[i]);
+		renderScene(scene->getChildren()[i].get());
 	}
 }
 

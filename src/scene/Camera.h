@@ -5,23 +5,21 @@
 #ifndef BIRD_CAMERA_H
 #define BIRD_CAMERA_H
 
-#include "Entity.h"
 #include "../util/Math.h"
+#include "Entity.h"
 
 namespace bird {
 
-    class Camera : public Entity {
-    public:
-        Camera(uint32_t width, uint32_t height);
-        virtual ~Camera();
+class Camera : public Entity {
+   public:
+	Camera(uint32_t width, uint32_t height);
+	virtual ~Camera();
 
-        const Matrix4& getPerspectiveMatrix() const;
+	const Matrix4& getPerspectiveMatrix() const;
 
-    private:
-        Matrix4 m_perspectiveMatrix;
+   private:
+	Matrix4 m_perspectiveMatrix;
+};
+}  // namespace bird
 
-    };
-}
-
-
-#endif //BIRD_CAMERA_H
+#endif	// BIRD_CAMERA_H

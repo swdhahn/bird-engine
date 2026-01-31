@@ -21,6 +21,7 @@ struct GlobalUBOData {
 	Matrix4 perspective;
 	Matrix4 view;
 	Matrix4 model;
+	Matrix4 norm;
 	Vector4 viewPos;
 };
 

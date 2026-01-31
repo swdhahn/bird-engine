@@ -4,6 +4,8 @@
 
 #include "WorldObject.h"
 
+#include "components/PhysicsBodyComponent.h"
+
 namespace bird {
 
 WorldObject::WorldObject()
@@ -15,7 +17,10 @@ WorldObject::WorldObject()
 	  m_transformMatrix(1),
 	  m_needsMatrixUpdate(true),
 	  m_components(),
+	  m_physicsBody(nullptr),
 	  m_id(++s_uniqueIdentificationIndex) {}
+
+WorldObject::~WorldObject() {}
 
 void WorldObject::_deinit() {
 	deinit();
@@ -99,6 +104,8 @@ void WorldObject::setTransformMatrix(Matrix4 transformMatrix) {
 
 void WorldObject::updateTransformationMatrix() {
 	updateTransformMatrix(this, &m_transformMatrix);
+	if (m_physicsBody != nullptr && !m_physicsBody->m_physicsUpdateTransfer)
+		m_physicsBody->updateTransform();
 }
 
 bool WorldObject::needsMatrixUpdate() const {
@@ -115,6 +122,16 @@ void WorldObject::setScale(Vector3 scale) {
 
 void WorldObject::addComponent(std::unique_ptr<Component> component) {
 	Component* c = component.get();
+	PhysicsBodyComponent* phys = dynamic_cast<PhysicsBodyComponent*>(c);
+
+	if (phys != nullptr) {
+		if (m_physicsBody != nullptr) {
+			std::cout << "You are trying to add another Physics Component when one already exists"
+					  << std::endl;
+			std::exit(-1);
+		}
+		m_physicsBody = phys;
+	}
 	m_components.emplace_back(std::move(component));
 	c->setParent(this);
 	c->init();
@@ -122,11 +139,15 @@ void WorldObject::addComponent(std::unique_ptr<Component> component) {
 
 void WorldObject::removeComponent(Component* component) {
 	component->deinit();
-	m_components.erase(std::remove_if(m_components.begin(), m_components.end(),
-									  [&](std::unique_ptr<Component>& comp) {
-										  return (component == comp.get());
-									  }),
-					   m_components.begin());
+	PhysicsBodyComponent* phys = dynamic_cast<PhysicsBodyComponent*>(component);
+
+	if (phys != nullptr) {
+		m_physicsBody = nullptr;
+	}
+	m_components.erase(
+			std::remove_if(m_components.begin(), m_components.end(),
+					[&](std::unique_ptr<Component>& comp) { return (component == comp.get()); }),
+			m_components.begin());
 }
 
 }  // namespace bird

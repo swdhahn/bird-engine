@@ -34,11 +34,12 @@ extern BIRD_API ResourceManager* RESOURCE_MANAGER;
 class Application;
 extern BIRD_API Application* APPLICATION;
 class Component;
+class PhysicsBodyComponent;
 
 class WorldObject {
    public:
 	WorldObject();
-	virtual ~WorldObject() {};
+	virtual ~WorldObject();
 
 	virtual void init() = 0;
 	virtual void deinit() = 0;
@@ -93,6 +94,7 @@ class WorldObject {
 
    private:
 	inline static uint64_t s_uniqueIdentificationIndex = 0;
+	PhysicsBodyComponent* m_physicsBody;
 };
 
 }  // namespace bird

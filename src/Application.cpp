@@ -4,6 +4,10 @@
 
 #include "Application.h"
 
+#include <memory>
+
+#include "physics/PhysicsPipeline.h"
+#include "renders/Window.h"
 #include "renders/opengl/GLPipeline.h"
 namespace bird {
 
@@ -13,11 +17,15 @@ Application* APPLICATION = nullptr;
 
 Application::Application(Scene& scene) : m_scene(&scene) {}
 
-Application::~Application() {}
+Application::~Application() = default;
 
 void Application::init() {
-	m_graphicsPipeline = new gl::GLPipeline();
+	m_graphicsPipeline = std::make_unique<gl::GLPipeline>();
+	m_physicsPipeline = std::make_unique<PhysicsPipeline>();
+
 	m_graphicsPipeline->init();
+	m_physicsPipeline->init();
+
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	RESOURCE_MANAGER = new ResourceManager();
 	APPLICATION = this;
@@ -43,18 +51,33 @@ void Application::run() {
 	init();
 
 	double lastTime = Window::getGLFWTime();
+	double physicsTime = Window::getGLFWTime();
 	float delta = 0.0f;
+	float delta2 = 0.0f;
+	float fixedStep = 1.0 / 60.0;  // physics step time
+	double accumulator = 0.0;
 
 	while (!m_graphicsPipeline->getWindow()->shouldWindowClose()) {
 		delta = (Window::getGLFWTime() - lastTime);
 		lastTime = Window::getGLFWTime();
-		m_graphicsPipeline->getCamera()->process(delta);
-		if (m_graphicsPipeline->getCamera()->needsMatrixUpdate()) {
-			m_graphicsPipeline->getCamera()->updateTransformationMatrix();
+
+		if (delta > 0.25) delta = 0.25;
+		accumulator += delta;
+		while (accumulator >= fixedStep) {
+			m_physicsPipeline->update(fixedStep);
+
+			m_graphicsPipeline->getCamera()->process(delta);
+			if (m_graphicsPipeline->getCamera()->needsMatrixUpdate()) {
+				m_graphicsPipeline->getCamera()->updateTransformationMatrix();
+			}
+			processScene(m_scene, delta);
+
+			INPUT->tick();
+
+			accumulator -= fixedStep;
 		}
-		processScene(m_scene, delta);
+
 		m_graphicsPipeline->renderRootScene(m_scene);
-		INPUT->tick();
 		m_graphicsPipeline->getWindow()->pollWindow();
 	}
 
@@ -69,7 +92,7 @@ void Application::processScene(Scene* scene, float delta) {
 		}
 	}
 	for (auto& child : scene->getChildren()) {
-		processScene(child, delta);
+		processScene(child.get(), delta);
 	}
 }
 
@@ -77,8 +100,8 @@ void Application::deinit() {
 	m_scene->deinit();
 
 	delete INPUT;
+	m_physicsPipeline->cleanup();
 	m_graphicsPipeline->cleanUp();
-	delete m_graphicsPipeline;
 }
 void Application::setCamera(bird::Camera* camera) {
 	m_graphicsPipeline->setCamera(camera);
@@ -88,7 +111,11 @@ bird::Camera* Application::getCamera() {
 }
 
 GraphicsPipeline* Application::getGraphicsPipeline() {
-	return m_graphicsPipeline;
+	return m_graphicsPipeline.get();
+}
+
+PhysicsPipeline* Application::getPhysicsPipeline() {
+	return m_physicsPipeline.get();
 }
 
 }  // namespace bird

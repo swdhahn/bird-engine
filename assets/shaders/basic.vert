@@ -13,13 +13,14 @@ layout(std140, binding = 0) uniform Global {
     mat4 perspective;
     mat4 view;
     mat4 model;
+    mat3 norm;
     vec4 viewPos;
 };
 
 void main() {
     gl_Position = perspective * view * model * vec4(position, 1.0f);
     fragTexCoord = texCoord;
-    fragNormal = normal;
+    fragNormal = norm * normal;
     fragPos = vec3(model * vec4(position, 1.0f));
     fragViewPos = viewPos.rgb;
 }
