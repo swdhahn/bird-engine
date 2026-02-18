@@ -5,6 +5,8 @@
 #ifndef BIRD_RESOURCEMANAGER_H
 #define BIRD_RESOURCEMANAGER_H
 
+#include <cerrno>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -64,6 +66,8 @@ class ResourceManager {
 	void addResource(std::string path, std::shared_ptr<Resource> resource,
 					 AssetType type);
 	void addMesh(std::string path, std::vector<std::shared_ptr<Mesh>> meshes);
+
+	static inline std::string RESOURCE_PATH = "";
 
    private:
 	std::unordered_map<std::string, std::shared_ptr<Resource>>* m_resources;

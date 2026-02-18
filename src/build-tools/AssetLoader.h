@@ -27,14 +27,16 @@ class AssetLoader {
 
 	void loadAsset();
 
-	void loadScene(std::string& path);
-	void loadModel(std::string& path);
-	void loadTexture(std::string& path);
-	void loadSound(std::string& path);
-	void loadShader(std::string& path);
-	void loadMaterial(std::string& path);
-	void loadCustom(std::string& path);
+	void loadScene(const std::string& path);
+	void loadModel(const std::string& path);
+	void loadTexture(const std::string& path);
+	void loadSound(const std::string& path);
+	void loadShader(const std::string& path);
+	void loadMaterial(const std::string& path);
+	void loadCustom(const std::string& path);
 
+	void writeImage(uint32_t width, uint32_t height, uint32_t channels,
+					uint8_t* imageData, const std::string& path);
 	// void writeMaterial(std::string& path, const aiMaterial* material);
 
    private:

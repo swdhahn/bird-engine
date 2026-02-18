@@ -5,15 +5,14 @@
 #ifndef BIRD_TEXTURE_H
 #define BIRD_TEXTURE_H
 
-#include <iostream>
-#include <vector>
-#include <string>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <iostream>
 #include <map>
 #include <memory>
-#include <cstdint>
 #include <string>
+#include <vector>
 
 #include "../../util/Constants.h"
 #include "../../util/Resource.h"
@@ -32,7 +31,7 @@ class Texture;
 
 class TextureBuilder {
    public:
-	TextureBuilder(void* pData, uint32_t width, uint32_t height,
+	TextureBuilder(uint8_t* pData, uint32_t width, uint32_t height,
 				   TextureFormat format);
 
 	TextureBuilder& generateMipMaps();
@@ -42,16 +41,16 @@ class TextureBuilder {
 	std::shared_ptr<Texture> build();
 
    private:
-	void* m_pData = nullptr;
+	uint8_t* m_pData = nullptr;
 	uint32_t m_width, m_height, m_channels;
 	TextureFormat m_format;
 	bool m_generateMipMaps = false;
 	bool m_linearFiltering = false;
 	bool m_nearestFiltering = false;
 
-	void createLinearInterpolated(void* srcData, void* dstData, uint32_t nWidth,
-								  uint32_t nHeight);
-	void createNearestInterpolated(void* srcData, void* dstData,
+	void createLinearInterpolated(uint8_t* srcData, uint8_t* dstData,
+								  uint32_t nWidth, uint32_t nHeight);
+	void createNearestInterpolated(uint8_t* srcData, uint8_t* dstData,
 								   uint32_t nWidth, uint32_t nHeight);
 };
 
@@ -64,7 +63,7 @@ class TextureBuilder {
  */
 class Texture : public Resource {
    public:
-	explicit Texture(void* data, uint32_t width, uint32_t height,
+	explicit Texture(uint8_t* data, uint32_t width, uint32_t height,
 					 TextureFormat format);
 	virtual ~Texture();
 
@@ -72,7 +71,7 @@ class Texture : public Resource {
 	void write();
 
 	static TextureBuilder create(const std::string& path);
-	static TextureBuilder create(void* data, uint32_t width, uint32_t height,
+	static TextureBuilder create(uint8_t* data, uint32_t width, uint32_t height,
 								 TextureFormat format);
 
 	const TextureFormat& getFormat();
@@ -80,7 +79,7 @@ class Texture : public Resource {
 	uint32_t getHeight();
 
    protected:
-	void* m_pData;
+	uint8_t* m_pData;
 	uint32_t m_width, m_height;
 	TextureFormat m_format;
 

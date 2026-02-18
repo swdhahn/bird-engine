@@ -25,7 +25,7 @@ struct GlobalUBOData {
 };
 
 struct MaterialUBOData {
-	Vector3 color;
+	Vector4 color;
 	Vector3 specularColor;
 	Vector3 ambientColor;
 	float shininess;
@@ -52,9 +52,12 @@ class GraphicsPipeline {
 	void addMesh(MeshComponent* mesh);
 	void removeMesh(MeshComponent* mesh);
 
+	static std::shared_ptr<Mesh> s_quad_mesh;
+
    protected:
 	std::unique_ptr<Window> m_pWindow = nullptr;
 	Camera* m_camera;
+	Matrix4 m_orthoMatrix;
 	DefaultCamera* m_defaultCamera;
 	std::unique_ptr<Buffer<MaterialUBOData>> m_materialUBO;
 	std::unique_ptr<Buffer<GlobalUBOData>> m_globalUBO;
@@ -62,7 +65,6 @@ class GraphicsPipeline {
 	// std::list fix this
 	std::vector<MeshComponent*> m_meshes;
 	std::vector<std::unique_ptr<FrameBuffer>> m_framebuffers;
-	std::shared_ptr<Mesh> m_quad_mesh;
 };
 
 }  // namespace bird

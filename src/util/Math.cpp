@@ -4,6 +4,7 @@
 
 #include "Math.h"
 
+#include "../scene/2D/ScreenObject.h"
 #include "../scene/WorldObject.h"
 
 namespace bird {
@@ -24,9 +25,30 @@ void updateTransformMatrix(WorldObject* obj, Matrix4* dst) {
 		glm::translate(*dst, obj->getWorldPosition() + obj->getLocalPosition());
 }
 
+void updateTransformMatrix(ScreenObject* obj, Matrix3* dst) {
+	float c = cos(obj->getRotation());
+	float s = sin(obj->getRotation());
+
+	// Construct the mat3 directly (Column-Major Order)
+	// [ Scale.x * cos   -Scale.y * sin    Pos.x ]
+	// [ Scale.x * sin    Scale.y * cos    Pos.y ]
+	// [      0                0             1   ]
+
+	*dst = glm::mat3(obj->getScale().x * c, obj->getScale().x * s, 0.0f,
+					 -(obj->getScale().y * s), obj->getScale().y * c, 0.0f,
+					 obj->getPosition().x, obj->getPosition().y, 1.0f);
+}
 Matrix4 createPerspectiveMatrix(uint32_t width, uint32_t height, float fov,
 								float near, float far) {
 	return glm::perspective(fov, (float)width / (float)height, near, far);
+}
+
+bool contains(const Vector2& point, const Vector4& bounds) {
+	if (point.x > bounds.x && point.x < bounds.x + bounds.z &&
+		point.y > bounds.y && point.y < bounds.y + bounds.w) {
+		return true;
+	}
+	return false;
 }
 
 std::ostream& operator<<(std::ostream& out, const Vector2& s) {

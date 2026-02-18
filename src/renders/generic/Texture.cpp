@@ -13,7 +13,7 @@
 
 namespace bird {
 
-TextureBuilder::TextureBuilder(void* pData, uint32_t width, uint32_t height,
+TextureBuilder::TextureBuilder(uint8_t* pData, uint32_t width, uint32_t height,
 							   TextureFormat format)
 	: m_pData(pData), m_width(width), m_height(height), m_format(format) {}
 
@@ -50,8 +50,8 @@ std::shared_ptr<Texture> TextureBuilder::build() {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
 						GL_LINEAR_MIPMAP_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, m_width, m_height, 0, GL_RGB,
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_RGBA,
 					 GL_UNSIGNED_BYTE, m_pData);
 		glGenerateMipmap(GL_TEXTURE_2D);
 
@@ -66,7 +66,7 @@ std::shared_ptr<Texture> TextureBuilder::build() {
 	return tex;
 }
 
-Texture::Texture(void* pData, uint32_t width, uint32_t height,
+Texture::Texture(uint8_t* pData, uint32_t width, uint32_t height,
 				 TextureFormat format)
 	: m_pData(pData), m_width(width), m_height(height), m_format(format) {}
 
@@ -101,7 +101,7 @@ TextureBuilder Texture::create(const std::string& path) {
 	return create(nPixels, width, height, FORMAT_8RGBA);
 }
 
-TextureBuilder Texture::create(void* data, uint32_t width, uint32_t height,
+TextureBuilder Texture::create(uint8_t* data, uint32_t width, uint32_t height,
 							   TextureFormat type) {
 	return TextureBuilder(data, width, height, type);
 }

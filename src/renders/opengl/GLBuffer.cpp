@@ -46,7 +46,9 @@ GLBuffer::~GLBuffer() {
 
 void GLBuffer::initialize() {
 	glBindBuffer(m_bufferTarget, m_bufferId);
-	glBufferData(m_bufferTarget, m_size * m_dataSize, m_pData, GL_STATIC_DRAW);
+	glBufferData(
+		m_bufferTarget, m_size * m_dataSize, m_pData,
+		m_bufferMode | BUFFER_DYNAMIC ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
 	if (m_bufferTarget == GL_UNIFORM_BUFFER) {
 		glBindBufferRange(m_bufferTarget, m_bindingPoint, m_bufferId, 0,
 						  m_size * m_dataSize);
@@ -55,11 +57,14 @@ void GLBuffer::initialize() {
 
 void GLBuffer::initialize(void* pData, size_t size) {
 	glBindBuffer(m_bufferTarget, m_bufferId);
-	glBufferData(m_bufferTarget, m_size * m_dataSize, m_pData, GL_STATIC_DRAW);
+	m_size = size;
+	glBufferData(
+		m_bufferTarget, size * m_dataSize, pData,
+		m_bufferMode | BUFFER_DYNAMIC ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
 
 	if (m_bufferTarget == GL_UNIFORM_BUFFER) {
 		glBindBufferRange(m_bufferTarget, m_bindingPoint, m_bufferId, 0,
-						  m_size * m_dataSize);
+						  size * m_dataSize);
 	}
 }
 
@@ -67,7 +72,8 @@ void GLBuffer::update(void* pData, size_t size, uint32_t offset) {
 	glBindBuffer(m_bufferTarget, m_bufferId);
 
 	if (m_bufferMode & BUFFER_STAGED) {
-		glBufferSubData(m_bufferTarget, offset, size * m_dataSize, pData);
+		glBufferSubData(m_bufferTarget, offset * m_dataSize, size * m_dataSize,
+						pData);
 	} else if (m_bufferMode & BUFFER_MAPPED) {
 		// memcpy(Buffer<T, t_attributeSize>::m_pData, pData + offset, size *
 		// sizeof(T));

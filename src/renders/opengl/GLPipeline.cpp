@@ -8,9 +8,12 @@
 
 #include <memory>
 
+#include "../../Application.h"
+#include "../../scene/2D/UIManager.h"
 #include "../generic/FrameBuffer.h"
 #include "GLFrameBuffer.h"
 #include "GLMesh.h"
+#include "GLShader.h"
 
 namespace bird::gl {
 
@@ -19,7 +22,8 @@ GLPipeline::GLPipeline() : GraphicsPipeline(GRAPHICS_PIPELINE_OPENGL) {}
 GLPipeline::~GLPipeline() {}
 
 void GLPipeline::init() {
-	m_pWindow = std::make_unique<Window>(WINDOW_WIDTH, WINDOW_HEIGHT, "Window");
+	m_pWindow = std::make_unique<Window>(WINDOW_WIDTH, WINDOW_HEIGHT,
+										 "Bird Engine - Application");
 
 	glewExperimental = true;
 	int code = 0;
@@ -33,6 +37,11 @@ void GLPipeline::init() {
 	glEnable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
 	glEnable(GL_DEBUG_OUTPUT);
+
+	ui_shader = ShaderBuilder()
+					.attachShaderFile("assets/shaders/ui.vert", VERTEX)
+					.attachShaderFile("assets/shaders/ui.frag", FRAGMENT)
+					.create();
 
 	FrameBufferBuilder builder;
 	builder.addTextureAttachment(
@@ -52,8 +61,18 @@ void GLPipeline::renderRootScene(const bird::Scene* scene) {
 
 	m_framebuffers.at(0).get()->bind(nullptr);
 
-	glClearColor(0.2, 0, 0, 1);
+	glClearColor(0, 0, 0, 1);
 	renderScene(scene);
+
+	glDisable(GL_DEPTH_TEST);
+
+	((GLShader*)ui_shader.get())->bind();
+	m_globalUBO->update((GlobalUBOData*)&m_orthoMatrix, sizeof(Matrix4), 0);
+
+	GLMesh* ui_mesh = (GLMesh*)APPLICATION->getUIManager()->getUIMesh().get();
+	glBindVertexArray(ui_mesh->getVAO());
+	glDrawElements(GL_TRIANGLES, ui_mesh->getIndexBuffer()->getBufferSize(),
+				   GL_UNSIGNED_INT, 0);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -61,8 +80,9 @@ void GLPipeline::renderRootScene(const bird::Scene* scene) {
 	((GLFrameBuffer*)m_framebuffers.at(0).get())->bindAttachments();
 
 	glDisable(GL_DEPTH_TEST);
-	glBindVertexArray(((GLMesh*)m_quad_mesh.get())->getVAO());
-	glDrawArrays(GL_TRIANGLES, 0, 6);
+	glBindVertexArray(((GLMesh*)s_quad_mesh.get())->getVAO());
+	glDrawElements(GL_TRIANGLES, s_quad_mesh->getIndexBuffer()->getBufferSize(),
+				   GL_UNSIGNED_INT, 0);
 	glBindVertexArray(0);
 	auto& attachments = m_framebuffers.at(0)->getColorAttachments();
 	for (int i = 0; i < attachments.size(); i++) {
@@ -82,6 +102,10 @@ void GLPipeline::renderScene(const Scene* scene) {
 	global.perspective = m_camera->getPerspectiveMatrix();
 	global.view = m_camera->getTransformMatrix();
 	global.viewPos = Vector4(m_camera->getWorldPosition(), 0.0);
+
+	glClearColor(m_camera->getWorldEnvironment().clearColor.x,
+				 m_camera->getWorldEnvironment().clearColor.y,
+				 m_camera->getWorldEnvironment().clearColor.z, 1.0);
 
 	MeshComponent* mesh = nullptr;
 	WorldObject* obj = nullptr;
@@ -103,7 +127,8 @@ void GLPipeline::renderScene(const Scene* scene) {
 			// std::cout << "Material:" << mat.get()->getDiffuseColor() <<
 			// std::endl;
 
-			matData.color = mat.get()->getDiffuseColor();
+			matData.color = Vector4(mat.get()->getDiffuseColor(),
+									mat.get()->getTextures().size() == 0);
 			matData.specularColor = mat.get()->getSpecularColor();
 			matData.ambientColor = mat.get()->getAmbientColor();
 			matData.shininess = mat.get()->getShininess();

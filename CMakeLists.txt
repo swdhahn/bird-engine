@@ -177,5 +177,5 @@ install(
   EXPORT Bird_Engine
   FILE Bird_EngineConfig.cmake
   NAMESPACE Bird::
-  DESTINATION cmake/Bird_Engine)
+  DESTINATION lib/cmake/Bird_Engine)
 install(DIRECTORY libs/install/include/glm DESTINATION include)

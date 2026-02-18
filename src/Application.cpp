@@ -4,7 +4,9 @@
 
 #include "Application.h"
 
+#include "renders/Window.h"
 #include "renders/opengl/GLPipeline.h"
+#include "scene/2D/UIManager.h"
 namespace bird {
 
 Input* INPUT = nullptr;
@@ -23,18 +25,8 @@ void Application::init() {
 	APPLICATION = this;
 
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
-
-	INPUT->addAction(Action("move_forward").addKey(KEY_W));
-	INPUT->addAction(Action("move_backward").addKey(KEY_S));
-	INPUT->addAction(Action("move_left").addKey(KEY_A));
-	INPUT->addAction(Action("move_right").addKey(KEY_D));
-	INPUT->addAction(Action("move_up").addKey(KEY_SPACE));
-	INPUT->addAction(Action("move_down").addKey(KEY_LEFT_SHIFT));
-
-	INPUT->addAction(Action("look_up").addKey(KEY_UP));
-	INPUT->addAction(Action("look_down").addKey(KEY_DOWN));
-	INPUT->addAction(Action("look_left").addKey(KEY_LEFT));
-	INPUT->addAction(Action("look_right").addKey(KEY_RIGHT));
+	m_uiManager = new UIManager();
+	m_uiManager->init();
 
 	m_scene->init();
 }
@@ -44,7 +36,9 @@ void Application::run() {
 
 	double lastTime = Window::getGLFWTime();
 	float delta = 0.0f;
+	uint16_t fps = 0;
 
+	double secondTime = Window::getGLFWTime();
 	while (!m_graphicsPipeline->getWindow()->shouldWindowClose()) {
 		delta = (Window::getGLFWTime() - lastTime);
 		lastTime = Window::getGLFWTime();
@@ -54,6 +48,12 @@ void Application::run() {
 		}
 		processScene(m_scene, delta);
 		m_graphicsPipeline->renderRootScene(m_scene);
+		fps++;
+		if (secondTime + 1.0 < Window::getGLFWTime()) {
+			std::cout << "FPS: " << fps << std::endl;
+			fps = 0;
+			secondTime = Window::getGLFWTime();
+		}
 		INPUT->tick();
 		m_graphicsPipeline->getWindow()->pollWindow();
 	}
@@ -62,6 +62,7 @@ void Application::run() {
 }
 
 void Application::processScene(Scene* scene, float delta) {
+	m_uiManager->process(delta);
 	for (auto& entity : scene->getEntities()) {
 		entity->process(delta);
 		if (entity->needsMatrixUpdate()) {
@@ -76,6 +77,8 @@ void Application::processScene(Scene* scene, float delta) {
 void Application::deinit() {
 	m_scene->deinit();
 
+	m_uiManager->deinit();
+	delete m_uiManager;
 	delete INPUT;
 	m_graphicsPipeline->cleanUp();
 	delete m_graphicsPipeline;
@@ -89,6 +92,10 @@ bird::Camera* Application::getCamera() {
 
 GraphicsPipeline* Application::getGraphicsPipeline() {
 	return m_graphicsPipeline;
+}
+
+UIManager* Application::getUIManager() {
+	return m_uiManager;
 }
 
 }  // namespace bird

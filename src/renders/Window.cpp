@@ -7,6 +7,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
+#include "../util/stb_image.h"
 #include "GraphicsPipeline.h"
 
 namespace bird {
@@ -29,7 +30,6 @@ Window::Window(uint32_t width, uint32_t height, std::string title) {
 		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 		m_pWindow =
 			glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
-
 		glfwMakeContextCurrent(m_pWindow);
 		int fwidth, fheight;
 		glfwGetFramebufferSize(m_pWindow, &fwidth, &fheight);
@@ -37,6 +37,15 @@ Window::Window(uint32_t width, uint32_t height, std::string title) {
 	} else {
 		throw std::invalid_argument("Graphics Pipeline is not supported!");
 	}
+	int w, h, channels;
+	unsigned char* pixels = stbi_load("logo.jpg", &w, &h, &channels, 4);
+
+	if (pixels) {
+		GLFWimage image = {w, h, pixels};
+		glfwSetWindowIcon(m_pWindow, 1, &image);
+		stbi_image_free(pixels);  // Free loaded data
+	}
+	glfwSwapInterval(0);
 }
 
 bool Window::shouldWindowClose() const {

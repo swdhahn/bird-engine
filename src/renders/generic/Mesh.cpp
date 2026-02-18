@@ -24,19 +24,19 @@ void Mesh::read() {}
 
 void Mesh::write() {}
 
-const Buffer<uint32_t>* Mesh::getIndexBuffer() const {
+Buffer<uint32_t>* Mesh::getIndexBuffer() {
 	return m_indexBuffer.get();
 }
 
-const Buffer<float>* Mesh::getVertexBuffer() const {
+Buffer<float>* Mesh::getVertexBuffer() {
 	return m_vertexBuffer.get();
 }
 
-const Buffer<float>* Mesh::getNormalBuffer() const {
+Buffer<float>* Mesh::getNormalBuffer() {
 	return m_normalBuffer.get();
 }
 
-const Buffer<float, 2>* Mesh::getTextureCoordBuffer() const {
+Buffer<float, 2>* Mesh::getTextureCoordBuffer() {
 	return m_textureCoordBuffer.get();
 }
 

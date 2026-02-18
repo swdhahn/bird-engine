@@ -1,6 +1,7 @@
 #ifndef BIRD_BUFFERTEMPLATE_H
 #define BIRD_BUFFERTEMPLATE_H
 
+#include <cstddef>
 #include <memory>
 #include <variant>
 
@@ -24,7 +25,16 @@ class Buffer {
 		m_rawBuffer->initialize((void*)pData.get(), size);
 	}
 
+	/**
+	 * This method does not update the m_pData variable in the buffer. If the
+	 * (offset + size > m_size) then it automatically initializes this buffer
+	 * for the new size: offset + size.
+	 */
 	void update(T* pData, size_t size, uint32_t offset) {
+		if (size + offset > m_rawBuffer->m_size) {
+			m_rawBuffer->initialize((void*)pData, size);
+			return;
+		}
 		m_rawBuffer->update((void*)pData, size, offset);
 	}
 
@@ -55,7 +65,10 @@ class Buffer {
 template <typename T, uint8_t t_attributeSize>
 
 Buffer<T, t_attributeSize>::Buffer(std::unique_ptr<RawBuffer> bufferData)
-	: Buffer(std::unique_ptr<T[]>(bufferData->m_pData), bufferData) {
+	: Buffer(nullptr, std::move(bufferData)) {
+	if (m_rawBuffer->m_pData != nullptr)
+		m_pData = std::unique_ptr<T[]>((T*)m_rawBuffer->m_pData);
+
 	m_rawBuffer->m_dataSize = sizeof(T);
 }
 template <typename T, uint8_t t_attributeSize>

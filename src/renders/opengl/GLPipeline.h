@@ -5,6 +5,8 @@
 #ifndef BIRD_GLPIPELINE_H
 #define BIRD_GLPIPELINE_H
 
+#include <memory>
+
 #include "../../util/File.h"
 #include "../GraphicsPipeline.h"
 #include "GLMesh.h"
@@ -26,6 +28,8 @@ class GLPipeline : public GraphicsPipeline {
 
    private:
 	void renderScene(const Scene* scene);
+
+	std::shared_ptr<Shader> ui_shader;
 };
 
 }  // namespace bird::gl

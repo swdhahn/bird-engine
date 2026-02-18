@@ -11,7 +11,7 @@ namespace bird::gl {
 
 class GLTexture : public Texture {
    public:
-	GLTexture(void* pData, uint32_t width, uint32_t height,
+	GLTexture(uint8_t* pData, uint32_t width, uint32_t height,
 			  TextureFormat format, uint32_t textureID);
 	~GLTexture() override;
 

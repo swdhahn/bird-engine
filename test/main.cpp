@@ -1,4 +1,6 @@
 #include <Application.h>
+#include <scene/2D/UIButton.h>
+#include <scene/2D/UIManager.h>
 #include <scene/Camera.h>
 #include <scene/components/MeshComponent.h>
 #include <util/Assets.h>
@@ -13,7 +15,10 @@
 
 class POVCamera : public bird::Camera {
    public:
-	POVCamera() : bird::Camera(1280, 720) {}
+	POVCamera() : bird::Camera(1280, 720) {
+		m_env.clearColor = bird::Vector3(0.2, 0.6, 0.85);
+	}
+
 	~POVCamera() {}
 
 	void init() {}
@@ -56,6 +61,18 @@ class TestEntity : public bird::Entity {
 class MainScene : public bird::Scene {
    public:
 	void init() override {
+		bird::INPUT->addAction(bird::Action("move_forward").addKey(KEY_W));
+		bird::INPUT->addAction(bird::Action("move_backward").addKey(KEY_S));
+		bird::INPUT->addAction(bird::Action("move_left").addKey(KEY_A));
+		bird::INPUT->addAction(bird::Action("move_right").addKey(KEY_D));
+		bird::INPUT->addAction(bird::Action("move_up").addKey(KEY_SPACE));
+		bird::INPUT->addAction(
+			bird::Action("move_down").addKey(KEY_LEFT_SHIFT));
+		bird::INPUT->addAction(bird::Action("look_up").addKey(KEY_UP));
+		bird::INPUT->addAction(bird::Action("look_down").addKey(KEY_DOWN));
+		bird::INPUT->addAction(bird::Action("look_left").addKey(KEY_LEFT));
+		bird::INPUT->addAction(bird::Action("look_right").addKey(KEY_RIGHT));
+
 		std::shared_ptr<bird::Shader> shader =
 			bird::RESOURCE_MANAGER->loadShader(
 				bird::ShaderBuilder()
@@ -70,8 +87,8 @@ class MainScene : public bird::Scene {
 								  bird::ShaderPipeline::VERTEX)
 				.attachShaderFile("assets/shaders/basic.frag",
 								  bird::ShaderPipeline::FRAGMENT));
-		mesh = bird::RESOURCE_MANAGER->loadMesh(
-			"assets/models/bugatti/bugatti.obj");
+		mesh = bird::RESOURCE_MANAGER->loadMesh("assets/models/maps/Map1.glb");
+		//"assets/models/bugatti/bugatti.obj");
 		auto mesh2 = bird::RESOURCE_MANAGER->loadMesh("assets/models/cube.obj");
 
 		auto mat = std::make_shared<bird::Material>();
@@ -95,9 +112,9 @@ class MainScene : public bird::Scene {
 		}
 
 		e = new TestEntity();
-		this->addEntity(e);
 		e->addComponent(std::make_unique<bird::MeshComponent>(mesh));
 		e->translate(bird::Vector3(0, 0, 0));
+		this->addEntity(e);
 
 		e2 = new TestEntity();
 		e2->addComponent(std::make_unique<bird::MeshComponent>(mesh2));
@@ -106,6 +123,14 @@ class MainScene : public bird::Scene {
 
 		cam = new POVCamera();
 		bird::APPLICATION->setCamera(cam);
+
+		auto button = std::make_unique<bird::UIButton>();
+		button->setScale(bird::Vector2(200, 100));
+		button->setPosition(bird::Vector2(600, 400));
+		button->updateTransformationMatrix();
+
+		bird::APPLICATION->getUIManager()->getRoot()->addChild(
+			std::move(button));
 	}
 
 	void deinit() override {

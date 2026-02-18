@@ -12,6 +12,8 @@
 
 namespace bird {
 
+class UIManager;
+
 class Application {
    public:
 	Application(Scene& scene);
@@ -27,9 +29,11 @@ class Application {
 	Camera* getCamera();
 
 	GraphicsPipeline* getGraphicsPipeline();
+	UIManager* getUIManager();
 
    private:
 	GraphicsPipeline* m_graphicsPipeline;
+	UIManager* m_uiManager;
 	Scene* m_scene;
 };
 

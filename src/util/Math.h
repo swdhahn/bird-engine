@@ -12,10 +12,12 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <glm/mat3x3.hpp>
 #include <iostream>
 
 namespace bird {
 class WorldObject;
+class ScreenObject;
 
 typedef glm::vec2 Vector2;
 typedef glm::vec3 Vector3;
@@ -45,6 +47,13 @@ inline Quaternion lookAt(const Vector3& direction, const Vector3& upDir) {
 
 Matrix4 createTransformMatrix(WorldObject* obj);
 void updateTransformMatrix(WorldObject* obj, Matrix4* dst);
+void updateTransformMatrix(ScreenObject* obj, Matrix3* dst);
+
+/**
+ * @param point - the point to be calculated
+ * @param bounds - a rectangular region defined by Vector4(x, y, width, height)
+ */
+bool contains(const Vector2& point, const Vector4& bounds);
 
 /**
  *

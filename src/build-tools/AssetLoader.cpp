@@ -4,6 +4,9 @@
 
 #include "AssetLoader.h"
 
+#include <cstring>
+#include <string>
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "../util/stb_image.h"
 
@@ -14,8 +17,8 @@ enum AssetType { TEXTURE, MODEL, SCENE, SOUND, SHADER, MATERIAL, CUSTOM };
 std::vector<std::vector<const char*>> supportedFileTypes{
 	{".png", ".jpg", ".jpeg", ".tga", ".bmp", ".psd", ".gif", ".hdr", ".pic",
 	 ".pnm"},												 // Textures
-	{".obj", ".fbx", ".gltf"},								 // 3D models
-	{".gltf"},												 // Scenes
+	{".obj", ".fbx", ".gltf", ".glb"},						 // 3D models
+	{".gltf", ".glb"},										 // Scenes
 	{".wav", ".mp3", ".ogg"},								 // Sounds
 	{".glsl", ".vert", ".frag", ".hlsl", ".metal", ".spv"},	 // Shaders
 	{".mtl", ".pbr"},										 // Materials
@@ -89,11 +92,56 @@ void AssetLoader::loadAsset() {
 	// load asset
 }
 
-void AssetLoader::loadScene(std::string& path) {
+void AssetLoader::loadScene(const std::string& path) {
 	// load scene
 }
 
-void AssetLoader::loadModel(std::string& path) {
+void DebugPrintAllTextures(const aiMaterial* mat) {
+	return;
+	std::cout << "--- Material Debug Info ---" << std::endl;
+	// Iterate clearly through all known Assimp texture types
+	// Note: Assimp 5.x defines up to around 18 types.
+	const int AI_TEXTURE_TYPE_MAX = 20;
+
+	for (int i = 0; i <= AI_TEXTURE_TYPE_MAX; i++) {
+		aiTextureType type = static_cast<aiTextureType>(i);
+		unsigned int count = mat->GetTextureCount(type);
+
+		if (count > 0) {
+			std::cout << "Found " << count
+					  << " texture(s) at Type Index: " << i;
+
+			// Map index to name for clarity
+			switch (i) {
+				case 1:
+					std::cout << " (DIFFUSE)";
+					break;
+				case 12:
+					std::cout << " (BASE_COLOR / PBR)";
+					break;
+				case 5:
+					std::cout << " (HEIGHT / NORMAL)";
+					break;
+				case 6:
+					std::cout << " (NORMALS)";
+					break;
+				case 16:
+					std::cout << " (ROUGHNESS)";
+					break;
+				case 17:
+					std::cout << " (METALLIC)";
+					break;
+			}
+			std::cout << std::endl;
+
+			aiString path;
+			mat->GetTexture(type, 0, &path);
+			std::cout << "   Path: " << path.C_Str() << std::endl;
+		}
+	}
+}
+
+void AssetLoader::loadModel(const std::string& path) {
 	// load model
 	if (std::filesystem::exists(path + ".bird")) {
 		return;
@@ -103,7 +151,8 @@ void AssetLoader::loadModel(std::string& path) {
 	const aiScene* scene = importer.ReadFile(
 		path, aiProcess_CalcTangentSpace | aiProcess_Triangulate |
 				  aiProcess_SortByPType | aiProcess_JoinIdenticalVertices |
-				  aiProcess_FixInfacingNormals);
+				  aiProcess_FixInfacingNormals |
+				  aiProcess_PreTransformVertices);
 	if (scene == nullptr) {
 		std::cout << "Error loading scene" << std::endl;
 		std::cout << importer.GetErrorString() << std::endl;
@@ -182,8 +231,19 @@ void AssetLoader::loadModel(std::string& path) {
 			file.write((char*)&scene->mMeshes[i]->mNumVertices,
 					   sizeof(uint32_t));
 			file.write((char*)&two, sizeof(uint8_t));
-			file.write((char*)&scene->mMeshes[i]->mTextureCoords[0],
-					   scene->mMeshes[i]->mNumVertices * two * sizeof(float));
+			std::vector<aiVector2D> buffer2D(scene->mMeshes[i]->mNumVertices);
+
+			// Use std::transform to strip the Z component
+			// We may come back to this and support 3D texture coords
+			std::transform(scene->mMeshes[i]->mTextureCoords[0],
+						   scene->mMeshes[i]->mTextureCoords[0] +
+							   scene->mMeshes[i]->mNumVertices,
+						   buffer2D.begin(), [](const aiVector3D& v) {
+							   return aiVector2D(v.x, v.y);
+						   });
+
+			file.write((char*)buffer2D.data(),
+					   scene->mMeshes[i]->mNumVertices * sizeof(aiVector2D));
 		}
 
 		// handle extra buffer data, it is currently 0 but we'll allow custom
@@ -202,6 +262,7 @@ void AssetLoader::loadModel(std::string& path) {
 						std::ios::out | std::ios::binary);
 
 		aiMaterial* aiMat = scene->mMaterials[i];
+		DebugPrintAllTextures(aiMat);
 		aiColor3D color(0.f, 0.f, 0.f);
 		float shininess = 32, opacity = 1.0, reflectivity = 0.0, zero = 0;
 
@@ -257,6 +318,7 @@ void AssetLoader::loadModel(std::string& path) {
 		} else {
 			mf.write((char*)&reflectivity, sizeof(float));
 		}
+
 		uint8_t totalTexCount = 0;	// max 256 textures per material
 		for (unsigned int t = aiTextureType_DIFFUSE; t <= aiTextureType_UNKNOWN;
 			 ++t) {
@@ -266,15 +328,22 @@ void AssetLoader::loadModel(std::string& path) {
 
 		mf.write((char*)&totalTexCount, sizeof(uint8_t));
 
-		aiString path;
+		aiString apath;
 		for (unsigned int t = aiTextureType_DIFFUSE; t <= aiTextureType_UNKNOWN;
 			 ++t) {
 			aiTextureType texType = static_cast<aiTextureType>(t);
 			unsigned int texCount = aiMat->GetTextureCount(texType);
 			for (unsigned int i = 0; i < texCount; ++i) {
-				if (AI_SUCCESS == aiMat->GetTexture(texType, i, &path)) {
-					mf.write((char*)&path.length, sizeof(uint16_t));
-					mf.write((char*)path.C_Str(), path.length);
+				if (AI_SUCCESS == aiMat->GetTexture(texType, i, &apath)) {
+					std::string np = apath.C_Str();
+					auto fp = std::filesystem::path(np);
+					if (!fp.has_extension()) {
+						np = std::filesystem::path(path).filename().string() +
+							 "_etex" + fp.filename().string().substr(1);
+					}
+					uint16_t npl = np.size();
+					mf.write((char*)&npl, sizeof(uint16_t));
+					mf.write((char*)np.c_str(), npl);
 				}
 			}
 		}
@@ -282,10 +351,41 @@ void AssetLoader::loadModel(std::string& path) {
 		mf.close();
 	}
 
+	for (int i = 0; i < scene->mNumTextures; i++) {
+		aiTexture* image = scene->mTextures[i];
+
+		uint8_t* imgData = nullptr;
+		int width, height, channels;
+		std::string fpath = path + "_etex" + std::to_string(i);
+
+		if (scene->mTextures[i]->mHeight == 0) {
+			imgData = stbi_load_from_memory((unsigned char*)(image->pcData),
+											image->mWidth, &width, &height,
+											&channels, 0);
+			writeImage(width, height, channels, imgData, fpath);
+			stbi_image_free(imgData);
+		} else {
+			width = image->mWidth;
+			height = image->mHeight;
+			channels = 4;
+			imgData = new uint8_t[width * height * channels];
+			std::memcpy(imgData, image->pcData, width * height * channels);
+			// Assimp is in BRGA but we want RGBA
+			for (int j = 0; j < width * height; j++) {
+				imgData[j * channels] =
+					((uint8_t*)image->pcData)[j * channels + 2];
+				imgData[j * channels + 2] =
+					((uint8_t*)image->pcData)[j * channels];
+			}
+			writeImage(width, height, channels, imgData, fpath);
+			delete[] imgData;
+		}
+	}
+
 	std::cout << "Model Materials Saved!" << std::endl;
 }
 
-void AssetLoader::loadTexture(std::string& path) {
+void AssetLoader::loadTexture(const std::string& path) {
 	if (std::filesystem::exists(path + ".bird")) {
 		return;
 	}
@@ -300,28 +400,39 @@ void AssetLoader::loadTexture(std::string& path) {
 		std::cout << "Error in loading the image: " << path << std::endl;
 	}
 
+	writeImage(width, height, channels, img, path);
+
 	std::cout << "Image Compiled. Saving file" << std::endl;
+
+	stbi_image_free(img);
+}
+
+void AssetLoader::writeImage(uint32_t width, uint32_t height, uint32_t channels,
+							 uint8_t* imageData, const std::string& path) {
+	if (std::filesystem::exists(path + ".bird")) {
+		return;
+	}
 	std::fstream file(path + ".bird", std::ios::out | std::ios::binary);
 
 	file.write((char*)&width, sizeof(int32_t));
 	file.write((char*)&height, sizeof(int32_t));
 	file.write((char*)&channels, sizeof(int32_t));
-	file.write((char*)img, width * height * channels * sizeof(uint8_t));
+	file.write((char*)imageData, width * height * channels * sizeof(uint8_t));
+
+	file.close();
 
 	std::cout << "Image saved." << std::endl;
-
-	stbi_image_free(img);
 }
 
-void AssetLoader::loadSound(std::string& path) {
+void AssetLoader::loadSound(const std::string& path) {
 	// load sound
 }
 
-void AssetLoader::loadShader(std::string& path) {
+void AssetLoader::loadShader(const std::string& path) {
 	// load shader
 }
 
-void AssetLoader::loadMaterial(std::string& path) {
+void AssetLoader::loadMaterial(const std::string& path) {
 	return;
 	// load material
 	// load model
@@ -342,7 +453,7 @@ void AssetLoader::loadMaterial(std::string& path) {
 	std::fstream file(path + ".bird", std::ios::out | std::ios::binary);
 }
 
-void AssetLoader::loadCustom(std::string& path) {
+void AssetLoader::loadCustom(const std::string& path) {
 	// load custom
 }
 

@@ -22,10 +22,14 @@ std::shared_ptr<Texture> ResourceManager::loadTexture(std::string path) {
 		return std::static_pointer_cast<Texture>(m_resources[TEXTURE].at(path));
 	}
 
-	std::fstream file(path + ".bird", std::ios::in | std::ios::binary);
+	std::fstream file(RESOURCE_PATH + path + ".bird",
+					  std::ios::in | std::ios::binary);
 
 	if (!file.is_open()) {
-		std::cout << "Error loading file: " << path << std::endl;
+		std::cout << "Error loading file. File does not exist: " << path
+				  << std::endl;
+		std::cerr << std::strerror(errno) << std::endl;
+		file.close();
 		return std::shared_ptr<Texture>(0);
 	}
 
@@ -37,6 +41,7 @@ std::shared_ptr<Texture> ResourceManager::loadTexture(std::string path) {
 	uint8_t* data = new uint8_t[width * height * channels];
 	file.read(reinterpret_cast<char*>(data),
 			  width * height * channels * sizeof(uint8_t));
+	file.close();
 
 	if (channels == 0) {
 		std::cout << "Error loading file: " << path << std::endl;
@@ -58,10 +63,12 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 		return m_meshes.at(path);
 	}
 	// load mesh from file
-	std::fstream file(path + ".bird", std::ios::in | std::ios::binary);
+	std::fstream file(RESOURCE_PATH + path + ".bird",
+					  std::ios::in | std::ios::binary);
 
 	if (!file.is_open()) {
 		std::cout << "Error loading file: " << path << std::endl;
+		file.close();
 		return std::vector<std::shared_ptr<Mesh>>(0);
 	}
 
@@ -125,12 +132,15 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 			createBuffer<float>(static_cast<bird::BufferMode>(
 									bird::BUFFER_STAGED | bird::BUFFER_ARRAY),
 								std::move(normals), normalCount * normalSize);
+
 		std::unique_ptr<bird::Buffer<float, 2>> textureCoordBuffer =
 			createBuffer<float, 2>(
 				static_cast<bird::BufferMode>(bird::BUFFER_STAGED |
 											  bird::BUFFER_ARRAY),
 				std::move(textureCoords), textureCoordCount * textureCoordSize);
+
 		bird::MeshBuilder mb = bird::MeshBuilder();
+
 		mb.setIndexBuffer(std::move(indexBuffer))
 			.setVertexBuffer(std::move(vertexBuffer))
 			.setNormalBuffer(std::move(normalBuffer))
@@ -159,10 +169,12 @@ std::shared_ptr<Material> ResourceManager::loadMaterial(std::string path) {
 	}
 
 	// load material from file
-	std::fstream file(path + ".bird", std::ios::in | std::ios::binary);
+	std::fstream file(RESOURCE_PATH + path + ".bird",
+					  std::ios::in | std::ios::binary);
 
 	if (!file.is_open()) {
 		std::cout << "Error loading file: " << path << std::endl;
+		file.close();
 		return std::shared_ptr<Material>(0);
 	}
 
@@ -179,17 +191,20 @@ std::shared_ptr<Material> ResourceManager::loadMaterial(std::string path) {
 	uint8_t textureCount = 0;
 	file.read(reinterpret_cast<char*>(&textureCount), sizeof(uint8_t));
 	for (int i = 0; i < textureCount; i++) {
-		std::string texPath;
+		std::string texPath = "";
 		uint16_t texPathSize = 0;
+
 		file.read(reinterpret_cast<char*>(&texPathSize), sizeof(uint16_t));
-		file.read(reinterpret_cast<char*>(&texPath), texPathSize);
+		texPath.resize(texPathSize);
+		file.read(reinterpret_cast<char*>(&texPath[0]), texPathSize);
+
 		std::filesystem::path p(path);
 		p = p.remove_filename();
 		texPath = std::string(p.string() + texPath);
 
-		std::cout << "Path: " << "../" + texPath + ".bird" << std::endl;
+		std::cout << texPath << std::endl;
+		std::shared_ptr<Texture> tex = loadTexture(texPath);
 
-		std::shared_ptr<Texture> tex = loadTexture("../" + texPath);
 		mat->addTexture(tex);
 	}
 

@@ -4,13 +4,13 @@
 
 #include "GLTexture.h"
 
-#include "../GraphicsConstants.h"
 #include <GL/glew.h>
 
+#include "../GraphicsConstants.h"
 
 namespace bird::gl {
 
-GLTexture::GLTexture(void* pData, uint32_t width, uint32_t height,
+GLTexture::GLTexture(uint8_t* pData, uint32_t width, uint32_t height,
 					 TextureFormat format, uint32_t textureID)
 	: Texture(pData, width, height, format), m_textureID(textureID) {}
 
