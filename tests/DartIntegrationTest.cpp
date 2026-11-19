@@ -123,6 +123,10 @@ TEST(DartIntegrationTest, EmbeddedDartVmExecutesScriptEndToEnd) {
 	ASSERT_TRUE(runtime.invokeTopLevelVoid("runUiIntegrationChecks"))
 		<< runtime.lastError();
 
+	// Run Pass 3 Jolt Physics + raycast + contact callbacks from Dart
+	ASSERT_TRUE(runtime.invokeTopLevelVoid("runPhysicsIntegrationChecks"))
+		<< runtime.lastError();
+
 	// Deinit triggers Dart deinit() and closes NativeCallables cleanly before VM shutdown
 	externalScene.deinit();
 	runtime.shutdown();

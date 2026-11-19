@@ -15,6 +15,8 @@
 extern "C" {
 typedef void (*BirdDartInitFn)(void* hostWorldObject);
 typedef void (*BirdDartProcessFn)(void* hostWorldObject, float delta);
+typedef void (*BirdDartPhysicsProcessFn)(void* hostWorldObject,
+										 float fixedDelta);
 typedef void (*BirdDartDeinitFn)(void* hostWorldObject);
 
 /**
@@ -23,28 +25,32 @@ typedef void (*BirdDartDeinitFn)(void* hostWorldObject);
  */
 BIRD_DART_C_API void* bird_DartScriptComponent_new(
 	BirdDartInitFn onInit, BirdDartProcessFn onProcess,
-	BirdDartDeinitFn onDeinit);
+	BirdDartPhysicsProcessFn onPhysicsProcess, BirdDartDeinitFn onDeinit);
 }
 
 namespace bird {
 
 /**
- * ProcessScriptComponent bridge that dispatches init(), process(delta), and
- * deinit() directly into Dart NativeCallable callbacks on the main isolate.
+ * ProcessScriptComponent bridge that dispatches init(), process(delta),
+ * physicsProcess(fixedDelta), and deinit() directly into Dart NativeCallable
+ * callbacks on the main isolate.
  */
 class DartScriptComponent : public ProcessScriptComponent {
    public:
 	DartScriptComponent(BirdDartInitFn onInit, BirdDartProcessFn onProcess,
+						BirdDartPhysicsProcessFn onPhysicsProcess,
 						BirdDartDeinitFn onDeinit);
 	~DartScriptComponent() override = default;
 
 	void init() override;
 	void process(float delta) override;
+	void physicsProcess(float fixedDelta) override;
 	void deinit() override;
 
    private:
 	BirdDartInitFn m_onInit;
 	BirdDartProcessFn m_onProcess;
+	BirdDartPhysicsProcessFn m_onPhysicsProcess;
 	BirdDartDeinitFn m_onDeinit;
 	Dart_Isolate m_isolate;
 };

@@ -133,7 +133,8 @@ static std::string safeDartIdent(std::string s) {
 		"Function",	 "part",	   "void",		"default", "get",
 		"required",	 "while",	   "deferred",	"hide",	   "rethrow",
 		"with",		 "do",		   "if",		"return",  "yield",
-		"dynamic",	 "implements", "set",		"Object"};
+		"dynamic",	 "implements", "set",		"Object",
+		"b",		 "arena",	   "out",		"handle"};
 	if (kw.count(s)) return s + "_";
 	if (s.empty()) return "arg";
 	return s;
@@ -317,9 +318,10 @@ enum class TypeCat {
 	GlmMat4,
 	Enum,		   // enum / enum class
 	OpaqueClass,   // user class T, T*, T&, const T&
-	UniquePtr,	   // std::unique_ptr<T> (_own<T>)
-	SharedPtr,	   // std::shared_ptr<T> (_ref<T>)
-	VectorInt,	   // std::vector<int>
+	UniquePtr,		// std::unique_ptr<T> (_own<T>)
+	SharedPtr,		// std::shared_ptr<T> (_ref<T>)
+	OptionalOpaque,	// std::optional<T>
+	VectorInt,		// std::vector<int>
 	VectorString,  // std::vector<std::string>
 	VectorOpaque,  // std::vector<T*>, std::vector<_own<T>>, or std::vector<T>
 	VectorShared,  // std::vector<_ref<T>>
@@ -532,6 +534,23 @@ static TypeInfo translateType(CXType t) {
 			return info;
 		}
 
+		// std::optional<T>
+		if (!info.isPointer &&
+			(recName == "std::optional" || recName == "std::__1::optional")) {
+			int nArgs = clang_Type_getNumTemplateArguments(canon);
+			if (nArgs >= 1) {
+				CXType elem = clang_Type_getTemplateArgumentAsType(canon, 0);
+				CXType elemCanon = clang_getCanonicalType(elem);
+				if (elemCanon.kind == CXType_Record) {
+					info.cat = TypeCat::OptionalOpaque;
+					info.cppCanonical = getRecordQualifiedName(elemCanon);
+					return info;
+				}
+			}
+			info.cat = TypeCat::Unsupported;
+			return info;
+		}
+
 		// std::vector<T>
 		if (!info.isPointer &&
 			(recName == "std::vector" || recName == "std::__1::vector")) {
@@ -622,6 +641,7 @@ static TypeInfo translateType(CXType t) {
 								case TypeCat::GlmVec4:
 								case TypeCat::GlmQuat:
 								case TypeCat::Enum:
+								case TypeCat::OpaqueClass:
 									fparams.push_back(std::move(pt));
 									break;
 								default:
@@ -1149,6 +1169,8 @@ static bool isTypeExportable(const TypeInfo& t, Model& model, bool isReturn) {
 			}
 			return true;
 		}
+		case TypeCat::OptionalOpaque:
+			return isReturn && model.classes.count(t.cppCanonical) > 0;
 		case TypeCat::VectorInt:
 			return isReturn;
 		case TypeCat::VectorString:
@@ -1171,6 +1193,9 @@ static bool isTypeExportable(const TypeInfo& t, Model& model, bool isReturn) {
 			if (isReturn) return false;
 			for (const auto& fp : t.fnParams) {
 				if (fp.cat == TypeCat::Enum && !model.enums.count(fp.cppCanonical))
+					return false;
+				if (fp.cat == TypeCat::OpaqueClass &&
+					!model.classes.count(fp.cppCanonical))
 					return false;
 			}
 			return true;
@@ -1455,7 +1480,7 @@ static EmittedType emitType(const TypeInfo& t, const Model& model,
 		}
 		case TypeCat::OpaqueClass: {
 			std::string dn = model.classes.at(t.cppCanonical).dartName;
-			std::string userType = (isReturn && t.isPointer) ? (dn + "?") : dn;
+			std::string userType = t.isPointer ? (dn + "?") : dn;
 			e = {"void*", "ffi.Pointer<ffi.Void>", "ffi.Pointer<ffi.Void>",
 				 userType, false};
 			return e;
@@ -1471,6 +1496,12 @@ static EmittedType emitType(const TypeInfo& t, const Model& model,
 			std::string userType = isReturn ? (dn + "?") : dn;
 			e = {"void*", "ffi.Pointer<ffi.Void>", "ffi.Pointer<ffi.Void>",
 				 userType, false};
+			return e;
+		}
+		case TypeCat::OptionalOpaque: {
+			std::string dn = model.classes.at(t.cppCanonical).dartName;
+			e = {"void*", "ffi.Pointer<ffi.Void>", "ffi.Pointer<ffi.Void>",
+				 dn + "?", false};
 			return e;
 		}
 		case TypeCat::VectorInt:
@@ -1585,6 +1616,12 @@ static std::string cppCbParamDecl(const TypeInfo& t, size_t idx) {
 			return "const glm::quat& " + an;
 		case TypeCat::Enum:
 			return "::" + t.cppCanonical + " " + an;
+		case TypeCat::OpaqueClass:
+			if (t.isPointer)
+				return (t.isConst ? "const " : "") + std::string("::") +
+					   t.cppCanonical + "* " + an;
+			return (t.isConst ? "const " : "") + std::string("::") +
+				   t.cppCanonical + "& " + an;
 		case TypeCat::Bool:
 			return "bool " + an;
 		case TypeCat::Int32:
@@ -1616,6 +1653,11 @@ static std::string cppCbArgToC(const TypeInfo& t, size_t idx) {
 			return "from_glm(" + an + ")";
 		case TypeCat::Enum:
 			return "static_cast<int32_t>(" + an + ")";
+		case TypeCat::OpaqueClass:
+			if (t.isPointer)
+				return "const_cast<void*>(static_cast<const void*>(" + an +
+					   "))";
+			return "const_cast<void*>(static_cast<const void*>(&" + an + "))";
 		default:
 			return an;
 	}
@@ -1733,6 +1775,12 @@ static void emitReturnStmt(std::ostream& src, const TypeInfo& retType,
 			src << "    if (!_sp) return nullptr;\n";
 			src << "    return new std::shared_ptr<::" << retType.cppCanonical
 				<< ">(std::move(_sp));\n";
+			break;
+		case TypeCat::OptionalOpaque:
+			src << "    auto _opt = " << callExpr << ";\n";
+			src << "    if (!_opt.has_value()) return nullptr;\n";
+			src << "    return new ::" << retType.cppCanonical
+				<< "(std::move(*_opt));\n";
 			break;
 		case TypeCat::VectorInt:
 			src << "    const auto& _v = " << callExpr << ";\n";
@@ -1971,7 +2019,7 @@ static void writeFiles(const fs::path& outDir,
 			src << "}\n";
 
 			if (!f.isReadOnly) {
-				ParamInfo vp{f.name, f.type, ""};
+				ParamInfo vp{"_value", f.type, ""};
 				std::string setParams = buildCParamList(
 					{"void", "ffi.Void", "void", "void", false}, !f.isStatic,
 					TypeInfo{}, {vp}, model);
@@ -2789,6 +2837,10 @@ static std::optional<std::string> dartDefaultFor(const ParamInfo& p,
 	if (p.type.cat == TypeCat::StdFunction && !e.empty()) {
 		return std::string("null");
 	}
+	if (p.type.cat == TypeCat::OpaqueClass && p.type.isPointer &&
+		(e == "nullptr" || e == "NULL" || e == "0")) {
+		return std::string("null");
+	}
 	return std::nullopt;
 }
 
@@ -2849,6 +2901,8 @@ static std::string dartCbNativeType(const TypeInfo& t) {
 			return "b.BVec4";
 		case TypeCat::GlmQuat:
 			return "b.BQuat";
+		case TypeCat::OpaqueClass:
+			return "ffi.Pointer<ffi.Void>";
 		default:
 			return "ffi.Int32";
 	}
@@ -2878,6 +2932,8 @@ static std::string dartCbDartParamType(const TypeInfo& t) {
 			return "b.BVec4";
 		case TypeCat::GlmQuat:
 			return "b.BQuat";
+		case TypeCat::OpaqueClass:
+			return "ffi.Pointer<ffi.Void>";
 		default:
 			return "int";
 	}
@@ -2900,6 +2956,9 @@ static std::string dartCbUnpackArg(const TypeInfo& t, const std::string& v,
 		case TypeCat::Enum:
 			return model.enums.at(t.cppCanonical).simpleName + ".fromValue(" +
 				   v + ")";
+		case TypeCat::OpaqueClass:
+			return model.classes.at(t.cppCanonical).dartName + ".fromHandle(" +
+				   v + ", owned: false)";
 		default:
 			return v;
 	}
@@ -2946,6 +3005,12 @@ static void emitDartCallArgs(std::ostream& f,
 				callArgs.push_back(n + ".value");
 				break;
 			case TypeCat::OpaqueClass:
+				if (p.type.isPointer) {
+					callArgs.push_back(n + "?.handle ?? ffi.nullptr");
+				} else {
+					callArgs.push_back(n + ".handle");
+				}
+				break;
 			case TypeCat::SharedPtr:
 				callArgs.push_back(n + ".handle");
 				break;
@@ -3077,6 +3142,13 @@ static void emitDartReturn(std::ostream& f, const TypeInfo& retType,
 		case TypeCat::SharedPtr: {
 			std::string dn =
 				model.sharedRefTypes.at(retType.cppCanonical).dartName;
+			f << "      final p = " << callExpr << ";\n";
+			f << "      if (p == ffi.nullptr) return null;\n";
+			f << "      return " << dn << ".fromHandle(p, owned: true);\n";
+			break;
+		}
+		case TypeCat::OptionalOpaque: {
+			std::string dn = model.classes.at(retType.cppCanonical).dartName;
 			f << "      final p = " << callExpr << ";\n";
 			f << "      if (p == ffi.nullptr) return null;\n";
 			f << "      return " << dn << ".fromHandle(p, owned: true);\n";
@@ -3259,13 +3331,21 @@ static void writeClassFile(const fs::path& outDir, const ClassInfo& cls,
 		f << "  }\n\n";
 
 		if (!field.isReadOnly) {
-			f << "  " << statKw << "set " << propName << "(" << setArg.dartUser
+			bool nullablePtr = (field.type.cat == TypeCat::OpaqueClass &&
+								field.type.isPointer);
+			std::string setDartType =
+				nullablePtr ? getRet.dartUser : setArg.dartUser;
+			f << "  " << statKw << "set " << propName << "(" << setDartType
 			  << " value) {\n";
 			f << "    using((arena) {\n";
 			std::vector<std::string> sArgs;
 			if (!field.isStatic) sArgs.push_back("handle");
-			ParamInfo vp{"value", field.type, ""};
-			emitDartCallArgs(f, {vp}, sArgs, model);
+			if (nullablePtr) {
+				sArgs.push_back("value?.handle ?? ffi.nullptr");
+			} else {
+				ParamInfo vp{"value", field.type, ""};
+				emitDartCallArgs(f, {vp}, sArgs, model);
+			}
 			f << "      b." << cls.flatName << "_set_" << field.name << "(";
 			for (size_t i = 0; i < sArgs.size(); ++i) {
 				if (i) f << ", ";
