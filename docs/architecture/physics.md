@@ -53,6 +53,7 @@ Bodies always use **world-space** transforms, whatever the scene depth.
 ### Ownership and teardown
 - `Scene` declares `m_physicsWorld` before `m_children`, so children (and their bodies) are destroyed while the world still exists.
 - A `RigidBodyComponent` destroys its body in `_deinit()` and, as a safety net, in its destructor.
+- Only explicit removal (`deinit`, `removeChild`, `removeComponent`) sends `end` events to partners. Destructor cleanup (a scene destroyed without being deinitialized) is silent, because partner objects, and the closures their callbacks captured, may already be gone.
 - `Application::deinit()` deinitializes and destroys the root scene before the server. The server aborts with a message if any world is still alive.
 
 ---
@@ -92,6 +93,15 @@ Jolt reports contacts from worker threads, one callback per touching sub-shape p
    - a body that wakes and fails to re-detect the pair (for example, after being teleported away) gets its end event.
 
 Events reach the component's own callbacks (`setOnContactBegin` and the others) and every `ScriptComponent` on the same object (`onContactBegin`, `onContactEnd`, `onTriggerEnter`, `onTriggerExit`).
+
+**Character controllers take part** (section 5):
+- A character touching a rigid body sends contact events to both sides.
+- A character entering a sensor sends trigger events to both the character and the sensor, so trigger zones notice players.
+- Two characters bumping each receive a contact event.
+
+`ContactEvent` names both sides: `self`/`other` are the rigid bodies (or `nullptr`), `selfCharacter`/`otherCharacter` the characters (or `nullptr`), and `selfObject`/`otherObject` are always set.
+
+Characters are swept on the main thread, so their contacts are recorded from Jolt's per-character listener (`OnContactAdded` and `OnContactPersisted`) into the set of bodies touched during the step. Comparing that set with the previous step's produces begin and end records, delivered with the rigid-body events after the step. Character sweeps skip every character's inner body (the characters meet through character-to-character collision instead), so a pair is never reported twice.
 
 **Destroying bodies in callbacks is safe.**
 - Receivers are copied before delivery.
@@ -168,23 +178,34 @@ Queries take a mask of the layers to hit.
   - Use `convexHull` for moving, mesh-like bodies.
 - Both `triangleMesh(meshes)` and `convexHull(meshes)` read the CPU-side vertex data that loaded meshes keep.
 - A `compound` of one part becomes an offset shape (Jolt's static compound needs at least two), which is handy for shifting a shape's origin.
+- **Levels:** `triangleMeshChunks(meshes, cellsX, cellsZ)` splits a level's merged geometry into a grid of static triangle meshes (one per non-empty cell, by triangle centroid, with degenerate triangles dropped). Chunks are built in parallel and keep the input's coordinates, so every chunk body takes the level object's transform. The demo map becomes 9 static bodies.
 
 ---
 
-## 9. Build Notes
+## 9. Debug Drawing
+
+`Application::setPhysicsDebugDraw(true)` draws every world's colliders as wireframes each frame, configured by `getPhysicsDebugSettings()`: shapes, colour by sleep state, bounding boxes, velocities, centres of mass, and each character's ground normal. Underneath, `PhysicsWorld::debugDraw(DebugDrawList&, settings, cameraPosition)` feeds Jolt's `DebugRendererSimple` into a `DebugDrawList` that the GL pipeline draws as lines into the scene target, depth-tested, so FXAA smooths them.
+
+**Cost.** Level geometry is large: the demo map is about 290,000 triangles. Static bodies therefore go into a cached `DebugDrawLayer`, rebuilt and uploaded only when static geometry changes (a static body added, removed, moved or reshaped) or the settings change. Moving bodies are drawn every frame. With the cache the demo runs at about 1,500 FPS with wireframes on; rebuilding everything every frame gave 11.
+
+Game code can add its own lines to `GraphicsPipeline::getDebugDraw()` (`line`, `box`), or keep a cached layer of its own with `cachedLayer(key)` and `DebugDrawList::newVersion()`.
+
+---
+
+## 10. Build Notes
 
 - All Jolt-dependent code compiles in the `physics` object library, which links `Jolt::Jolt` for its include paths and definitions.
 - Jolt is built as **Release** (`libs/CMakeLists.txt`). Its exported definitions (`JPH_PROFILE_ENABLED`, `JPH_DEBUG_RENDERER` and others) then match what Debug and Release engine builds compile with, so class layouts agree.
   - A configuration-less Jolt build lacks those features, which produced link errors and would risk layout mismatches.
-  - After changing this, rebuild the dependency (`cmake --build libs --target JOLT`).
+  - Jolt is also built with RTTI (`CPP_RTTI_ENABLED=ON`), because the engine derives from Jolt interfaces (the debug renderer) and uses `dynamic_cast`.
+  - After changing either, rebuild the dependency (`cmake --build libs --target JOLT`).
 - The step scratch arena (`PhysicsServerSettings::tempAllocatorBytes`, 32 MB by default) falls back to `malloc` when a step outgrows it, instead of aborting.
 
 ---
 
-## 10. Known Limits
+## 11. Known Limits
 
 - No joints or constraints yet.
-- Character controllers have no contact events; poll `getTouchingBodies()` and the ground state.
-- No debug wireframe drawing of colliders.
+- Contacts are not drawn in debug mode (only shapes, boxes, velocities and character ground normals).
 - No render interpolation: bodies render at their last step's pose, so motion can show slight judder when the frame rate is not a multiple of 60 Hz.
 - Seven collision layers.

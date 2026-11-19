@@ -36,6 +36,7 @@
 #include <util/Math.h>
 
 #include <array>
+#include <cstdlib>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 #include <iostream>
@@ -60,13 +61,21 @@ class POVCamera : public bird::ProcessScript<bird::Camera> {
 	void deinit() {}
 
 	void process(float delta) {
-		float speed = 10;
-		float rotSpeed = 5;
-		float rotVal = input()->getActionValue("look_right") -
-					   input()->getActionValue("look_left");
-		// The camera looks down its local -Z; turning right is a negative yaw.
-		object()->rotateLocal(bird::Vector3(0, 1, 0),
-							  -rotVal * rotSpeed * delta);
+		const float speed = 10;
+		// Hold the right mouse button to look around (always while walking).
+		// The captured cursor is hidden and the UI ignores the pointer.
+		const bool look = g_walkMode || input()->getActionValue("look") > 0.5f;
+		input()->setMouseCaptured(look);
+		if (look) {
+			const bird::Vector2 mouse = input()->getMouseDelta();
+			m_yaw -= mouse.x * kSensitivity;
+			m_pitch = glm::clamp(m_pitch - mouse.y * kSensitivity,
+								 glm::radians(-89.0f), glm::radians(89.0f));
+		}
+		// Yaw about world up, then pitch about the camera's right axis; the
+		// camera looks down its local -Z.
+		object()->setWorldRotation(glm::angleAxis(m_yaw, bird::Vector3(0, 1, 0)) *
+								   glm::angleAxis(m_pitch, bird::Vector3(1, 0, 0)));
 
 		if (g_walkMode) return;	 // the character script moves the camera
 
@@ -81,6 +90,11 @@ class POVCamera : public bird::ProcessScript<bird::Camera> {
 							object()->getLocalRotation() * local * speed *
 							delta);
 	}
+
+   private:
+	static constexpr float kSensitivity = 0.0025f;	// radians per pixel
+	float m_yaw = 0.0f;
+	float m_pitch = 0.0f;
 };
 
 
@@ -462,19 +476,28 @@ class PlaygroundScript : public bird::ProcessScript<bird::WorldObject> {
 					 bird::CharacterControllerComponent* walker,
 					 std::array<bird::UILabel*, 3> hud)
 		: m_camera(camera), m_boxes(std::move(boxes)), m_walker(walker), m_hud(hud) {
-		m_hud[2]->setText("F: push box   R: drop again   C: walk / fly");
+		m_hud[2]->setText("Right mouse: look   F: push   R: drop again   C: walk / fly   "
+						  "G: colliders");
 	}
 
 	void init() override {}
 	void deinit() override {}
 
-	void enterZone(const bird::ContactEvent&) {
+	void enterZone(const bird::ContactEvent& e) {
 		m_inZone++;
-		m_message = "Trigger: a box entered the zone";
+		m_message = e.otherCharacter ? "Trigger: you entered the zone"
+									 : "Trigger: a box entered the zone";
 	}
-	void leaveZone(const bird::ContactEvent&) {
+	void leaveZone(const bird::ContactEvent& e) {
 		m_inZone--;
-		m_message = "Trigger: a box left the zone";
+		m_message = e.otherCharacter ? "Trigger: you left the zone"
+									 : "Trigger: a box left the zone";
+	}
+	/** Character contact events: report bumping into boxes. */
+	void walkerTouched(const bird::ContactEvent& e) {
+		if (e.other && e.other->getMotionType() == bird::MotionType::Dynamic) {
+			m_message = "Character: bumped into a box";
+		}
 	}
 
 	void process(float delta) override {
@@ -487,6 +510,12 @@ class PlaygroundScript : public bird::ProcessScript<bird::WorldObject> {
 		m_pushHeld = push;
 		m_resetHeld = reset;
 		m_walkHeld = walk;
+		const bool debug = input()->getActionValue("physics_debug") > 0.5f;
+		if (debug && !m_debugHeld) {
+			bird::APPLICATION->setPhysicsDebugDraw(
+				!bird::APPLICATION->isPhysicsDebugDrawEnabled());
+		}
+		m_debugHeld = debug;
 
 		if (g_walkMode) {
 			// Eye height above the character's feet.
@@ -534,7 +563,7 @@ class PlaygroundScript : public bird::ProcessScript<bird::WorldObject> {
 			m_walker->teleport(bird::Vector3(glm::clamp(eye.x, -11.0f, 11.0f), -1.0f,
 											 glm::clamp(eye.z, -29.0f, -7.0f)));
 		}
-		m_message = g_walkMode ? "Walking: WASD, Space jumps, arrows turn"
+		m_message = g_walkMode ? "Walking: WASD, Space jumps, mouse looks"
 							   : "Flying: WASD, Space/Shift up/down";
 	}
 
@@ -575,6 +604,7 @@ class PlaygroundScript : public bird::ProcessScript<bird::WorldObject> {
 	bool m_pushHeld = false;
 	bool m_resetHeld = false;
 	bool m_walkHeld = false;
+	bool m_debugHeld = false;
 };
 
 /** Adds a mesh object with an optional body to the scene. */
@@ -663,6 +693,8 @@ void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui) {
 		[scriptRaw](const ContactEvent& e) { scriptRaw->enterZone(e); });
 	zoneBody->setOnTriggerExit(
 		[scriptRaw](const ContactEvent& e) { scriptRaw->leaveZone(e); });
+	walkerRaw->setOnContactBegin(
+		[scriptRaw](const ContactEvent& e) { scriptRaw->walkerTouched(e); });
 	auto controller = _own_mk<WorldObject>();
 	controller->addComponent(std::move(script));
 	scene->addChild(std::move(controller));
@@ -680,19 +712,30 @@ class MainScript : public bird::Script<bird::Scene> {
 		bird::INPUT->addAction(bird::Action("move_up").addKey(KEY_SPACE));
 		bird::INPUT->addAction(
 			bird::Action("move_down").addKey(KEY_LEFT_SHIFT));
-		bird::INPUT->addAction(bird::Action("look_up").addKey(KEY_UP));
-		bird::INPUT->addAction(bird::Action("look_down").addKey(KEY_DOWN));
-		bird::INPUT->addAction(bird::Action("look_left").addKey(KEY_LEFT));
-		bird::INPUT->addAction(bird::Action("look_right").addKey(KEY_RIGHT));
+		bird::INPUT->addAction(
+			bird::Action("look").addMouseButton(MOUSE_BUTTON_2));  // right button
+		bird::INPUT->addAction(bird::Action("physics_debug").addKey(KEY_G));
 		bird::INPUT->addAction(bird::Action("physics_push").addKey(KEY_F));
 		bird::INPUT->addAction(bird::Action("physics_reset").addKey(KEY_R));
 		bird::INPUT->addAction(bird::Action("physics_walk").addKey(KEY_C));
 
+		// The village map: rendered as one object, collided as a few static
+		// triangle-mesh chunks (3 x 3 grid) sharing its transform.
+		auto mapMeshes = resource_manager()->loadMesh("assets/models/maps/Map1.glb");
+		const bird::Vector3 mapPosition(0, -5, 30);
 		auto e = bird::_own_mk<bird::WorldObject>();
-		e->addComponent(bird::_own_mk<bird::MeshComponent>(
-			resource_manager()->loadMesh("assets/models/maps/Map1.glb")));
-		e->translate(bird::Vector3(0, -5, 30));
+		e->addComponent(bird::_own_mk<bird::MeshComponent>(mapMeshes));
+		e->translate(mapPosition);
 		object()->addChild(std::move(e));
+		bird::RigidBodySettings level;
+		level.motionType = bird::MotionType::Static;
+		for (const bird::CollisionShape& chunk :
+			 bird::CollisionShape::triangleMeshChunks(mapMeshes, 3, 3)) {
+			auto collider = bird::_own_mk<bird::WorldObject>();
+			collider->addComponent(bird::_own_mk<bird::RigidBodyComponent>(chunk, level));
+			collider->setWorldPosition(mapPosition);
+			object()->addChild(std::move(collider));
+		}
 
 		auto cam = bird::_own_mk<bird::Camera>(1280, 720);
 		cam->addComponent(bird::_own_mk<POVCamera>());
@@ -701,6 +744,10 @@ class MainScript : public bird::Script<bird::Scene> {
 		object()->addChild(std::move(cam));
 		buildGallery(bird::APPLICATION->getUIManager());
 		playground::build(object(), camera, bird::APPLICATION->getUIManager());
+		// BIRD_PHYSICS_DEBUG=1 starts with collider wireframes on (G toggles).
+		if (std::getenv("BIRD_PHYSICS_DEBUG") != nullptr) {
+			bird::APPLICATION->setPhysicsDebugDraw(true);
+		}
 	}
 
 	void deinit() override {}

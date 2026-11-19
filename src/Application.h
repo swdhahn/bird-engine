@@ -10,6 +10,7 @@
 
 #include "physics/FixedStepClock.h"
 #include "physics/PhysicsServer.h"
+#include "physics/PhysicsWorld.h"
 #include "renders/GraphicsPipeline.h"
 #include "renders/opengl/GLPipeline.h"
 #include "scene/components/ProcessScript.h"
@@ -100,6 +101,14 @@ class Application {
 	/** The fixed-step clock driving physicsProcess() and physics steps. */
 	FixedStepClock& getPhysicsClock();
 
+	/**
+	 * Draws every physics world's colliders as wireframes each frame (into
+	 * GraphicsPipeline::getDebugDraw()), configured by getPhysicsDebugSettings().
+	 */
+	void setPhysicsDebugDraw(bool enabled) { m_physicsDebugDraw = enabled; }
+	bool isPhysicsDebugDrawEnabled() const { return m_physicsDebugDraw; }
+	PhysicsDebugSettings& getPhysicsDebugSettings() { return m_physicsDebugSettings; }
+
    private:
 	/** Propagates a window size change to the renderer, camera and UI. */
 	void handleResize();
@@ -108,6 +117,8 @@ class Application {
 	UIManager* m_uiManager;
 	_own<PhysicsServer> m_physicsServer;
 	FixedStepClock m_physicsClock;
+	bool m_physicsDebugDraw = false;
+	PhysicsDebugSettings m_physicsDebugSettings;
 	Scene* m_scene;
 
 	std::vector<ProcessScriptComponent*> m_processableScripts;

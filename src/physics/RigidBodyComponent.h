@@ -115,7 +115,7 @@ class RigidBodyComponent : public Component {
 	RigidBodyComponent& setOnTriggerExit(ContactCallback callback);
 
 	// ---- engine-internal (PhysicsWorld) ----
-	enum class _EventKind : uint8_t { ContactBegin, ContactEnd, TriggerEnter, TriggerExit };
+	using _EventKind = ContactEventKind;
 	uint32_t _bodyId() const { return m_bodyId; }
 	size_t _index() const { return m_index; }
 	void _setIndex(size_t index) { m_index = index; }
@@ -135,7 +135,8 @@ class RigidBodyComponent : public Component {
    private:
 	void requireWorld(const char* what) const;
 	void createBody();
-	void destroyBody();
+	/** @param notify Send end events to partners (false from the destructor). */
+	void destroyBody(bool notify);
 
 	CollisionShape m_shape;
 	RigidBodySettings m_settings;

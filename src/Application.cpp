@@ -25,7 +25,6 @@ Application::~Application() {}
 void Application::init(Script<Scene>* script) {
 	m_graphicsPipeline = new gl::GLPipeline();
 	m_graphicsPipeline->init();
-	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	RESOURCE_MANAGER = new ResourceManager();
 	RESOURCE_MANAGER->init();
 	APPLICATION = this;
@@ -61,6 +60,9 @@ void Application::run() {
 			m_graphicsPipeline->getCamera()->updateTransformationMatrix();
 		}
 
+		// Debug lines are rebuilt every frame (physics first, then scripts).
+		m_graphicsPipeline->getDebugDraw().clear();
+
 		// PHYSICS SECTION: zero or more fixed steps
 		const int physicsSteps = m_physicsClock.advance(delta);
 		const float fixedStep = m_physicsClock.getStep();
@@ -69,6 +71,14 @@ void Application::run() {
 				m_processableScripts[i]->physicsProcess(fixedStep);
 			}
 			m_physicsServer->step(fixedStep);
+		}
+		if (m_physicsDebugDraw) {
+			Camera* camera = m_graphicsPipeline->getCamera();
+			const Vector3 eye = camera ? camera->getWorldPosition() : Vector3(0.0f);
+			for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
+				world->debugDraw(m_graphicsPipeline->getDebugDraw(),
+								 m_physicsDebugSettings, eye);
+			}
 		}
 
 		// PROCESS SECTION

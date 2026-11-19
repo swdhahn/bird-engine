@@ -56,18 +56,53 @@ RigidBodyComponent* lookup(const PhysicsWorldImpl& impl, uint32_t id) {
 	return it == impl.byId.end() ? nullptr : it->second;
 }
 
+/** One side of a contact: a rigid body or a character (by inner body ID). */
+struct Endpoint {
+	RigidBodyComponent* body = nullptr;
+	CharacterControllerComponent* character = nullptr;
+
+	explicit operator bool() const { return body != nullptr || character != nullptr; }
+	bool operator==(const Endpoint& o) const { return body == o.body && character == o.character; }
+	bool operator!=(const Endpoint& o) const { return !(*this == o); }
+	WorldObject* object() const {
+		return body != nullptr ? body->world_object() : character->world_object();
+	}
+	std::vector<ContactCallbackFn> receivers(EventKind kind) const {
+		return body != nullptr ? body->_receivers(kind) : character->_receivers(kind);
+	}
+};
+
+Endpoint resolve(const PhysicsWorldImpl& impl, uint32_t id) {
+	Endpoint endpoint;
+	endpoint.body = lookup(impl, id);
+	if (endpoint.body == nullptr) {
+		auto it = impl.characterByInnerBody.find(id);
+		if (it != impl.characterByInnerBody.end()) endpoint.character = it->second;
+	}
+	return endpoint;
+}
+
 /**
  * Delivers one event to every receiver of `selfId`, stopping as soon as a
- * receiver destroys either body (the pointers would dangle).
+ * receiver destroys either side (the pointers would dangle).
  */
 void deliver(const PhysicsWorldImpl& impl, uint32_t selfId, uint32_t otherId,
 			 EventKind kind, const Vector3& point, const Vector3& normal) {
-	RigidBodyComponent* self = lookup(impl, selfId);
-	RigidBodyComponent* other = lookup(impl, otherId);
-	if (self == nullptr || other == nullptr) return;
-	for (const auto& receiver : self->_receivers(kind)) {
-		if (lookup(impl, selfId) != self || lookup(impl, otherId) != other) return;
-		receiver(ContactEvent{self, other, point, normal});
+	const Endpoint self = resolve(impl, selfId);
+	const Endpoint other = resolve(impl, otherId);
+	if (!self || !other) return;
+	ContactEvent event;
+	event.self = self.body;
+	event.selfCharacter = self.character;
+	event.selfObject = self.object();
+	event.other = other.body;
+	event.otherCharacter = other.character;
+	event.otherObject = other.object();
+	event.point = point;
+	event.normal = normal;
+	for (const auto& receiver : self.receivers(kind)) {
+		if (resolve(impl, selfId) != self || resolve(impl, otherId) != other) return;
+		receiver(event);
 	}
 }
 
@@ -246,15 +281,73 @@ void PhysicsWorld::dispatchContacts() {
 					sensor ? EventKind::TriggerExit : EventKind::ContactEnd, Vector3(0.0f),
 					Vector3(0.0f));
 	}
+
+	// Character contacts recorded during the step. Each character reports
+	// its own side; a rigid body hears it too (another character reports
+	// the same pair itself).
+	std::vector<PhysicsWorldImpl::CharacterContactRecord> records;
+	records.swap(impl.characterEvents);
+	for (const auto& record : records) {
+		const EventKind kind =
+			record.begin ? (record.state.sensor ? EventKind::TriggerEnter : EventKind::ContactBegin)
+						 : (record.state.sensor ? EventKind::TriggerExit : EventKind::ContactEnd);
+		deliver(impl, record.character, record.other, kind, record.point, record.normal);
+		if (!record.state.otherIsCharacter) {
+			deliver(impl, record.other, record.character, kind, record.point, -record.normal);
+		}
+	}
+}
+
+void PhysicsWorld::_removeCharacter(CharacterControllerComponent* character, bool notify) {
+	PhysicsWorldImpl& impl = *m_impl;
+	const uint32_t id = character->_innerBodyId();
+
+	// End every pair with this character while both sides still resolve.
+	struct Ending {
+		uint32_t receiver;
+		bool sensor;
+	};
+	std::vector<Ending> endings;
+	for (auto it = impl.characterPairs.begin(); it != impl.characterPairs.end();) {
+		const auto [owner, other] = it->first;
+		if (owner == id) {
+			if (!it->second.otherIsCharacter) endings.push_back({other, it->second.sensor});
+			it = impl.characterPairs.erase(it);
+		} else if (other == id) {
+			endings.push_back({owner, it->second.sensor});	// a character touching this one
+			it = impl.characterPairs.erase(it);
+		} else {
+			++it;
+		}
+	}
+	for (const Ending& ending : endings) {
+		if (!notify) break;
+		deliver(impl, ending.receiver, id,
+				ending.sensor ? EventKind::TriggerExit : EventKind::ContactEnd, Vector3(0.0f),
+				Vector3(0.0f));
+	}
+
+	impl.characterByInnerBody.erase(id);
+	const size_t index = character->_index();
+	if (index < impl.characters.size() && impl.characters[index] == character) {
+		impl.characters[index] = impl.characters.back();
+		impl.characters[index]->_setIndex(index);
+		impl.characters.pop_back();
+	}
+}
+
+void PhysicsWorld::_staticGeometryChanged() {
+	m_impl->staticDebugVersion = DebugDrawList::newVersion();
 }
 
 void PhysicsWorld::_addBody(RigidBodyComponent* body) {
+	if (body->getMotionType() == MotionType::Static) _staticGeometryChanged();
 	body->_setIndex(m_impl->bodies.size());
 	m_impl->bodies.push_back(body);
 	m_impl->byId[body->_bodyId()] = body;
 }
 
-void PhysicsWorld::_removeBody(RigidBodyComponent* body) {
+void PhysicsWorld::_removeBody(RigidBodyComponent* body, bool notify) {
 	PhysicsWorldImpl& impl = *m_impl;
 	const uint32_t id = body->_bodyId();
 
@@ -269,10 +362,22 @@ void PhysicsWorld::_removeBody(RigidBodyComponent* body) {
 			++it;
 		}
 	}
+	// Characters touching this body.
+	for (auto it = impl.characterPairs.begin(); it != impl.characterPairs.end();) {
+		if (it->first.second == id && !it->second.otherIsCharacter) {
+			partners.emplace_back(it->first.first, it->second.sensor);
+			it = impl.characterPairs.erase(it);
+		} else {
+			++it;
+		}
+	}
 	for (const auto& [partner, sensor] : partners) {
+		if (!notify) break;
 		deliver(impl, partner, id, sensor ? EventKind::TriggerExit : EventKind::ContactEnd,
 				Vector3(0.0f), Vector3(0.0f));
 	}
+
+	if (body->getMotionType() == MotionType::Static) _staticGeometryChanged();
 
 	// Swap-remove: O(1).
 	const size_t index = body->_index();
@@ -428,6 +533,70 @@ std::vector<RigidBodyComponent*> PhysicsWorld::overlap(const CollisionShape& sha
 		if (RigidBodyComponent* body = lookup(*m_impl, id)) bodies.push_back(body);
 	}
 	return bodies;
+}
+
+// --------------------------------------------------------------- debug draw
+
+void PhysicsWorld::debugDraw(DebugDrawList& out, const PhysicsDebugSettings& settings,
+							 const Vector3& cameraPosition) const {
+#ifdef JPH_DEBUG_RENDERER
+	PhysicsServerImpl& server = *m_impl->server;
+	if (!server.debugSink) server.debugSink = std::make_unique<DebugLineSink>();
+	DebugLineSink& sink = *server.debugSink;
+	sink.target = &out;
+	sink.SetCameraPos(toJolt(cameraPosition));
+
+	JPH::BodyManager::DrawSettings draw;
+	draw.mDrawShape = settings.shapes;
+	draw.mDrawShapeWireframe = true;
+	draw.mDrawShapeColor = settings.colorBySleep ? JPH::BodyManager::EShapeColor::SleepColor
+												 : JPH::BodyManager::EShapeColor::MotionTypeColor;
+	draw.mDrawBoundingBox = settings.boundingBoxes;
+	draw.mDrawVelocity = settings.velocities;
+	draw.mDrawCenterOfMassTransform = settings.centersOfMass;
+
+	struct MotionFilter final : JPH::BodyDrawFilter {
+		explicit MotionFilter(bool wantStatic) : wantStatic(wantStatic) {}
+		bool ShouldDraw(const JPH::Body& body) const override { return body.IsStatic() == wantStatic; }
+		bool wantStatic;
+	};
+
+	// Static bodies: rebuilt only when static geometry or settings changed.
+	const uint32_t fingerprint = (settings.shapes ? 1u : 0u) | (settings.colorBySleep ? 2u : 0u) |
+								 (settings.boundingBoxes ? 4u : 0u) |
+								 (settings.centersOfMass ? 8u : 0u);
+	DebugDrawLayer& layer = out.cachedLayer(this);
+	if (layer.version != m_impl->staticDebugVersion ||
+		m_impl->drawnStaticSettings != fingerprint) {
+		DebugDrawList staticLines;
+		sink.target = &staticLines;
+		const MotionFilter onlyStatic(true);
+		m_impl->system.DrawBodies(draw, &sink, &onlyStatic);
+		layer.vertices = staticLines.vertices();
+		layer.version = m_impl->staticDebugVersion;
+		m_impl->drawnStaticSettings = fingerprint;
+	}
+
+	// Moving bodies (and character inner bodies): every call.
+	sink.target = &out;
+	const MotionFilter onlyMoving(false);
+	m_impl->system.DrawBodies(draw, &sink, &onlyMoving);
+	sink.NextFrame();
+	sink.target = nullptr;
+
+	if (settings.characterGround) {
+		const Vector4 yellow(1.0f, 0.9f, 0.1f, 1.0f);
+		for (CharacterControllerComponent* character : m_impl->characters) {
+			if (character->getGroundState() == GroundState::InAir) continue;
+			const Vector3 feet = character->world_object()->getWorldPosition();
+			out.line(feet, feet + character->getGroundNormal() * 0.75f, yellow);
+		}
+	}
+#else
+	(void)out;
+	(void)settings;
+	(void)cameraPosition;
+#endif
 }
 
 }  // namespace bird

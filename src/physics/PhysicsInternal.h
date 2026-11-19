@@ -33,7 +33,11 @@
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
+#ifdef JPH_DEBUG_RENDERER
+#include <Jolt/Renderer/DebugRendererSimple.h>
+#endif
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -41,6 +45,7 @@
 #include <utility>
 #include <vector>
 
+#include "../renders/DebugDraw.h"
 #include "../util/Math.h"
 #include "CollisionShape.h"
 #include "ContactEvent.h"
@@ -61,6 +66,16 @@ class Component;
  * @throws std::logic_error when the object is not in a scene.
  */
 PhysicsWorld* resolvePhysicsWorld(WorldObject* object, const char* who);
+
+using ContactCallbackFn = std::function<void(const ContactEvent&)>;
+/**
+ * Everything on an object that should hear a contact event: the
+ * component's own callback (when set) and every ScriptComponent hook,
+ * copied so delivery survives callbacks that change components.
+ */
+std::vector<ContactCallbackFn> collectContactReceivers(WorldObject* object,
+														 ContactEventKind kind,
+														 const ContactCallbackFn& own);
 
 // ------------------------------------------------------------ conversions
 
@@ -165,6 +180,20 @@ inline const JPH::Shape* nativeShape(const CollisionShape& shape) {
 
 // ----------------------------------------------------------------- server
 
+#ifdef JPH_DEBUG_RENDERER
+/** Collects Jolt's debug drawing into a DebugDrawList as lines. */
+class DebugLineSink final : public JPH::DebugRendererSimple {
+   public:
+	DebugDrawList* target = nullptr;
+
+	void DrawLine(JPH::RVec3Arg from, JPH::RVec3Arg to, JPH::ColorArg color) override {
+		target->line(toBird(JPH::Vec3(from)), toBird(JPH::Vec3(to)),
+					 Vector4(color.r, color.g, color.b, color.a) / 255.0f);
+	}
+	void DrawText3D(JPH::RVec3Arg, const std::string_view&, JPH::ColorArg, float) override {}
+};
+#endif
+
 struct PhysicsServerImpl {
 	// Falls back to malloc when a step outgrows the arena, instead of aborting.
 	std::unique_ptr<JPH::TempAllocatorImplWithMallocFallback> tempAllocator;
@@ -172,6 +201,10 @@ struct PhysicsServerImpl {
 	BroadPhaseLayers broadPhaseLayers;
 	ObjectVsBroadPhaseFilter objectVsBroadPhase;
 	ObjectPairFilter objectPairs;
+#ifdef JPH_DEBUG_RENDERER
+	// Created on first debug draw (Jolt allows one DebugRenderer instance).
+	std::unique_ptr<DebugLineSink> debugSink;
+#endif
 };
 
 // ------------------------------------------------------------------ world
@@ -226,15 +259,99 @@ struct PhysicsWorldImpl {
 
 	JPH::BodyIDVector activeScratch;
 
+	// Static wireframes are cached in a DebugDrawLayer; this version moves on
+	// whenever static geometry changes (body added, removed, moved, reshaped).
+	uint64_t staticDebugVersion = DebugDrawList::newVersion();
+	uint32_t drawnStaticSettings = 0; // settings fingerprint it was built with
+
 	// Character controllers, stepped before the simulation.
 	std::vector<CharacterControllerComponent*> characters;
 	// Inner body ID -> character, so queries can report the character.
 	std::unordered_map<uint32_t, CharacterControllerComponent*> characterByInnerBody;
 	JPH::CharacterVsCharacterCollisionSimple characterVsCharacter;
+
+	/** Keeps character sweeps off every character's inner body (characters
+	 * meet through characterVsCharacter instead). */
+	class InnerBodyFilter final : public JPH::BodyFilter {
+	   public:
+		explicit InnerBodyFilter(const PhysicsWorldImpl& impl) : m_impl(impl) {}
+		bool ShouldCollide(const JPH::BodyID& id) const override {
+			return m_impl.characterByInnerBody.count(id.GetIndexAndSequenceNumber()) == 0;
+		}
+
+	   private:
+		const PhysicsWorldImpl& m_impl;
+	};
+	InnerBodyFilter innerBodyFilter{*this};
+
+	/** Routes Jolt's per-character contact callbacks to the components. */
+	class CharacterContactRecorder final : public JPH::CharacterContactListener {
+	   public:
+		explicit CharacterContactRecorder(const PhysicsWorldImpl& impl) : m_impl(impl) {}
+		void OnContactAdded(const JPH::CharacterVirtual* character, const JPH::BodyID& body,
+							const JPH::SubShapeID&, JPH::RVec3Arg point, JPH::Vec3Arg normal,
+							JPH::CharacterContactSettings&) override {
+			record(character, body, point, normal);
+		}
+		void OnContactPersisted(const JPH::CharacterVirtual* character, const JPH::BodyID& body,
+								const JPH::SubShapeID&, JPH::RVec3Arg point, JPH::Vec3Arg normal,
+								JPH::CharacterContactSettings&) override {
+			record(character, body, point, normal);
+		}
+		void OnCharacterContactAdded(const JPH::CharacterVirtual* character,
+									 const JPH::CharacterVirtual* other, const JPH::SubShapeID&,
+									 JPH::RVec3Arg point, JPH::Vec3Arg normal,
+									 JPH::CharacterContactSettings&) override {
+			recordCharacter(character, other, point, normal);
+		}
+		void OnCharacterContactPersisted(const JPH::CharacterVirtual* character,
+										 const JPH::CharacterVirtual* other,
+										 const JPH::SubShapeID&, JPH::RVec3Arg point,
+										 JPH::Vec3Arg normal,
+										 JPH::CharacterContactSettings&) override {
+			recordCharacter(character, other, point, normal);
+		}
+
+	   private:
+		void record(const JPH::CharacterVirtual* character, const JPH::BodyID& body,
+					JPH::RVec3Arg point, JPH::Vec3Arg normal);
+		void recordCharacter(const JPH::CharacterVirtual* character,
+							 const JPH::CharacterVirtual* other, JPH::RVec3Arg point,
+							 JPH::Vec3Arg normal);
+		const PhysicsWorldImpl& m_impl;
+	};
+	CharacterContactRecorder characterContacts{*this};
+
+	struct CharacterPairState {
+		bool sensor = false;
+		bool otherIsCharacter = false;
+	};
+	// Key: (character inner body ID, other body or character inner body ID).
+	std::map<std::pair<uint32_t, uint32_t>, CharacterPairState> characterPairs;
+
+	/** A character begin/end found during the step, delivered afterwards. */
+	struct CharacterContactRecord {
+		bool begin;
+		uint32_t character;
+		uint32_t other;
+		CharacterPairState state;
+		Vector3 point;
+		Vector3 normal;	 // from the character towards the other side
+	};
+	std::vector<CharacterContactRecord> characterEvents;
 };
 
 /** Native state of a character controller. */
 struct CharacterControllerComponent::Native {
+	struct Touch {
+		bool sensor = false;
+		bool otherIsCharacter = false;
+		Vector3 point{0.0f};
+		Vector3 normal{0.0f};
+	};
+	// Everything touched during the current step (keyed by body ID or the
+	// other character's inner body ID).
+	std::unordered_map<uint32_t, Touch> touches;
 	JPH::Ref<JPH::CharacterVirtual> character;
 	JPH::CharacterVirtual::ExtendedUpdateSettings update;
 	JPH::ObjectLayer layer = 0;

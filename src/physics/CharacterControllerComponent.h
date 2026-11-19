@@ -2,11 +2,13 @@
 #define BIRD_CHARACTERCONTROLLERCOMPONENT_H
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <vector>
 
 #include "../scene/components/Component.h"
 #include "CollisionShape.h"
+#include "ContactEvent.h"
 #include "PhysicsLayers.h"
 
 namespace bird {
@@ -60,6 +62,13 @@ struct CharacterSettings {
  * whatever the object's rotation. Each physics step the controller applies
  * gravity, the move velocity and any requested jump, moves, and writes the
  * new position back to the object. Moving the object yourself teleports it.
+ *
+ * Contacts: when the character starts or stops touching a rigid body or
+ * another character, both sides receive onContactBegin / onContactEnd (a
+ * character's ContactEvent has selfCharacter set and self == nullptr);
+ * entering or leaving a sensor sends onTriggerEnter / onTriggerExit to both
+ * the character and the sensor. Events reach the callbacks below and every
+ * ScriptComponent on the object, on the main thread after the step.
  *
  * The character pushes dynamic bodies (up to pushStrength) and an inner
  * kinematic body lets falling bodies, other bodies and raycasts hit it
@@ -119,12 +128,22 @@ class CharacterControllerComponent : public Component {
 	/** Moves the object and the character immediately (no sweep). */
 	void teleport(const Vector3& position);
 
+	using ContactCallback = std::function<void(const ContactEvent&)>;
+	CharacterControllerComponent& setOnContactBegin(ContactCallback callback);
+	CharacterControllerComponent& setOnContactEnd(ContactCallback callback);
+	CharacterControllerComponent& setOnTriggerEnter(ContactCallback callback);
+	CharacterControllerComponent& setOnTriggerExit(ContactCallback callback);
+
 	// ---- engine-internal (PhysicsWorld) ----
 	/** Moves the character for one step and writes the result back. */
 	void _step(float fixedDelta);
 	/** The world is being destroyed: release Jolt state while it still exists. */
 	void _forgetWorld();
 	uint32_t _innerBodyId() const;
+	std::vector<ContactCallback> _receivers(ContactEventKind kind) const;
+	/** Called by the world's character contact listener during _step. */
+	void _recordTouch(uint32_t otherId, bool sensor, bool otherIsCharacter,
+					  const Vector3& point, const Vector3& normal);
 	size_t _index() const { return m_index; }
 	void _setIndex(size_t index) { m_index = index; }
 
@@ -132,7 +151,10 @@ class CharacterControllerComponent : public Component {
 
    private:
 	void requireWorld(const char* what) const;
-	void destroyCharacter();
+	/** @param notify Send end events to partners (false from the destructor). */
+	void destroyCharacter(bool notify);
+	/** Turns this step's touches into begin/end records for the world. */
+	void diffTouches();
 
 	CharacterSettings m_settings;
 	std::unique_ptr<Native> m_native;
@@ -144,6 +166,10 @@ class CharacterControllerComponent : public Component {
 	bool m_hasVelocityOverride = false;
 	Vector3 m_velocityOverride{0.0f};
 	uint64_t m_syncedRevision = 0;
+	ContactCallback m_onContactBegin;
+	ContactCallback m_onContactEnd;
+	ContactCallback m_onTriggerEnter;
+	ContactCallback m_onTriggerExit;
 };
 
 }  // namespace bird

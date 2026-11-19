@@ -53,7 +53,7 @@ CharacterControllerComponent::CharacterControllerComponent(const CharacterSettin
 }
 
 CharacterControllerComponent::~CharacterControllerComponent() {
-	destroyCharacter();
+	destroyCharacter(false);  // silent: partners may be mid-destruction too
 }
 
 void CharacterControllerComponent::_init() {
@@ -83,6 +83,7 @@ void CharacterControllerComponent::_init() {
 		settings, bird::toJolt(object->getWorldPosition()), JPH::Quat::sIdentity(),
 		reinterpret_cast<JPH::uint64>(this), &impl.system);
 	m_native->character->SetCharacterVsCharacterCollision(&impl.characterVsCharacter);
+	m_native->character->SetListener(&impl.characterContacts);
 	impl.characterVsCharacter.Add(m_native->character);
 
 	m_syncedRevision = object->getTransformRevision();
@@ -92,18 +93,12 @@ void CharacterControllerComponent::_init() {
 }
 
 void CharacterControllerComponent::_deinit() {
-	destroyCharacter();
+	destroyCharacter(true);
 }
 
-void CharacterControllerComponent::destroyCharacter() {
+void CharacterControllerComponent::destroyCharacter(bool notify) {
 	if (m_world == nullptr) return;
-	PhysicsWorldImpl& impl = m_world->_impl();
-	impl.characterByInnerBody.erase(_innerBodyId());
-	if (m_index < impl.characters.size() && impl.characters[m_index] == this) {
-		impl.characters[m_index] = impl.characters.back();
-		impl.characters[m_index]->_setIndex(m_index);
-		impl.characters.pop_back();
-	}
+	m_world->_removeCharacter(this, notify);  // ends its contact pairs, unregisters
 	_forgetWorld();
 }
 
@@ -162,10 +157,13 @@ void CharacterControllerComponent::_step(float fixedDelta) {
 	m_jumpRequested = false;
 	character.SetLinearVelocity(velocity);
 
+	m_native->touches.clear();
 	character.ExtendedUpdate(fixedDelta, gravity, m_native->update,
 							 impl.system.GetDefaultBroadPhaseLayerFilter(m_native->layer),
-							 impl.system.GetDefaultLayerFilter(m_native->layer), JPH::BodyFilter(),
-							 JPH::ShapeFilter(), *impl.server->tempAllocator);
+							 impl.system.GetDefaultLayerFilter(m_native->layer),
+							 impl.innerBodyFilter, JPH::ShapeFilter(),
+							 *impl.server->tempAllocator);
+	diffTouches();
 
 	object->setWorldPosition(toBird(JPH::Vec3(character.GetPosition())));
 	m_syncedRevision = object->getTransformRevision();
@@ -245,6 +243,95 @@ void CharacterControllerComponent::teleport(const Vector3& position) {
 	world_object()->setWorldPosition(position);
 	m_native->character->SetPosition(bird::toJolt(position));
 	m_syncedRevision = world_object()->getTransformRevision();
+}
+
+// --------------------------------------------------------------- contacts
+
+void PhysicsWorldImpl::CharacterContactRecorder::record(const JPH::CharacterVirtual* character,
+														  const JPH::BodyID& body,
+														  JPH::RVec3Arg point,
+														  JPH::Vec3Arg normal) {
+	auto it = m_impl.byId.find(body.GetIndexAndSequenceNumber());
+	if (it == m_impl.byId.end()) return;  // not a component's body
+	auto* self = reinterpret_cast<CharacterControllerComponent*>(character->GetUserData());
+	self->_recordTouch(it->first, it->second->getSettings().isSensor, false,
+					   toBird(JPH::Vec3(point)), toBird(normal));
+}
+
+void PhysicsWorldImpl::CharacterContactRecorder::recordCharacter(
+	const JPH::CharacterVirtual* character, const JPH::CharacterVirtual* other,
+	JPH::RVec3Arg point, JPH::Vec3Arg normal) {
+	auto* self = reinterpret_cast<CharacterControllerComponent*>(character->GetUserData());
+	auto* otherComponent =
+		reinterpret_cast<CharacterControllerComponent*>(other->GetUserData());
+	self->_recordTouch(otherComponent->_innerBodyId(), false, true, toBird(JPH::Vec3(point)),
+					   toBird(normal));
+}
+
+void CharacterControllerComponent::_recordTouch(uint32_t otherId, bool sensor,
+												bool otherIsCharacter, const Vector3& point,
+												const Vector3& normal) {
+	// Several sub-shape contacts with one body collapse into one touch.
+	m_native->touches.emplace(otherId, Native::Touch{sensor, otherIsCharacter, point, normal});
+}
+
+void CharacterControllerComponent::diffTouches() {
+	PhysicsWorldImpl& impl = m_world->_impl();
+	const uint32_t self = _innerBodyId();
+	for (const auto& [other, touch] : m_native->touches) {
+		const PhysicsWorldImpl::CharacterPairState state{touch.sensor, touch.otherIsCharacter};
+		if (impl.characterPairs.emplace(std::make_pair(self, other), state).second) {
+			impl.characterEvents.push_back({true, self, other, state, touch.point, touch.normal});
+		}
+	}
+	auto it = impl.characterPairs.lower_bound({self, 0});
+	while (it != impl.characterPairs.end() && it->first.first == self) {
+		if (m_native->touches.count(it->first.second) == 0) {
+			impl.characterEvents.push_back(
+				{false, self, it->first.second, it->second, Vector3(0.0f), Vector3(0.0f)});
+			it = impl.characterPairs.erase(it);
+		} else {
+			++it;
+		}
+	}
+}
+
+std::vector<CharacterControllerComponent::ContactCallback> CharacterControllerComponent::_receivers(
+	ContactEventKind kind) const {
+	switch (kind) {
+		case ContactEventKind::ContactBegin:
+			return collectContactReceivers(m_object, kind, m_onContactBegin);
+		case ContactEventKind::ContactEnd:
+			return collectContactReceivers(m_object, kind, m_onContactEnd);
+		case ContactEventKind::TriggerEnter:
+			return collectContactReceivers(m_object, kind, m_onTriggerEnter);
+		default:
+			return collectContactReceivers(m_object, kind, m_onTriggerExit);
+	}
+}
+
+CharacterControllerComponent& CharacterControllerComponent::setOnContactBegin(
+	ContactCallback callback) {
+	m_onContactBegin = std::move(callback);
+	return *this;
+}
+
+CharacterControllerComponent& CharacterControllerComponent::setOnContactEnd(
+	ContactCallback callback) {
+	m_onContactEnd = std::move(callback);
+	return *this;
+}
+
+CharacterControllerComponent& CharacterControllerComponent::setOnTriggerEnter(
+	ContactCallback callback) {
+	m_onTriggerEnter = std::move(callback);
+	return *this;
+}
+
+CharacterControllerComponent& CharacterControllerComponent::setOnTriggerExit(
+	ContactCallback callback) {
+	m_onTriggerExit = std::move(callback);
+	return *this;
 }
 
 }  // namespace bird

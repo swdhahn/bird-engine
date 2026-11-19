@@ -630,3 +630,241 @@ TEST_F(PhysicsTest, SinglePartCompoundOffsetsItsShape) {
 		motion(MotionType::Static));
 	EXPECT_NEAR(world().raycast({0, 10, 0}, {0, -1, 0}, 20)->point.y, 6.0f, 1e-3f);
 }
+
+// ------------------------------------------------------------- debug draw
+
+#include "renders/DebugDraw.h"
+
+TEST_F(PhysicsTest, DebugDrawEmitsWireframesWithinTheShapes) {
+	DebugDrawList lines;
+	world().debugDraw(lines);
+	EXPECT_TRUE(lines.empty());	 // empty world
+
+	add(CollisionShape::box({1, 2, 3}), {10, 0, 0}, motion(MotionType::Static));
+	world().debugDraw(lines);
+	ASSERT_GE(lines.lineCount(), 12u);	// at least the box's edges
+	// A static body lands in the world's cached layer, not the per-frame list.
+	EXPECT_TRUE(lines.vertices().empty());
+	const DebugDrawLayer& layer = lines.cachedLayers().at(&world());
+	for (const DebugVertex& v : layer.vertices) {
+		EXPECT_NEAR(v.position.x, 10.0f, 1.0f + 1e-3f);
+		EXPECT_LE(std::abs(v.position.y), 2.0f + 1e-3f);
+		EXPECT_LE(std::abs(v.position.z), 3.0f + 1e-3f);
+		EXPECT_GT(v.color.a, 0.0f);
+	}
+
+	// Unchanged static geometry is not rebuilt; moving it is.
+	const uint64_t version = layer.version;
+	lines.clear();
+	world().debugDraw(lines);
+	EXPECT_EQ(lines.cachedLayers().at(&world()).version, version);
+	run(1);
+	lines.clear();
+	world().debugDraw(lines);
+	EXPECT_EQ(lines.cachedLayers().at(&world()).version, version);	 // a step changes nothing static
+	add(CollisionShape::sphere(1), {0, 0, 0}, motion(MotionType::Static));
+	lines.clear();
+	world().debugDraw(lines);
+	EXPECT_NE(lines.cachedLayers().at(&world()).version, version);
+
+	// Settings changes rebuild too; an unused layer is dropped after a frame.
+	const size_t shapesOnly = lines.lineCount();
+	lines.clear();
+	PhysicsDebugSettings settings;
+	settings.boundingBoxes = true;
+	world().debugDraw(lines, settings);
+	EXPECT_GT(lines.lineCount(), shapesOnly);
+	lines.clear();
+	lines.clear();
+	EXPECT_TRUE(lines.cachedLayers().empty());
+}
+
+TEST_F(PhysicsTest, MovingBodiesAreDrawnEveryFrame) {
+	add(CollisionShape::box({0.5f, 0.5f, 0.5f}), {0, 5, 0});
+	DebugDrawList lines;
+	world().debugDraw(lines);
+	EXPECT_GE(lines.vertices().size(), 24u);  // dynamic: transient lines
+	EXPECT_TRUE(lines.cachedLayers().at(&world()).vertices.empty());
+}
+
+TEST_F(CharacterTest, DebugDrawShowsTheCharacterAndItsGroundNormal) {
+	addFloor();
+	Walker w = addCharacter({0, 1, 0});
+	run(10);
+	DebugDrawList lines;
+	world().debugDraw(lines);
+	bool groundNormal = false;
+	for (size_t i = 0; i + 1 < lines.vertices().size(); i += 2) {
+		const DebugVertex& a = lines.vertices()[i];
+		const DebugVertex& b = lines.vertices()[i + 1];
+		if (a.color == Vector4(1.0f, 0.9f, 0.1f, 1.0f) &&
+			glm::length(a.position - w.object->getWorldPosition()) < 1e-3f) {
+			groundNormal = b.position.y > a.position.y;
+		}
+	}
+	EXPECT_TRUE(groundNormal);
+}
+
+// -------------------------------------------------- character contact events
+
+namespace {
+struct CharacterScript : ScriptComponent {
+	int begins = 0;
+	void onContactBegin(const ContactEvent& e) override {
+		begins++;
+		EXPECT_NE(e.selfCharacter, nullptr);
+	}
+};
+}  // namespace
+
+TEST_F(CharacterTest, LandingAndJumpingSendContactEventsToBothSides) {
+	Body floor = addFloor();
+	auto object = _own_mk<WorldObject>();
+	auto script = _own_mk<CharacterScript>();
+	CharacterScript* scriptRaw = script.get();
+	object->addComponent(std::move(script));
+	auto component = _own_mk<CharacterControllerComponent>();
+	CharacterControllerComponent* character = component.get();
+	object->addComponent(std::move(component));
+	object->setWorldPosition({0, 3, 0});
+	WorldObject* objectRaw = object.get();
+	root->addChild(std::move(object));
+
+	int charBegins = 0, charEnds = 0, floorBegins = 0, floorEnds = 0;
+	Vector3 normal(0.0f);
+	character->setOnContactBegin([&](const ContactEvent& e) {
+		charBegins++;
+		normal = e.normal;
+		EXPECT_EQ(e.self, nullptr);
+		EXPECT_EQ(e.selfCharacter, character);
+		EXPECT_EQ(e.other, floor.body);
+		EXPECT_EQ(e.otherObject, floor.object);
+	});
+	character->setOnContactEnd([&](const ContactEvent&) { charEnds++; });
+	floor.body->setOnContactBegin([&](const ContactEvent& e) {
+		floorBegins++;
+		EXPECT_EQ(e.other, nullptr);
+		EXPECT_EQ(e.otherCharacter, character);
+		EXPECT_EQ(e.otherObject, objectRaw);
+	});
+	floor.body->setOnContactEnd([&](const ContactEvent&) { floorEnds++; });
+
+	run(90);  // lands and stands
+	EXPECT_EQ(charBegins, 1);
+	EXPECT_EQ(floorBegins, 1);
+	EXPECT_EQ(scriptRaw->begins, 1);
+	EXPECT_LT(normal.y, -0.9f);	 // from the character down into the floor
+
+	ASSERT_TRUE(character->jump(6));
+	run(15);
+	EXPECT_EQ(charEnds, 1);
+	EXPECT_EQ(floorEnds, 1);
+	run(90);
+	EXPECT_EQ(charBegins, 2);  // landed again
+}
+
+TEST_F(CharacterTest, CharactersTriggerSensors) {
+	addFloor();
+	RigidBodySettings sensor = motion(MotionType::Static);
+	sensor.isSensor = true;
+	Body zone = add(CollisionShape::box({1, 1, 1}), {3, 2, 0}, sensor);
+	int zoneEnters = 0, zoneExits = 0, charEnters = 0, charContacts = 0;
+	zone.body->setOnTriggerEnter([&](const ContactEvent& e) {
+		zoneEnters++;
+		EXPECT_NE(e.otherCharacter, nullptr);
+	});
+	zone.body->setOnTriggerExit([&](const ContactEvent&) { zoneExits++; });
+
+	Walker w = addCharacter({0, 1, 0});
+	w.character->setOnTriggerEnter([&](const ContactEvent&) { charEnters++; });
+	w.character->setOnContactBegin([&](const ContactEvent& e) {
+		if (e.other == zone.body) charContacts++;
+	});
+	run(10);
+	w.character->setMoveVelocity({3, 0, 0});
+	run(120);  // walks through the zone (sensors do not block)
+	EXPECT_GT(w.object->getWorldPosition().x, 5.0f);
+	EXPECT_EQ(zoneEnters, 1);
+	EXPECT_EQ(charEnters, 1);
+	EXPECT_EQ(zoneExits, 1);
+	EXPECT_EQ(charContacts, 0);
+}
+
+TEST_F(CharacterTest, RemovalEndsCharacterPairsOnBothSides) {
+	Body floor = addFloor();
+	Walker w = addCharacter({0, 1, 0});
+	int floorEnds = 0;
+	floor.body->setOnContactEnd([&](const ContactEvent& e) {
+		floorEnds++;
+		EXPECT_NE(e.otherCharacter, nullptr);  // still valid during the callback
+	});
+	run(30);
+	root->removeChild(w.object);
+	EXPECT_EQ(floorEnds, 1);
+
+	// And the other way round: a body vanishing under a character.
+	Walker w2 = addCharacter({0, 1, 0});
+	int charEnds = 0;
+	w2.character->setOnContactEnd([&](const ContactEvent&) { charEnds++; });
+	run(30);
+	root->removeChild(floor.object);
+	EXPECT_EQ(charEnds, 1);
+}
+
+TEST_F(CharacterTest, TwoCharactersBumpingNotifyEachOther) {
+	addFloor();
+	Walker a = addCharacter({0, 1, 0});
+	Walker b = addCharacter({2, 1, 0});
+	int aHits = 0, bHits = 0;
+	a.character->setOnContactBegin([&](const ContactEvent& e) {
+		if (e.otherCharacter == b.character) aHits++;
+	});
+	b.character->setOnContactBegin([&](const ContactEvent& e) {
+		if (e.otherCharacter == a.character) bHits++;
+	});
+	run(10);
+	a.character->setMoveVelocity({2, 0, 0});
+	b.character->setMoveVelocity({-2, 0, 0});
+	run(60);
+	EXPECT_EQ(aHits, 1);
+	EXPECT_EQ(bHits, 1);
+	EXPECT_LT(a.object->getWorldPosition().x, b.object->getWorldPosition().x - 0.5f);
+}
+
+// ---------------------------------------------------------- chunked meshes
+
+TEST_F(PhysicsTest, TriangleMeshChunksSplitALevelIntoStaticPieces) {
+	// A 20 x 20 m ground grid of 1 m quads, from -10 to 10.
+	std::vector<Vector3> vertices;
+	std::vector<uint32_t> indices;
+	for (int z = 0; z <= 20; z++)
+		for (int x = 0; x <= 20; x++) vertices.emplace_back(x - 10.0f, 0.0f, z - 10.0f);
+	for (int z = 0; z < 20; z++) {
+		for (int x = 0; x < 20; x++) {
+			const uint32_t i = z * 21 + x;
+			indices.insert(indices.end(), {i, i + 21, i + 1, i + 1, i + 21, i + 22});
+		}
+	}
+	indices.insert(indices.end(), {0, 0, 1});  // degenerate: dropped
+
+	auto chunks = CollisionShape::triangleMeshChunks(vertices, indices, 2, 3);
+	ASSERT_EQ(chunks.size(), 6u);
+	for (const CollisionShape& chunk : chunks) {
+		EXPECT_TRUE(chunk.containsTriangleMesh());
+		add(chunk, {0, 0, 0}, motion(MotionType::Static));
+	}
+	EXPECT_EQ(world().getBodyCount(), 6u);
+	for (float x : {-9.5f, 0.5f, 9.5f}) {
+		for (float z : {-9.5f, 0.1f, 9.5f}) {
+			EXPECT_TRUE(world().raycast({x, 5, z}, {0, -1, 0}, 10).has_value()) << x << "," << z;
+		}
+	}
+	Body ball = add(CollisionShape::sphere(0.5f), {0, 3, 0});
+	run(120);
+	EXPECT_NEAR(ball.object->getWorldPosition().y, 0.5f, 0.05f);
+
+	EXPECT_THROW(CollisionShape::triangleMeshChunks(vertices, indices, 0, 1),
+				 std::invalid_argument);
+	EXPECT_THROW(CollisionShape::triangleMeshChunks(vertices, {0, 0, 0}, 1, 1),
+				 std::invalid_argument);
+}

@@ -169,6 +169,9 @@ ExternalProject_Add(
              # Release: matches the JPH_* definitions Jolt exports to Debug and
              # Release consumers (profiler, debug renderer), so layouts agree.
              -DCMAKE_BUILD_TYPE=Release
+             # RTTI: engine classes derive from Jolt interfaces (debug renderer)
+             # and use dynamic_cast, so typeinfo must exist in the library.
+             -DCPP_RTTI_ENABLED=ON
              "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}")
 
 

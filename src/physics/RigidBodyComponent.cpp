@@ -65,7 +65,7 @@ RigidBodyComponent::RigidBodyComponent(CollisionShape shape, const RigidBodySett
 }
 
 RigidBodyComponent::~RigidBodyComponent() {
-	destroyBody();
+	destroyBody(false);	 // silent: partners may be mid-destruction too
 }
 
 PhysicsWorld* resolvePhysicsWorld(WorldObject* object, const char* who) {
@@ -82,7 +82,7 @@ void RigidBodyComponent::_init() {
 }
 
 void RigidBodyComponent::_deinit() {
-	destroyBody();
+	destroyBody(true);
 }
 
 void RigidBodyComponent::createBody() {
@@ -127,10 +127,10 @@ void RigidBodyComponent::createBody() {
 	m_world->_addBody(this);
 }
 
-void RigidBodyComponent::destroyBody() {
+void RigidBodyComponent::destroyBody(bool notify) {
 	if (m_world == nullptr || m_removing) return;
 	m_removing = true;
-	m_world->_removeBody(this);	 // ends contacts while both bodies resolve
+	m_world->_removeBody(this, notify);  // ends contacts while both bodies resolve
 	JPH::BodyInterface& bodies = bodyInterface(m_world);
 	const JPH::BodyID id(m_bodyId);
 	bodies.RemoveBody(id);
@@ -184,6 +184,7 @@ void RigidBodyComponent::_preStep(float fixedDelta) {
 		bodies.SetPositionAndRotation(
 			id, position, rotation,
 			dynamic ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
+		if (m_settings.motionType == MotionType::Static) m_world->_staticGeometryChanged();
 	}
 	m_syncedRevision = revision;
 }
@@ -196,36 +197,46 @@ void RigidBodyComponent::_writeBack(const Vector3& position, const Quaternion& r
 	m_syncedRevision = object->getTransformRevision();	// not a game edit
 }
 
-std::vector<RigidBodyComponent::ContactCallback> RigidBodyComponent::_receivers(
-	_EventKind kind) const {
-	std::vector<ContactCallback> receivers;
-	const ContactCallback* own = nullptr;
+std::vector<ContactCallbackFn> collectContactReceivers(WorldObject* object,
+														 ContactEventKind kind,
+														 const ContactCallbackFn& own) {
 	void (ScriptComponent::*hook)(const ContactEvent&) = nullptr;
 	switch (kind) {
-		case _EventKind::ContactBegin:
-			own = &m_onContactBegin;
+		case ContactEventKind::ContactBegin:
 			hook = &ScriptComponent::onContactBegin;
 			break;
-		case _EventKind::ContactEnd:
-			own = &m_onContactEnd;
+		case ContactEventKind::ContactEnd:
 			hook = &ScriptComponent::onContactEnd;
 			break;
-		case _EventKind::TriggerEnter:
-			own = &m_onTriggerEnter;
+		case ContactEventKind::TriggerEnter:
 			hook = &ScriptComponent::onTriggerEnter;
 			break;
-		case _EventKind::TriggerExit:
-			own = &m_onTriggerExit;
+		case ContactEventKind::TriggerExit:
 			hook = &ScriptComponent::onTriggerExit;
 			break;
 	}
-	if (*own) receivers.push_back(*own);
-	for (const auto& component : m_object->getComponents()) {
+	std::vector<ContactCallbackFn> receivers;
+	if (own) receivers.push_back(own);
+	for (const auto& component : object->getComponents()) {
 		if (auto* script = dynamic_cast<ScriptComponent*>(component.get())) {
 			receivers.push_back([script, hook](const ContactEvent& e) { (script->*hook)(e); });
 		}
 	}
 	return receivers;
+}
+
+std::vector<RigidBodyComponent::ContactCallback> RigidBodyComponent::_receivers(
+	_EventKind kind) const {
+	switch (kind) {
+		case _EventKind::ContactBegin:
+			return collectContactReceivers(m_object, kind, m_onContactBegin);
+		case _EventKind::ContactEnd:
+			return collectContactReceivers(m_object, kind, m_onContactEnd);
+		case _EventKind::TriggerEnter:
+			return collectContactReceivers(m_object, kind, m_onTriggerEnter);
+		default:
+			return collectContactReceivers(m_object, kind, m_onTriggerExit);
+	}
 }
 
 // ---------------------------------------------------------------- runtime
@@ -234,6 +245,7 @@ void RigidBodyComponent::setShape(CollisionShape shape) {
 	validate(shape, m_settings);
 	m_shape = std::move(shape);
 	if (m_world == nullptr) return;
+	if (m_settings.motionType == MotionType::Static) m_world->_staticGeometryChanged();
 	bodyInterface(m_world).SetShape(JPH::BodyID(m_bodyId),
 									scaled(m_shape, world_object()->getScale()),
 									m_settings.motionType == MotionType::Dynamic,
@@ -297,6 +309,7 @@ void RigidBodyComponent::teleport(const Vector3& position, const Quaternion& rot
 		m_settings.motionType == MotionType::Static ? JPH::EActivation::DontActivate
 													: JPH::EActivation::Activate);
 	m_syncedRevision = object->getTransformRevision();
+	if (m_settings.motionType == MotionType::Static) m_world->_staticGeometryChanged();
 }
 
 void RigidBodyComponent::wake() {

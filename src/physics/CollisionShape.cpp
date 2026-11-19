@@ -1,6 +1,9 @@
 #include "CollisionShape.h"
 
 #include <algorithm>
+#include <future>
+#include <limits>
+#include <unordered_map>
 #include <stdexcept>
 #include <string>
 
@@ -165,6 +168,97 @@ CollisionShape CollisionShape::triangleMesh(const std::vector<std::shared_ptr<Me
 	}
 	return wrap(JPH::MeshShapeSettings(vertices, triangles), Kind::TriangleMesh, true,
 				"triangleMesh");
+}
+
+std::vector<CollisionShape> CollisionShape::triangleMeshChunks(
+	const std::vector<Vector3>& vertices, const std::vector<uint32_t>& indices, int cellsX,
+	int cellsZ) {
+	if (cellsX < 1 || cellsZ < 1) {
+		throw std::invalid_argument("CollisionShape::triangleMeshChunks: cells must be >= 1");
+	}
+	if (indices.size() % 3 != 0) {
+		throw std::invalid_argument(
+			"CollisionShape::triangleMeshChunks: index count must be a multiple of 3");
+	}
+
+	// Keep non-degenerate triangles and find the centroid extent: O(n).
+	std::vector<uint32_t> kept;
+	kept.reserve(indices.size() / 3);
+	Vector2 lo(std::numeric_limits<float>::max()), hi(-std::numeric_limits<float>::max());
+	for (size_t t = 0; t < indices.size(); t += 3) {
+		if (indices[t] >= vertices.size() || indices[t + 1] >= vertices.size() ||
+			indices[t + 2] >= vertices.size()) {
+			throw std::invalid_argument("CollisionShape::triangleMeshChunks: index out of range");
+		}
+		const Vector3& a = vertices[indices[t]];
+		const Vector3& b = vertices[indices[t + 1]];
+		const Vector3& c = vertices[indices[t + 2]];
+		if (glm::length(glm::cross(b - a, c - a)) < 1e-10f) continue;
+		const Vector3 centroid = (a + b + c) / 3.0f;
+		lo = glm::min(lo, Vector2(centroid.x, centroid.z));
+		hi = glm::max(hi, Vector2(centroid.x, centroid.z));
+		kept.push_back(uint32_t(t));
+	}
+	if (kept.empty()) {
+		throw std::invalid_argument("CollisionShape::triangleMeshChunks: no usable triangles");
+	}
+
+	// Bucket triangles by cell.
+	const Vector2 extent = glm::max(hi - lo, Vector2(1e-6f));
+	std::vector<std::vector<uint32_t>> cells(size_t(cellsX) * cellsZ);
+	for (uint32_t t : kept) {
+		const Vector3 centroid =
+			(vertices[indices[t]] + vertices[indices[t + 1]] + vertices[indices[t + 2]]) / 3.0f;
+		const int x = std::min(cellsX - 1, int((centroid.x - lo.x) / extent.x * cellsX));
+		const int z = std::min(cellsZ - 1, int((centroid.z - lo.y) / extent.y * cellsZ));
+		cells[size_t(z) * cellsX + x].push_back(t);
+	}
+
+	// Build each non-empty cell's mesh (only the vertices it uses) in parallel.
+	std::vector<std::future<CollisionShape>> builds;
+	for (const auto& cell : cells) {
+		if (cell.empty()) continue;
+		builds.push_back(std::async(std::launch::async, [&vertices, &indices, &cell] {
+			JPH::VertexList cellVertices;
+			JPH::IndexedTriangleList triangles;
+			triangles.reserve(cell.size());
+			std::unordered_map<uint32_t, uint32_t> remap;
+			auto local = [&](uint32_t index) {
+				auto [it, added] = remap.emplace(index, uint32_t(cellVertices.size()));
+				if (added) {
+					const Vector3& v = vertices[index];
+					cellVertices.push_back(JPH::Float3(v.x, v.y, v.z));
+				}
+				return it->second;
+			};
+			for (uint32_t t : cell) {
+				triangles.push_back(JPH::IndexedTriangle(local(indices[t]), local(indices[t + 1]),
+														 local(indices[t + 2])));
+			}
+			return wrap(JPH::MeshShapeSettings(cellVertices, triangles), Kind::TriangleMesh,
+						true, "triangleMeshChunks");
+		}));
+	}
+	std::vector<CollisionShape> chunks;
+	chunks.reserve(builds.size());
+	for (auto& build : builds) chunks.push_back(build.get());	 // rethrows build errors
+	return chunks;
+}
+
+std::vector<CollisionShape> CollisionShape::triangleMeshChunks(
+	const std::vector<std::shared_ptr<Mesh>>& meshes, int cellsX, int cellsZ) {
+	JPH::VertexList joltVertices;
+	JPH::IndexedTriangleList triangles;
+	for (const auto& mesh : meshes) appendMesh(mesh, joltVertices, &triangles, "triangleMeshChunks");
+	std::vector<Vector3> vertices;
+	vertices.reserve(joltVertices.size());
+	for (const JPH::Float3& v : joltVertices) vertices.emplace_back(v.x, v.y, v.z);
+	std::vector<uint32_t> indices;
+	indices.reserve(triangles.size() * 3);
+	for (const JPH::IndexedTriangle& t : triangles) {
+		indices.insert(indices.end(), {t.mIdx[0], t.mIdx[1], t.mIdx[2]});
+	}
+	return triangleMeshChunks(vertices, indices, cellsX, cellsZ);
 }
 
 CollisionShape CollisionShape::compound(const std::vector<Part>& parts) {

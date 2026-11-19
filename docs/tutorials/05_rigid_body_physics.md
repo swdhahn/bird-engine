@@ -58,7 +58,25 @@ Each step, dynamic bodies write their pose back to their objects, so rendering n
 | `Kinematic` | Your code; pushes dynamic bodies | Moving platforms, doors |
 | `Dynamic` | Gravity, forces, collisions | Crates, debris, balls |
 
-Level geometry can use its render meshes directly: `CollisionShape::triangleMesh(resource_manager()->loadMesh("assets/models/maps/Map1.glb"))`. Triangle meshes must be static or kinematic; give moving bodies a `convexHull` instead.
+Level geometry can use its render meshes directly. For a whole level, split it into a few static chunks that share the level's transform:
+
+```cpp
+void addLevelCollision(Scene* scene) {
+    auto meshes = RESOURCE_MANAGER->loadMesh("assets/models/maps/Map1.glb");
+    const Vector3 levelPosition(0, -5, 30);  // the rendered map's transform
+
+    RigidBodySettings level;
+    level.motionType = MotionType::Static;
+    for (const CollisionShape& chunk : CollisionShape::triangleMeshChunks(meshes, 3, 3)) {
+        auto collider = _own_mk<WorldObject>();
+        collider->addComponent(_own_mk<RigidBodyComponent>(chunk, level));
+        collider->setWorldPosition(levelPosition);
+        scene->addChild(std::move(collider));
+    }
+}
+```
+
+Triangle meshes must be static or kinematic; give moving bodies a `convexHull` instead.
 
 ---
 
@@ -221,17 +239,42 @@ void addPlayer(Scene* scene, Camera* camera) {
 }
 ```
 
-`getGroundState()` reports `OnGround`, `OnSteepGround`, `NotSupported` or `InAir`, and `getTouchingBodies()` lists what the character bumped into. Remember that pushing is force-limited: give crates a modest `mass` (the default density makes a 1 m cube weigh a tonne).
+`getGroundState()` reports `OnGround`, `OnSteepGround`, `NotSupported` or `InAir`, and `getTouchingBodies()` lists what the character bumped into. Characters also send contact events, and trigger zones hear characters walking in:
+
+```cpp
+void watchDoorway(RigidBodyComponent* doorwaySensor, CharacterControllerComponent* player) {
+    doorwaySensor->setOnTriggerEnter([](const ContactEvent& e) {
+        if (e.otherCharacter != nullptr) std::cout << "The player came in" << std::endl;
+    });
+    player->setOnContactBegin([](const ContactEvent& e) {
+        // e.selfCharacter == player; e.other is the rigid body bumped (or nullptr
+        // when e.otherCharacter is another character).
+    });
+}
+``` Remember that pushing is force-limited: give crates a modest `mass` (the default density makes a 1 m cube weigh a tonne).
 
 ---
 
-## 7. Try It
+## 7. Seeing the Colliders
+
+Turn on wireframes of every collider (static level chunks are cached, so this stays fast):
+
+```cpp
+APPLICATION->setPhysicsDebugDraw(true);
+APPLICATION->getPhysicsDebugSettings().velocities = true;  // optional extras
+```
+
+---
+
+## 8. Try It
 
 `test/main.cpp` contains a playground:
 - 80 boxes drop onto a slab;
 - a trigger zone counts the boxes inside it;
 - **F** pushes the box under the crosshair, and **R** drops the boxes again;
-- **C** switches between flying and walking as a first-person character (WASD, **Space** jumps) that can shove the boxes.
+- **C** switches between flying and walking as a first-person character (WASD, **Space** jumps) that can shove the boxes and walk through the village;
+- hold the **right mouse button** to look around (always on while walking);
+- **G** toggles collider wireframes; `BIRD_PHYSICS_DEBUG=1` starts with them on.
 
 The HUD shows the body count, the awake count and the last event.
 

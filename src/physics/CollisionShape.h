@@ -81,6 +81,23 @@ class CollisionShape {
 	static CollisionShape triangleMesh(const std::vector<std::shared_ptr<Mesh>>& meshes);
 
 	/**
+	 * Splits a large static triangle mesh (a level) into a grid of
+	 * cellsX x cellsZ chunks over its horizontal (XZ) extent, one triangle
+	 * mesh per non-empty cell. Each triangle goes to the cell holding its
+	 * centroid; degenerate triangles are dropped. Chunks keep the input's
+	 * coordinates, so give every chunk body the same transform. Chunks are
+	 * built in parallel.
+	 * @throws std::invalid_argument for cells < 1, an index count that is
+	 *         not a multiple of 3, an index out of range, or no triangles.
+	 */
+	static std::vector<CollisionShape> triangleMeshChunks(const std::vector<Vector3>& vertices,
+														  const std::vector<uint32_t>& indices,
+														  int cellsX, int cellsZ);
+	/** As above, merging the CPU-side data of rendered meshes first. */
+	static std::vector<CollisionShape> triangleMeshChunks(
+		const std::vector<std::shared_ptr<Mesh>>& meshes, int cellsX, int cellsZ);
+
+	/**
 	 * Several shapes rigidly joined.
 	 * @throws std::invalid_argument when parts is empty or a part is empty.
 	 */

@@ -13,7 +13,9 @@
 namespace bird {
 
 class Component;
+class DebugDrawList;
 class PhysicsServer;
+class CharacterControllerComponent;
 class RigidBodyComponent;
 class WorldObject;
 struct PhysicsWorldImpl;
@@ -47,6 +49,21 @@ struct ShapeCastHit {
 	Vector3 normal{0.0f};
 	/** Fraction of the sweep travelled before contact, in [0, 1]. */
 	float fraction = 0.0f;
+};
+
+/** What PhysicsWorld::debugDraw() draws. */
+struct PhysicsDebugSettings {
+	/** Wireframe of every body's shape (characters included). */
+	bool shapes = true;
+	/** Colour shapes by awake (random per island) / asleep instead of by
+	 * motion type (static grey, kinematic green, dynamic per body). */
+	bool colorBySleep = false;
+	bool boundingBoxes = false;
+	/** Linear and angular velocity vectors of moving bodies. */
+	bool velocities = false;
+	bool centersOfMass = false;
+	/** Ground contact normal under each supported character (yellow). */
+	bool characterGround = true;
 };
 
 /**
@@ -128,10 +145,30 @@ class PhysicsWorld {
 											 PhysicsLayerMask mask = kAllPhysicsLayers,
 											 const Component* ignore = nullptr) const;
 
+	/**
+	 * Appends wireframes of this world to a debug line list (typically
+	 * GraphicsPipeline::getDebugDraw()). Static bodies go into a cached layer
+	 * rebuilt only when static geometry or the settings change, so large
+	 * levels cost nothing per frame; moving bodies are drawn every call.
+	 * Convex shapes use level of detail by distance to cameraPosition. Does
+	 * nothing when Jolt was built without its debug renderer.
+	 */
+	void debugDraw(DebugDrawList& out, const PhysicsDebugSettings& settings = {},
+				   const Vector3& cameraPosition = Vector3(0.0f)) const;
+
 	/** Engine-internal. */
 	PhysicsWorldImpl& _impl() { return *m_impl; }
 	void _addBody(RigidBodyComponent* body);
-	void _removeBody(RigidBodyComponent* body);
+	/** A static body moved or changed shape: rebuild cached static wireframes. */
+	void _staticGeometryChanged();
+	/**
+	 * Unregisters a body. With notify, partners receive end events first
+	 * (explicit removal); destructor cleanup passes false, because partner
+	 * objects may be mid-destruction.
+	 */
+	void _removeBody(RigidBodyComponent* body, bool notify = true);
+	/** As _removeBody, for a character controller. */
+	void _removeCharacter(CharacterControllerComponent* character, bool notify = true);
 
    private:
 	void dispatchContacts();
