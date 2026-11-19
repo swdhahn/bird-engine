@@ -109,6 +109,10 @@ class Application {
 	bool isPhysicsDebugDrawEnabled() const { return m_physicsDebugDraw; }
 	PhysicsDebugSettings& getPhysicsDebugSettings() { return m_physicsDebugSettings; }
 
+	/** Smooth rendering between physics steps (on by default). */
+	void setPhysicsInterpolation(bool enabled) { m_physicsInterpolation = enabled; }
+	bool isPhysicsInterpolationEnabled() const { return m_physicsInterpolation; }
+
    private:
 	/** Propagates a window size change to the renderer, camera and UI. */
 	void handleResize();
@@ -118,6 +122,7 @@ class Application {
 	_own<PhysicsServer> m_physicsServer;
 	FixedStepClock m_physicsClock;
 	bool m_physicsDebugDraw = false;
+	bool m_physicsInterpolation = true;
 	PhysicsDebugSettings m_physicsDebugSettings;
 	Scene* m_scene;
 

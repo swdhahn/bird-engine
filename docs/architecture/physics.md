@@ -182,7 +182,34 @@ Queries take a mask of the layers to hit.
 
 ---
 
-## 9. Debug Drawing
+## 9. Joints
+
+`PhysicsWorld` creates joints between two rigid bodies, or between one body and the world (pass `nullptr` as `b`). Anchors and axes are in world space, taken at creation.
+
+| Factory | Behaviour |
+|---------|-----------|
+| `createFixedJoint(a, b)` | Locks the bodies' current relative pose (weld). |
+| `createPointJoint(a, b, anchor)` | Ball and socket at the anchor. |
+| `createHingeJoint(a, b, anchor, axis, minAngle, maxAngle)` | Rotation about the axis, optionally limited. |
+| `createSliderJoint(a, b, axis, min, max)` | Translation of `a` along the axis only, optionally limited. |
+| `createDistanceJoint(a, b, anchorA, anchorB, min, max, springHz)` | Keeps the anchors within `[min, max]` (rope or rod); `springHz > 0` makes the limit a spring. |
+
+Hinges and sliders have motors (`Joint::setMotorVelocity`, `disableMotor`) and report `getPosition()` (angle or offset). `setEnabled(false)` releases a joint without destroying it. The world owns joints: `destroyJoint` removes one, and destroying either body removes its joints, after which the handle is invalid.
+
+---
+
+## 10. Render Interpolation
+
+Physics runs at a fixed 60 Hz while rendering runs at any rate, so bodies drawn at their last step's pose judder.
+- After each step the world records every moved body's and character's pose before and after the step.
+- After `processScene`, `Application` calls `PhysicsWorld::interpolate(FixedStepClock::getAlpha())`. This overrides those objects' **transform matrices** with the pose blended between the two (linear position, slerped rotation).
+- Logic positions stay at the true simulated pose, so scripts, queries and physics never see the blend. A game edit after the step (the object's revision changed) cancels the blend for that object.
+- `CharacterControllerComponent::getInterpolatedPosition()` gives the same blend for cameras that follow a character.
+- `Application::setPhysicsInterpolation(false)` turns the blending off.
+
+---
+
+## 11. Debug Drawing
 
 `Application::setPhysicsDebugDraw(true)` draws every world's colliders as wireframes each frame, configured by `getPhysicsDebugSettings()`: shapes, colour by sleep state, bounding boxes, velocities, centres of mass, and each character's ground normal. Underneath, `PhysicsWorld::debugDraw(DebugDrawList&, settings, cameraPosition)` feeds Jolt's `DebugRendererSimple` into a `DebugDrawList` that the GL pipeline draws as lines into the scene target, depth-tested, so FXAA smooths them.
 
@@ -192,7 +219,7 @@ Game code can add its own lines to `GraphicsPipeline::getDebugDraw()` (`line`, `
 
 ---
 
-## 10. Build Notes
+## 12. Build Notes
 
 - All Jolt-dependent code compiles in the `physics` object library, which links `Jolt::Jolt` for its include paths and definitions.
 - Jolt is built as **Release** (`libs/CMakeLists.txt`). Its exported definitions (`JPH_PROFILE_ENABLED`, `JPH_DEBUG_RENDERER` and others) then match what Debug and Release engine builds compile with, so class layouts agree.
@@ -203,9 +230,9 @@ Game code can add its own lines to `GraphicsPipeline::getDebugDraw()` (`line`, `
 
 ---
 
-## 11. Known Limits
+## 13. Known Limits
 
-- No joints or constraints yet.
+- Interpolation shows motion up to one step (16.7 ms) late, the usual trade-off.
 - Contacts are not drawn in debug mode (only shapes, boxes, velocities and character ground normals).
 - No render interpolation: bodies render at their last step's pose, so motion can show slight judder when the frame rate is not a multiple of 60 Hz.
 - Seven collision layers.

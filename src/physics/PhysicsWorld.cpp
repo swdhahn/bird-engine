@@ -178,6 +178,7 @@ PhysicsWorld::PhysicsWorld(PhysicsServer& server, const PhysicsWorldSettings& se
 }
 
 PhysicsWorld::~PhysicsWorld() {
+	m_impl->joints.clear();	 // removes constraints while the system lives
 	// Bodies are freed with the PhysicsSystem; components just let go.
 	for (RigidBodyComponent* body : m_impl->bodies) body->_forgetWorld();
 	// Characters release their CharacterVirtual (and inner body) now, while
@@ -199,7 +200,16 @@ void PhysicsWorld::step(float fixedDelta) {
 	PhysicsWorldImpl& impl = *m_impl;
 
 	for (RigidBodyComponent* body : impl.bodies) body->_preStep(fixedDelta);
-	for (CharacterControllerComponent* character : impl.characters) character->_step(fixedDelta);
+	impl.interpolants.clear();
+	for (CharacterControllerComponent* character : impl.characters) {
+		WorldObject* object = character->world_object();
+		const Vector3 before = object->getWorldPosition();
+		const Quaternion rotation = object->getWorldRotation();
+		character->_step(fixedDelta);
+		impl.interpolants.push_back({character->_innerBodyId(), before,
+									 object->getWorldPosition(), rotation, rotation,
+									 object->getTransformRevision()});
+	}
 
 	const JPH::EPhysicsUpdateError error =
 		impl.system.Update(fixedDelta, 1, impl.server->tempAllocator.get(),
@@ -218,7 +228,13 @@ void PhysicsWorld::step(float fixedDelta) {
 		JPH::RVec3 position;
 		JPH::Quat rotation;
 		bodies.GetPositionAndRotation(id, position, rotation);
+		WorldObject* object = body->world_object();
+		const Vector3 before = object->getWorldPosition();
+		const Quaternion beforeRotation = object->getWorldRotation();
 		body->_writeBack(toBird(JPH::Vec3(position)), toBird(rotation));
+		impl.interpolants.push_back({id.GetIndexAndSequenceNumber(), before,
+									 object->getWorldPosition(), beforeRotation,
+									 object->getWorldRotation(), object->getTransformRevision()});
 	}
 
 	m_stepping = false;
@@ -378,6 +394,14 @@ void PhysicsWorld::_removeBody(RigidBodyComponent* body, bool notify) {
 	}
 
 	if (body->getMotionType() == MotionType::Static) _staticGeometryChanged();
+
+	// Joints on this body go with it.
+	auto& joints = impl.joints;
+	joints.erase(std::remove_if(joints.begin(), joints.end(),
+								[body](const std::unique_ptr<Joint>& j) {
+									return j->getBodyA() == body || j->getBodyB() == body;
+								}),
+				 joints.end());
 
 	// Swap-remove: O(1).
 	const size_t index = body->_index();
@@ -597,6 +621,30 @@ void PhysicsWorld::debugDraw(DebugDrawList& out, const PhysicsDebugSettings& set
 	(void)settings;
 	(void)cameraPosition;
 #endif
+}
+
+// ----------------------------------------------------- render interpolation
+
+void PhysicsWorld::interpolate(float alpha) {
+	PhysicsWorldImpl& impl = *m_impl;
+	impl.alpha = glm::clamp(alpha, 0.0f, 1.0f);
+	for (const auto& pose : impl.interpolants) {
+		const Endpoint endpoint = resolve(impl, pose.id);
+		if (!endpoint) continue;
+		WorldObject* object = endpoint.object();
+		if (object->getTransformRevision() != pose.revision) continue;	// moved by the game
+		const Vector3 position =
+			glm::mix(pose.previousPosition, pose.position, impl.alpha) + object->getLocalPosition();
+		const Quaternion rotation =
+			glm::slerp(pose.previousRotation, pose.rotation, impl.alpha) * object->getLocalRotation();
+		object->setTransformMatrix(glm::scale(glm::translate(Matrix4(1.0f), position) *
+												  glm::toMat4(rotation),
+											  object->getScale()));
+	}
+}
+
+float PhysicsWorld::getInterpolationAlpha() const {
+	return m_impl->alpha;
 }
 
 }  // namespace bird

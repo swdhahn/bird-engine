@@ -125,6 +125,12 @@ class CharacterControllerComponent : public Component {
 	/** Rigid bodies actually collided with during the last step, each once. */
 	std::vector<RigidBodyComponent*> getTouchingBodies() const;
 
+	/**
+	 * Feet position blended between the last two steps by the world's
+	 * interpolation alpha: follow this with a camera for smooth motion.
+	 */
+	Vector3 getInterpolatedPosition() const;
+
 	/** Moves the object and the character immediately (no sweep). */
 	void teleport(const Vector3& position);
 
@@ -166,6 +172,7 @@ class CharacterControllerComponent : public Component {
 	bool m_hasVelocityOverride = false;
 	Vector3 m_velocityOverride{0.0f};
 	uint64_t m_syncedRevision = 0;
+	Vector3 m_previousPosition{0.0f};
 	ContactCallback m_onContactBegin;
 	ContactCallback m_onContactEnd;
 	ContactCallback m_onTriggerEnter;

@@ -8,6 +8,7 @@
 
 #include "../util/Math.h"
 #include "CollisionShape.h"
+#include "Joint.h"
 #include "PhysicsLayers.h"
 
 namespace bird {
@@ -155,6 +156,46 @@ class PhysicsWorld {
 	 */
 	void debugDraw(DebugDrawList& out, const PhysicsDebugSettings& settings = {},
 				   const Vector3& cameraPosition = Vector3(0.0f)) const;
+
+	// ---- joints (b == nullptr joins body a to the world) ----
+	// Anchors and axes are world space, taken at creation. All throw
+	// std::invalid_argument when a body is missing or not in this world,
+	// a == b, or an axis is zero.
+
+	/** Locks the bodies' current relative pose. */
+	Joint* createFixedJoint(RigidBodyComponent* a, RigidBodyComponent* b);
+	/** Ball-and-socket at anchor. */
+	Joint* createPointJoint(RigidBodyComponent* a, RigidBodyComponent* b, const Vector3& anchor);
+	/** Rotation about axis through anchor, optionally limited (radians). */
+	Joint* createHingeJoint(RigidBodyComponent* a, RigidBodyComponent* b, const Vector3& anchor,
+							const Vector3& axis, float minAngle = -3.14159265f,
+							float maxAngle = 3.14159265f);
+	/** Translation along axis only, optionally limited (metres from start). */
+	Joint* createSliderJoint(RigidBodyComponent* a, RigidBodyComponent* b, const Vector3& axis,
+							 float minDistance = -1e30f, float maxDistance = 1e30f);
+	/**
+	 * Keeps anchorA (on a) and anchorB (on b) between minDistance and
+	 * maxDistance (negative: the current distance); springHz > 0 makes the
+	 * limits soft (a spring), 0 rigid (a rope or rod).
+	 */
+	Joint* createDistanceJoint(RigidBodyComponent* a, RigidBodyComponent* b,
+							   const Vector3& anchorA, const Vector3& anchorB,
+							   float minDistance = -1.0f, float maxDistance = -1.0f,
+							   float springHz = 0.0f);
+	/** Removes a joint now (the handle becomes invalid). */
+	void destroyJoint(Joint* joint);
+	size_t getJointCount() const;
+
+	// ---- render interpolation ----
+	/**
+	 * Poses bodies and characters moved by the last step between their
+	 * previous and current pose (alpha in [0, 1]) by overriding their
+	 * transform matrices. Logic positions are untouched. The Application
+	 * calls this after processScene with FixedStepClock::getAlpha().
+	 */
+	void interpolate(float alpha);
+	/** The alpha last passed to interpolate() (1 before any). */
+	float getInterpolationAlpha() const;
 
 	/** Engine-internal. */
 	PhysicsWorldImpl& _impl() { return *m_impl; }

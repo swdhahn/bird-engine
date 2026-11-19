@@ -519,7 +519,7 @@ class PlaygroundScript : public bird::ProcessScript<bird::WorldObject> {
 
 		if (g_walkMode) {
 			// Eye height above the character's feet.
-			m_camera->setWorldPosition(m_walker->world_object()->getWorldPosition() +
+			m_camera->setWorldPosition(m_walker->getInterpolatedPosition() +
 									   bird::Vector3(0, 1.6f, 0));
 		}
 
@@ -655,6 +655,22 @@ void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui) {
 				object->setWorldRotation(rotation);	 // synced at the first step
 				boxes.push_back({raw, position, rotation});
 			}
+		}
+	}
+
+	// A chain of five boxes hanging from a world pivot by ball joints (push it with F).
+	{
+		RigidBodyComponent* previous = nullptr;
+		for (int i = 0; i < 5; i++) {
+			const Vector3 position(6.0f, 6.0f - i * 1.1f, -14.0f);
+			RigidBodySettings link;
+			link.mass = 10.0f;
+			auto body = _own_mk<RigidBodyComponent>(unitBox, link);
+			RigidBodyComponent* raw = body.get();
+			addObject(scene, cube, position, Vector3(0.4f), std::move(body));
+			scene->getPhysicsWorld()->createPointJoint(raw, previous,
+													   position + Vector3(0, 0.55f, 0));
+			previous = raw;
 		}
 	}
 

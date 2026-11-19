@@ -88,6 +88,13 @@ void Application::run() {
 		}
 
 		processScene(m_scene, delta);
+		// After matrix updates: draw moving bodies between their last two
+		// physics poses so motion is smooth at any frame rate.
+		if (m_physicsInterpolation) {
+			for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
+				world->interpolate(m_physicsClock.getAlpha());
+			}
+		}
 		// PROCESS SECTION END
 
 		m_graphicsPipeline->renderRootScene(m_scene);

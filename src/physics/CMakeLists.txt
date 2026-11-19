@@ -15,7 +15,9 @@ add_library(
   RigidBodyComponent.h
   RigidBodyComponent.cpp
   CharacterControllerComponent.h
-  CharacterControllerComponent.cpp)
+  CharacterControllerComponent.cpp
+  Joint.h
+  Joint.cpp)
 
 target_link_libraries(physics PRIVATE glm Jolt::Jolt)
 set_target_properties(physics PROPERTIES POSITION_INDEPENDENT_CODE TRUE)

@@ -134,6 +134,7 @@ void CharacterControllerComponent::_step(float fixedDelta) {
 		character.SetPosition(bird::toJolt(object->getWorldPosition()));  // game moved it
 	}
 
+	m_previousPosition = bird::toBird(JPH::Vec3(character.GetPosition()));
 	const JPH::Vec3 up = character.GetUp();
 	const JPH::Vec3 gravity = gravityFor(m_world, m_settings.gravityFactor);
 	JPH::Vec3 velocity;
@@ -238,8 +239,15 @@ std::vector<RigidBodyComponent*> CharacterControllerComponent::getTouchingBodies
 	return bodies;
 }
 
+Vector3 CharacterControllerComponent::getInterpolatedPosition() const {
+	requireWorld("getInterpolatedPosition");
+	return glm::mix(m_previousPosition, toBird(JPH::Vec3(m_native->character->GetPosition())),
+					m_world->getInterpolationAlpha());
+}
+
 void CharacterControllerComponent::teleport(const Vector3& position) {
 	requireWorld("teleport");
+	m_previousPosition = position;
 	world_object()->setWorldPosition(position);
 	m_native->character->SetPosition(bird::toJolt(position));
 	m_syncedRevision = world_object()->getTransformRevision();

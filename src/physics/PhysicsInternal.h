@@ -29,6 +29,11 @@
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
 #include <Jolt/Physics/Body/BodyFilter.h>
+#include <Jolt/Physics/Constraints/DistanceConstraint.h>
+#include <Jolt/Physics/Constraints/FixedConstraint.h>
+#include <Jolt/Physics/Constraints/HingeConstraint.h>
+#include <Jolt/Physics/Constraints/PointConstraint.h>
+#include <Jolt/Physics/Constraints/SliderConstraint.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
@@ -49,6 +54,7 @@
 #include "../util/Math.h"
 #include "CollisionShape.h"
 #include "ContactEvent.h"
+#include "Joint.h"
 #include "CharacterControllerComponent.h"
 #include "PhysicsLayers.h"
 
@@ -259,6 +265,18 @@ struct PhysicsWorldImpl {
 
 	JPH::BodyIDVector activeScratch;
 
+	std::vector<std::unique_ptr<Joint>> joints;
+
+	/** A pose before and after the last step, for render interpolation. */
+	struct Interpolant {
+		uint32_t id;  // body ID, or a character's inner body ID
+		Vector3 previousPosition, position;
+		Quaternion previousRotation, rotation;
+		uint64_t revision;	// object revision after the step (edits cancel)
+	};
+	std::vector<Interpolant> interpolants;
+	float alpha = 1.0f;
+
 	// Static wireframes are cached in a DebugDrawLayer; this version moves on
 	// whenever static geometry changes (body added, removed, moved, reshaped).
 	uint64_t staticDebugVersion = DebugDrawList::newVersion();
@@ -339,6 +357,10 @@ struct PhysicsWorldImpl {
 		Vector3 normal;	 // from the character towards the other side
 	};
 	std::vector<CharacterContactRecord> characterEvents;
+};
+
+struct Joint::Native {
+	JPH::Ref<JPH::TwoBodyConstraint> constraint;
 };
 
 /** Native state of a character controller. */

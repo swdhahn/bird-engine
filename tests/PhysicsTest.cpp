@@ -868,3 +868,93 @@ TEST_F(PhysicsTest, TriangleMeshChunksSplitALevelIntoStaticPieces) {
 	EXPECT_THROW(CollisionShape::triangleMeshChunks(vertices, {0, 0, 0}, 1, 1),
 				 std::invalid_argument);
 }
+
+// ------------------------------------------------------------------ joints
+
+TEST_F(PhysicsTest, PointJointMakesAPendulum) {
+	Body bob = add(CollisionShape::sphere(0.2f), {2, 10, 0});
+	world().createPointJoint(bob.body, nullptr, {0, 10, 0});  // pivot in the world
+	for (int i = 0; i < 120; i++) {
+		run(1);
+		EXPECT_NEAR(glm::length(bob.object->getWorldPosition() - Vector3(0, 10, 0)), 2.0f, 0.05f);
+	}
+	EXPECT_LT(bob.object->getWorldPosition().y, 10.0f);	 // it swung down
+}
+
+TEST_F(PhysicsTest, HingeRotatesAboutItsAxisWithinLimitsAndMotor) {
+	Body door = add(CollisionShape::box({1, 1, 0.1f}), {1, 0, 0}, [] {
+		RigidBodySettings s;
+		s.gravityFactor = 0;
+		return s;
+	}());
+	Joint* hinge = world().createHingeJoint(door.body, nullptr, {0, 0, 0}, {0, 1, 0}, -1.0f, 1.0f);
+	EXPECT_EQ(hinge->getType(), JointType::Hinge);
+	hinge->setMotorVelocity(2.0f, 1e5f);
+	run(120);
+	EXPECT_NEAR(hinge->getPosition(), 1.0f, 0.05f);	 // stopped by the limit
+	EXPECT_NEAR(door.object->getWorldPosition().y, 0.0f, 1e-3f);
+	EXPECT_NEAR(glm::length(door.object->getWorldPosition()), 1.0f, 0.02f);	 // orbit radius
+	EXPECT_THROW(world().createFixedJoint(door.body, nullptr)->getPosition(), std::logic_error);
+}
+
+TEST_F(PhysicsTest, SliderFixedAndDistanceJoints) {
+	RigidBodySettings floating;
+	floating.gravityFactor = 0;
+	Body cart = add(CollisionShape::box({0.5f, 0.5f, 0.5f}), {0, 0, 0}, floating);
+	world().createSliderJoint(cart.body, nullptr, {1, 0, 0}, -1.0f, 2.0f);
+	cart.body->applyImpulse(Vector3(1, 1, 1) * cart.body->getMass() * 10.0f);
+	run(60);
+	EXPECT_NEAR(cart.object->getWorldPosition().x, 2.0f, 0.05f);  // limit
+	EXPECT_NEAR(cart.object->getWorldPosition().y, 0.0f, 1e-3f);	 // axis only
+
+	Body a = add(CollisionShape::box({0.5f, 0.5f, 0.5f}), {10, 10, 0});
+	Body b = add(CollisionShape::box({0.5f, 0.5f, 0.5f}), {11, 10, 0});
+	world().createFixedJoint(a.body, b.body);
+	world().createFixedJoint(a.body, nullptr);	// welded to the world
+	run(60);
+	EXPECT_NEAR(b.object->getWorldPosition().y, 10.0f, 0.02f);
+
+	Body weight = add(CollisionShape::sphere(0.2f), {20, 10, 0});
+	world().createDistanceJoint(weight.body, nullptr, {20, 10, 0}, {20, 12, 0}, 0.0f, 3.0f);
+	run(120);  // a 3 m rope from y = 12
+	EXPECT_NEAR(weight.object->getWorldPosition().y, 9.0f, 0.05f);
+	EXPECT_EQ(world().getJointCount(), 4u);
+}
+
+TEST_F(PhysicsTest, JointsDieWithTheirBodiesAndValidate) {
+	Body a = add(CollisionShape::sphere(0.5f), {0, 0, 0});
+	Body b = add(CollisionShape::sphere(0.5f), {2, 0, 0});
+	Joint* joint = world().createPointJoint(a.body, b.body, {1, 0, 0});
+	joint->setEnabled(false);
+	EXPECT_FALSE(joint->isEnabled());
+	root->removeChild(b.object);
+	EXPECT_EQ(world().getJointCount(), 0u);
+
+	EXPECT_THROW(world().createPointJoint(a.body, a.body, {}), std::invalid_argument);
+	EXPECT_THROW(world().createPointJoint(nullptr, a.body, {}), std::invalid_argument);
+	EXPECT_THROW(world().createHingeJoint(a.body, nullptr, {}, {0, 0, 0}), std::invalid_argument);
+	Joint* j = world().createFixedJoint(a.body, nullptr);
+	world().destroyJoint(j);
+	EXPECT_EQ(world().getJointCount(), 0u);
+	EXPECT_THROW(world().destroyJoint(j), std::invalid_argument);
+}
+
+// ----------------------------------------------------- render interpolation
+
+TEST_F(PhysicsTest, InterpolationBlendsTheLastTwoPoses) {
+	Body ball = add(CollisionShape::sphere(0.5f), {0, 10, 0});
+	run(10);
+	const Vector3 previous = ball.object->getWorldPosition();
+	run(1);
+	const Vector3 current = ball.object->getWorldPosition();
+	world().interpolate(0.25f);
+	const Vector3 drawn = Vector3(ball.object->getTransformMatrix()[3]);
+	EXPECT_NEAR(drawn.y, glm::mix(previous.y, current.y, 0.25f), 1e-4f);
+	EXPECT_EQ(ball.object->getWorldPosition(), current);	 // logic untouched
+	EXPECT_FLOAT_EQ(world().getInterpolationAlpha(), 0.25f);
+
+	ball.object->setWorldPosition({5, 5, 5});  // a game edit cancels the blend
+	ball.object->updateTransformationMatrix();
+	world().interpolate(0.5f);
+	EXPECT_EQ(Vector3(ball.object->getTransformMatrix()[3]), Vector3(5, 5, 5));
+}

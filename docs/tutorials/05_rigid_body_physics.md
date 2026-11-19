@@ -255,7 +255,23 @@ void watchDoorway(RigidBodyComponent* doorwaySensor, CharacterControllerComponen
 
 ---
 
-## 7. Seeing the Colliders
+## 7. Joints
+
+```cpp
+void addSwingingSign(Scene* scene, RigidBodyComponent* sign, RigidBodyComponent* door) {
+    PhysicsWorld* world = scene->getPhysicsWorld();
+    world->createPointJoint(sign, nullptr, {0, 5, 0});                // hangs from a world pivot
+    Joint* hinge = world->createHingeJoint(door, nullptr, {2, 0, 0},  // door on a vertical hinge
+                                           {0, 1, 0}, -1.5f, 1.5f);   // +-86 degrees
+    hinge->setMotorVelocity(1.0f, 500.0f);                            // swings open at 1 rad/s
+}
+```
+
+Joints die with either body. Rendering is interpolated between physics steps automatically, so jointed and falling bodies move smoothly at any frame rate.
+
+---
+
+## 8. Seeing the Colliders
 
 Turn on wireframes of every collider (static level chunks are cached, so this stays fast):
 
@@ -266,7 +282,7 @@ APPLICATION->getPhysicsDebugSettings().velocities = true;  // optional extras
 
 ---
 
-## 8. Try It
+## 9. Try It
 
 `test/main.cpp` contains a playground:
 - 80 boxes drop onto a slab;
