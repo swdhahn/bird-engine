@@ -45,7 +45,7 @@ Essential guides for downloading, compiling, and configuring Bird Engine on your
 Hands-on walkthroughs introducing engine systems progressively with complete, runnable code examples.
 - **[Tutorial 1: Your First 3D Scene](tutorials/01_first_3d_scene.md)**: Setting up the root Scene, loading 3D models (`MeshComponent`), and manipulating spatial transforms.
 - **[Tutorial 2: Camera & Input Handling](tutorials/02_camera_and_input.md)**: Subclassing `ProcessScript<Camera>`, binding input actions, and implementing a smooth free-look camera controller.
-- **[Tutorial 3: Building UI Layouts](tutorials/03_building_ui_layouts.md)**: Crafting responsive 2D interfaces with `UIManager`, `UIStack`, buttons, sliders, text inputs, and modal dialogs.
+- **[Tutorial 3: Building UI Layouts](tutorials/03_building_ui_layouts.md)**: Crafting responsive 2D interfaces with `UIManager`, `UIStack`, buttons, sliders, text inputs, modal dialogs, lists and trees, the colour picker, and rich inputs.
 - **[Tutorial 4: Shaders & Asset Baking](tutorials/04_shaders_and_baking.md)**: Writing Vulkan-compatible GLSL shaders, configuring push constants, baking with `BuildTools`, and material assignment.
 
 ### 3. [Architecture Deep Dives](architecture/lifecycle_and_main_loop.md)
@@ -54,5 +54,5 @@ Under-the-hood technical references detailing internal mechanics and design deci
 - **[Memory & Ownership Model](architecture/memory_and_ownership.md)**: Memory management via `_own<T>`, `_ref<T>`, and `_weak<T>`, plus lifecycle ownership contracts.
 - **[Scene Tree & Scripting](architecture/scene_tree_and_scripts.md)**: Entities (`WorldObject`, `Scene`), component model, and `Script<T>` / `ProcessScript<T>` templating.
 - **[Rendering Pipeline](architecture/rendering_pipeline.md)**: Multi-backend rendering (`GLPipeline`, `VKPipeline`), offscreen FBOs, post-processing (FXAA), and UI blending passes.
-- **[2D UI Framework](architecture/ui_framework.md)**: The two-pass layout system (measure & layout), event bubbling, focus navigation, and `UIDrawList` batching.
+- **[2D UI Framework](architecture/ui_framework.md)**: The two-pass layout system (measure & arrange), event bubbling, popups and focus, `UIDrawList` batching, and the widget library including virtualized lists and trees, the colour picker, and rich inputs.
 - **[Resource Management](architecture/resource_management.md)**: Asset caching in `ResourceManager`, binary `.bird` formats, and `BuildTools` compilation.

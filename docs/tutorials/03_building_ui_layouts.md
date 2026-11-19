@@ -8,6 +8,8 @@ In this tutorial, you will learn how to:
 3. Configure layout anchors, pivots, and sizing rules.
 4. Add interactive controls (`UIButton`, `UISlider`, `UICheckBox`, `UITextBox`).
 5. Wire callbacks and display modal dialogs (`UIDialog`).
+6. Show data in lists and trees (`UIListView`, `UITreeView`, `UIExpander`).
+7. Add a colour picker and the rich inputs (`UIColorPicker`, `UIRangeSlider`, `UIKeyBindField`, `UIImage`, `UISplitter`).
 
 ---
 
@@ -125,6 +127,102 @@ helpBtn->setAnchor(bird::UIAlignment::BottomRight);
 helpBtn->setPivot(bird::UIAlignment::BottomRight);
 helpBtn->setOffset(bird::Vector2(-20.0f, -20.0f));
 ```
+
+---
+
+## 5. Lists, Trees, and Collapsible Sections
+
+A settings page listing assets and a scene hierarchy. Both views are virtualized, so the 10,000-row list costs no more to draw than a 10-row one:
+
+```cpp
+#include <scene/2D/UIExpander.h>
+#include <scene/2D/UIListView.h>
+#include <scene/2D/UITreeView.h>
+
+void buildAssetBrowser(bird::UIObject* page) {
+    auto* column = page->add<bird::UIStack>(bird::UIAxis::Vertical);
+    column->setAnchors(bird::UIAlignment::TopLeft, bird::UIAlignment::BottomRight);
+    column->setAlign(bird::UIAlign::Stretch);
+
+    auto* views = column->add<bird::UIStack>(bird::UIAxis::Horizontal);
+    views->setAlign(bird::UIAlign::Stretch);
+
+    // Generated rows: the provider is only called for rows on screen.
+    auto* list = views->add<bird::UIListView>();
+    list->setItemProvider(10000, [](size_t i) {
+        return "Asset " + std::to_string(i + 1);
+    });
+    list->setSelectionMode(bird::UISelectionMode::Multiple);  // Ctrl/Shift+click
+    list->setWidth(bird::UISizeRule::fill());
+    list->setOnActivate([](size_t index) {  // Enter or double-click
+        std::cout << "Open asset " << index << std::endl;
+    });
+
+    // The tree owns its nodes; only expanded branches produce rows.
+    auto* tree = views->add<bird::UITreeView>(std::vector<bird::UITreeNode>{
+        bird::UITreeNode::branch("Village",
+                                 {bird::UITreeNode::leaf("Main Camera"),
+                                  bird::UITreeNode::branch("Houses",
+                                                           {bird::UITreeNode::leaf("Inn"),
+                                                            bird::UITreeNode::leaf("Smithy")})},
+                                 /*expanded=*/true)});
+    tree->setWidth(bird::UISizeRule::fill());
+    tree->setOnSelectionChanged([](bird::UITreeNode& node, const bird::UITreePath&) {
+        std::cout << "Selected " << node.text << std::endl;
+    });
+    tree->selectPath({0, 1, 0});  // "Inn": expands "Houses" to reveal it
+
+    // Collapsed content takes no space until the header is clicked.
+    auto* options = column->add<bird::UIExpander>("Import options", /*expanded=*/false);
+    options->getContent()->add<bird::UICheckBox>("Generate mipmaps", true);
+}
+```
+
+After editing a tree's nodes through `tree->getRoots()`, call `tree->refresh()`. The selection is kept by path where it still exists.
+
+---
+
+## 6. Colour Picker and Rich Inputs
+
+```cpp
+#include <scene/2D/UIColorPicker.h>
+#include <scene/2D/UIRichInputs.h>
+
+void buildAppearancePage(bird::UIObject* page, std::shared_ptr<bird::Texture> preview) {
+    auto* column = page->add<bird::UIStack>(bird::UIAxis::Vertical);
+    column->setAnchors(bird::UIAlignment::TopLeft, bird::UIAlignment::BottomRight);
+    column->setAlign(bird::UIAlign::Stretch);
+
+    // Full picker: wheel, value/alpha bars, RGB sliders, H/S/V/R/G/B/A
+    // fields, and a hex field with Copy and Paste buttons.
+    auto* picker = column->add<bird::UIColorPicker>(bird::Vector4(0.0f, 0.5f, 1.0f, 1.0f));
+    picker->setOnChanged([](const bird::Vector4& rgba) {
+        std::cout << "Accent " << bird::color::toHex(rgba) << std::endl;
+    });
+    picker->setHex("#FF8000");  // also accepts #RGB, #RGBA and #RRGGBBAA
+
+    // Compact alternative: a swatch button that opens the picker in a popup.
+    column->add<bird::UIColorButton>(bird::Vector4(0.9f, 0.3f, 0.2f, 1.0f))
+        ->setOnColorChanged([](const bird::Vector4& rgba) { /* apply */ });
+
+    auto* price = column->add<bird::UIRangeSlider>(0.0f, 500.0f, 100.0f, 400.0f);
+    price->setStep(10.0f).setMinGap(20.0f);
+    price->setOnChanged([](float low, float high) { /* filter */ });
+
+    // Stores the raw GLFW key code; 32 is GLFW_KEY_SPACE.
+    column->add<bird::UIKeyBindField>(32)->setOnChanged([](int keyCode) {
+        /* rebind the "jump" action */
+    });
+
+    auto* split = column->add<bird::UISplitter>(bird::UIAxis::Horizontal, 0.5f);
+    split->setHeight(bird::UISizeRule::fixed(160.0f));
+    auto* image = split->getFirst()->add<bird::UIImage>(preview, bird::UIImageFit::Cover);
+    image->setAnchors(bird::UIAlignment::TopLeft, bird::UIAlignment::BottomRight);
+    image->setCornerRadius(8.0f);
+}
+```
+
+Load the preview texture through the resource manager, for example `RESOURCE_MANAGER->loadTexture("assets/textures/waterfall.png")` (baked by `BuildTools`).
 
 ---
 
