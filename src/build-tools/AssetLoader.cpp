@@ -594,10 +594,12 @@ void AssetLoader::loadSound(const std::string& path) {
 void AssetLoader::loadShader(const std::string& path) {
 	// load shader
 
-	std::filesystem::path _newPath = std::filesystem::path(path);
-	std::string npath = _newPath.parent_path();
-	npath += _newPath.stem();
-	if (std::filesystem::exists(npath + ".bird")) {
+	// One .bird per shader program: every stage sharing a stem (ui.vert,
+	// ui.frag) maps to the same output, matching ShaderHeader/ShaderStage[].
+	const std::filesystem::path source(path);
+	const std::string outputPath =
+		(source.parent_path() / source.stem()).string() + ".bird";
+	if (std::filesystem::exists(outputPath)) {
 		return;
 	}
 	std::vector<format::ShaderStage> stages;
@@ -607,8 +609,9 @@ void AssetLoader::loadShader(const std::string& path) {
 	std::unordered_map<ShaderGraphicsPipeline, std::vector<uint32_t>>
 		shaderData;
 
-	std::fstream os(npath, std::ios::out | std::ios::binary);
-	// writeShaderInformation(npath, _newPath.extension(), gpHeader, stages,
+	// The output is opened only where data is written, so an unimplemented
+	// bake leaves no empty file behind.
+	// writeShaderInformation(outputPath, source.extension(), gpHeader, stages,
 	//					   uniformInfo, shaderData, names);
 
 	/*
