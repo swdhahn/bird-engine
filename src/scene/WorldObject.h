@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "../util/Constants.h"
 #include "../util/Input.h"
 #include "../util/Math.h"
 #include "../util/ResourceManager.h"
@@ -48,7 +49,7 @@ class Scene;
 class WorldObject : public Object {
 	BIRD_OBJECT(WORLDOBJECT)
    public:
-	WorldObject(uint16_t type);
+	BIRD_NO_EXPORT WorldObject(uint16_t type);
 	WorldObject();
 	virtual ~WorldObject() {};
 

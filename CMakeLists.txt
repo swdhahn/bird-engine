@@ -32,7 +32,11 @@ target_link_options(
   Bird_core PRIVATE
   # Only apply -Bsymbolic on Linux and Android (ELF systems)
   $<$<PLATFORM_ID:Linux,Android>:-Wl,-Bsymbolic>)
-set_target_properties(Bird_core PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+set_target_properties(Bird_core PROPERTIES
+    POSITION_INDEPENDENT_CODE TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH "$ORIGIN"
+)
 
 if(APPLE)
   target_link_libraries(
@@ -155,6 +159,25 @@ endif()
 # Build Tools
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 add_subdirectory(src/build-tools)
+
+# Embedded Dart VM & FFI Binding Generation
+option(BIRD_ENABLE_DART "Enable embedded Dart VM and FFI binding generation" ON)
+if(BIRD_ENABLE_DART)
+  add_subdirectory(src/dart)
+  target_sources(Bird_core PRIVATE $<TARGET_OBJECTS:bird_dart>)
+  target_link_libraries(Bird_core PRIVATE dart_dll)
+  target_compile_definitions(Bird_core PUBLIC BIRD_ENABLE_DART)
+  target_include_directories(Bird_core PUBLIC $<BUILD_INTERFACE:${BIRD_DART_GEN_C_DIR}>)
+  if(UNIX AND NOT APPLE)
+    target_link_options(Bird PRIVATE -Wl,--export-dynamic)
+  endif()
+  add_custom_command(TARGET Bird POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${BIRD_DART_DLL_PATH}"
+      "$<TARGET_FILE_DIR:Bird>"
+    COMMENT "Copying libdart_dll alongside Bird executable"
+  )
+endif()
 
 # Unit tests (optional; requires GoogleTest)
 option(BIRD_BUILD_TESTS "Build Bird engine unit tests" ON)

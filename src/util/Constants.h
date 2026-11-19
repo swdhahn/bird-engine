@@ -5,6 +5,16 @@
 #ifndef BIRD_CONSTANTS_H
 #define BIRD_CONSTANTS_H
 
+/**
+ * Marks a C++ class, method, field, or free function as excluded from
+ * automatic script binding generation (DartApiGenerator).
+ */
+#ifdef BIRD_CODEGEN
+#define BIRD_NO_EXPORT __attribute__((annotate("bird_no_export")))
+#else
+#define BIRD_NO_EXPORT
+#endif
+
 namespace bird {
 
 /** Global engine version and configuration constants. */

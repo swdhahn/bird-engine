@@ -1,0 +1,160 @@
+# ==============================================================================
+# Bird Engine Dart Scripting & Automatic FFI Binding Generation
+# ==============================================================================
+
+# Curated script-facing C++ headers (Pass 1 Core + Pass 2 2D UI Framework)
+set(BIRD_SCRIPT_HEADERS
+    ${CMAKE_SOURCE_DIR}/src/util/Math.h
+    ${CMAKE_SOURCE_DIR}/src/util/Input.h
+    ${CMAKE_SOURCE_DIR}/src/util/Resource.h
+    ${CMAKE_SOURCE_DIR}/src/util/ResourceManager.h
+    ${CMAKE_SOURCE_DIR}/src/scene/Object.h
+    ${CMAKE_SOURCE_DIR}/src/scene/WorldObject.h
+    ${CMAKE_SOURCE_DIR}/src/scene/Scene.h
+    ${CMAKE_SOURCE_DIR}/src/scene/Camera.h
+    ${CMAKE_SOURCE_DIR}/src/scene/Light.h
+    ${CMAKE_SOURCE_DIR}/src/scene/components/Component.h
+    ${CMAKE_SOURCE_DIR}/src/scene/components/Script.h
+    ${CMAKE_SOURCE_DIR}/src/scene/components/ProcessScript.h
+    ${CMAKE_SOURCE_DIR}/src/scene/components/MeshComponent.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/ScreenObject.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UILayout.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIEvents.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIMenu.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UITheme.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIObject.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIManager.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UILabel.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIPanel.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIButton.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIStack.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UICheckBox.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UISlider.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIProgressBar.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UITextBox.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UITextArea.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIScrollView.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UITabView.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIWindow.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIDialog.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIDropdown.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIRadioGroup.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIToggle.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UINumberField.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIMenuBar.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIMenuPanel.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIListView.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UITreeView.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIExpander.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIColor.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIColorControls.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIColorPicker.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIRichInputs.h
+    ${CMAKE_SOURCE_DIR}/src/Application.h
+)
+
+set(BIRD_DART_GEN_C_DIR "${CMAKE_BINARY_DIR}/generated/dart_c")
+set(BIRD_DART_GEN_DART_DIR "${CMAKE_SOURCE_DIR}/dart/bird_engine/lib/src/generated")
+
+set(BIRD_DART_C_WRAPPER_H "${BIRD_DART_GEN_C_DIR}/c_wrapper.h")
+set(BIRD_DART_C_WRAPPER_CPP "${BIRD_DART_GEN_C_DIR}/c_wrapper.cpp")
+
+# Find Clang's builtin resource include directory (stddef.h, stdarg.h, etc.)
+find_package(LLVM QUIET CONFIG)
+set(_CLANG_BUILTIN_HINTS "")
+if(LLVM_LIBRARY_DIRS AND LLVM_VERSION_MAJOR)
+    list(APPEND _CLANG_BUILTIN_HINTS
+        "${LLVM_LIBRARY_DIRS}/clang/${LLVM_VERSION_MAJOR}/include"
+        "${LLVM_LIBRARY_DIRS}/clang/${LLVM_PACKAGE_VERSION}/include")
+endif()
+if(LLVM_VERSION_MAJOR)
+    list(APPEND _CLANG_BUILTIN_HINTS "/usr/lib/clang/${LLVM_VERSION_MAJOR}/include")
+endif()
+find_path(BIRD_CLANG_BUILTIN_INCLUDE_DIR stddef.h
+    PATHS ${_CLANG_BUILTIN_HINTS}
+    NO_DEFAULT_PATH
+)
+set(_CLANG_BUILTIN_FLAG "")
+if(BIRD_CLANG_BUILTIN_INCLUDE_DIR)
+    set(_CLANG_BUILTIN_FLAG "-isystem${BIRD_CLANG_BUILTIN_INCLUDE_DIR}")
+endif()
+
+add_custom_command(
+    OUTPUT
+        ${BIRD_DART_C_WRAPPER_H}
+        ${BIRD_DART_C_WRAPPER_CPP}
+        ${BIRD_DART_GEN_DART_DIR}/bindings.dart
+        ${BIRD_DART_GEN_DART_DIR}/generated.dart
+    COMMAND $<TARGET_FILE:DartApiGenerator>
+        --out-c ${BIRD_DART_GEN_C_DIR}
+        --out-dart ${BIRD_DART_GEN_DART_DIR}
+        --lib libBird_core
+        --
+        ${_CLANG_BUILTIN_FLAG}
+        -I${CMAKE_SOURCE_DIR}/src
+        -I${INSTALLED_LIB_PATH}/include
+        ${BIRD_SCRIPT_HEADERS}
+    DEPENDS
+        DartApiGenerator
+        ${BIRD_SCRIPT_HEADERS}
+    COMMENT "Generating extern \"C\" wrapper and Dart FFI bindings..."
+    VERBATIM
+)
+
+add_custom_target(GenerateDartBindings
+    DEPENDS
+        ${BIRD_DART_C_WRAPPER_H}
+        ${BIRD_DART_C_WRAPPER_CPP}
+        ${BIRD_DART_GEN_DART_DIR}/bindings.dart
+        ${BIRD_DART_GEN_DART_DIR}/generated.dart
+)
+
+# Locate dart_shared_library (libdart_dll)
+set(_DART_DLL_ROOT "")
+if(EXISTS "${INSTALLED_LIB_PATH}/dart_shared_library/include/dart_dll.h")
+    set(_DART_DLL_ROOT "${INSTALLED_LIB_PATH}/dart_shared_library")
+elseif(EXISTS "${CMAKE_SOURCE_DIR}/libs/dart_shared_library/include/dart_dll.h")
+    set(_DART_DLL_ROOT "${CMAKE_SOURCE_DIR}/libs/dart_shared_library")
+endif()
+
+if(NOT _DART_DLL_ROOT)
+    message(FATAL_ERROR
+        "BIRD_ENABLE_DART is ON, but dart_shared_library (dart_dll.h) was not found in "
+        "${INSTALLED_LIB_PATH}/dart_shared_library or ${CMAKE_SOURCE_DIR}/libs/dart_shared_library.")
+endif()
+
+if(WIN32)
+    set(_DART_DLL_LIB "${_DART_DLL_ROOT}/bin/dart_dll.dll")
+elseif(APPLE)
+    set(_DART_DLL_LIB "${_DART_DLL_ROOT}/bin/libdart_dll.dylib")
+else()
+    set(_DART_DLL_LIB "${_DART_DLL_ROOT}/bin/libdart_dll.so")
+endif()
+
+add_library(dart_dll SHARED IMPORTED GLOBAL)
+set_target_properties(dart_dll PROPERTIES
+    IMPORTED_LOCATION "${_DART_DLL_LIB}"
+    INTERFACE_INCLUDE_DIRECTORIES "${_DART_DLL_ROOT}/include"
+)
+
+# Generated C wrapper + Embedded Dart VM runtime compiled directly into Bird_core
+add_library(bird_dart OBJECT
+    ${BIRD_DART_C_WRAPPER_CPP}
+    DartRuntime.cpp
+    DartRuntime.h
+    DartScriptComponent.cpp
+    DartScriptComponent.h
+)
+add_dependencies(bird_dart GenerateDartBindings)
+target_compile_definitions(bird_dart PRIVATE BIRD_ENABLE_DART)
+target_include_directories(bird_dart PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${BIRD_DART_GEN_C_DIR}
+    ${INSTALLED_LIB_PATH}/include
+    ${_DART_DLL_ROOT}/include
+)
+set_target_properties(bird_dart PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+
+# Expose path to libdart_dll so parent CMakeLists can copy it alongside Bird
+set(BIRD_DART_DLL_PATH "${_DART_DLL_LIB}" PARENT_SCOPE)
+set(BIRD_DART_GEN_C_DIR "${BIRD_DART_GEN_C_DIR}" PARENT_SCOPE)

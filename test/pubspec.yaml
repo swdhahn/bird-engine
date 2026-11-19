@@ -1,0 +1,11 @@
+name: bird_test_app
+description: Sample Dart game script for Bird Engine.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+
+dependencies:
+  bird_engine:
+    path: ../dart/bird_engine

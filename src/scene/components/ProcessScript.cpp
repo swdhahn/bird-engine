@@ -5,11 +5,11 @@
 namespace bird {
 
 void ProcessScriptComponent::_init() {
-	APPLICATION->addProcessableScript(this);
+	if (APPLICATION) APPLICATION->addProcessableScript(this);
 }
 
 void ProcessScriptComponent::_deinit() {
-	APPLICATION->removeProcessableScript(this);
+	if (APPLICATION) APPLICATION->removeProcessableScript(this);
 }
 
 void ProcessScriptComponent::process(float delta) {}
