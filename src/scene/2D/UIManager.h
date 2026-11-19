@@ -13,6 +13,12 @@ namespace bird {
 
 class Font;
 
+/** Where a popup opens relative to its anchor rect. */
+enum class UIPopupPlacement : uint8_t {
+	Below,	// under the anchor, flipping above when there is no room
+	Right	// beside the anchor (submenus), flipping left
+};
+
 /**
  * Owns the UI tree and every piece of interaction state: hover, pointer
  * capture, keyboard focus, modal stack, tooltip and pending removals.
@@ -90,6 +96,31 @@ class UIManager {
 	void closeModal(UIObject* modal);
 	UIObject* getTopModal() const;
 
+	// --------------------------------------------------------- popups
+	/**
+	 * Opens a light-dismiss popup (dropdown list, menu) on the overlay,
+	 * above any modal. It is positioned against anchorRect (screen space)
+	 * after measuring, flipped and clamped to stay on screen. Pressing
+	 * outside every popup closes them all; Escape closes the top one.
+	 * Keys and characters reach the top popup before the focused node.
+	 * @param owner - notified through onPopupClosed when it closes.
+	 */
+	UIObject* openPopup(UIObject* owner, std::unique_ptr<UIObject> popup,
+						UIRect anchorRect,
+						UIPopupPlacement placement = UIPopupPlacement::Below);
+	/** Closes a popup and every popup opened after it (submenus). */
+	void closePopup(UIObject* popup);
+	void closeAllPopups();
+	bool isPopupOpen(const UIObject* popup) const;
+	UIObject* getTopPopup() const;
+	size_t getPopupCount() const { return m_popups.size(); }
+	/** Opens a context menu at a screen position. */
+	UIObject* showContextMenu(UIMenuItems items, Vector2 position,
+							  UIObject* owner = nullptr);
+
+	/** Calls node->tick(dt) every frame until it returns false. */
+	void animate(UIObject* node);
+
 	/** Topmost interactive node under a point, honouring the modal. */
 	UIObject* hitTest(Vector2 position) const;
 	/** Topmost interactive, enabled, visible node of a subtree. */
@@ -124,6 +155,16 @@ class UIManager {
 	template <typename Handler>
 	UIObject* bubble(UIObject* node, Handler handler);
 	UIObject* focusScope();
+	bool insidePopup(const UIObject* node) const;
+	void placePopups();
+	void tickAnimations(float delta);
+
+	struct PopupEntry {
+		UIObject* node;
+		UIObject* owner;
+		UIRect anchor;
+		UIPopupPlacement placement;
+	};
 
 	std::unique_ptr<UIObject> m_root;
 	std::unique_ptr<UIObject> m_overlay;
@@ -137,6 +178,8 @@ class UIManager {
 	UIObject* m_tooltip = nullptr;
 	UIObject* m_tooltipSource = nullptr;
 	std::vector<UIObject*> m_modals;
+	std::vector<PopupEntry> m_popups;
+	std::vector<UIObject*> m_animating;
 	std::vector<UIObject*> m_pendingRemovals;
 
 	Vector2 m_viewport{0.0f};
@@ -150,6 +193,7 @@ class UIManager {
 	bool m_layoutDirty = true;
 	bool m_drawDirty = true;
 	bool m_shuttingDown = false;
+	bool m_swallowRelease = false;  // release after a light-dismiss press
 };
 
 }  // namespace bird

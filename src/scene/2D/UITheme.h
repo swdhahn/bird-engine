@@ -33,12 +33,21 @@ struct UITheme {
 	Vector4 scrollbarColor{0.400f, 0.400f, 0.420f, 0.70f};
 	Vector4 backdropColor{0.0f, 0.0f, 0.0f, 0.55f};	 // behind modal dialogs
 	Vector4 tooltipColor{0.050f, 0.052f, 0.058f, 0.95f};
+	Vector4 popupColor{0.110f, 0.114f, 0.122f, 0.98f};	 // dropdowns, menus
+	Vector4 menuHighlightColor{0.000f, 0.478f, 0.800f, 0.85f};
+	Vector4 separatorColor{0.271f, 0.271f, 0.271f, 1.0f};
+	Vector4 switchOffColor{0.300f, 0.306f, 0.322f, 1.0f};
+	Vector4 shadowColor{0.0f, 0.0f, 0.0f, 0.45f};
 
 	// --- Borders ---
 	Vector4 borderColor{0.271f, 0.271f, 0.271f, 1.0f};	 // #454545
 	Vector4 focusBorderColor{0.000f, 0.478f, 0.800f, 1.0f};
 	float borderWidth = 1.0f;
-	float borderRadius = 4.0f;	// reserved: corners are square for now
+	float borderRadius = 4.0f;	 // legacy alias of controlRadius
+	float controlRadius = 4.0f;	 // buttons, inputs, boxes
+	float panelRadius = 6.0f;	 // panels, windows, dialogs
+	float popupRadius = 6.0f;	 // dropdown lists, menus, tooltips
+	float shadowBlur = 12.0f;
 
 	// --- Typography and layout ---
 	float fontSize = 14.0f;
@@ -49,9 +58,14 @@ struct UITheme {
 	float titleBarHeight = 30.0f;
 	float scrollbarWidth = 8.0f;
 	float checkBoxSize = 18.0f;
-	float sliderThumbWidth = 10.0f;
+	float sliderThumbWidth = 14.0f;  // thumb diameter
 	float caretBlinkSeconds = 0.53f;
 	float tooltipDelaySeconds = 0.5f;
+	float rowHeight = 26.0f;  // list, dropdown and menu rows
+	float submenuDelaySeconds = 0.15f;
+	float switchWidth = 36.0f;
+	float switchHeight = 20.0f;
+	float animationSeconds = 0.12f;
 };
 
 /** Shared theme applied to every UIObject that does not receive its own. */

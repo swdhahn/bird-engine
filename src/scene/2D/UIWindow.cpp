@@ -134,11 +134,17 @@ void UIWindow::draw(UIDrawList& list) {
 	const UITheme& t = theme();
 	const UIRect bounds{Vector2(0.0f), getSize()};
 	const UIRect title{Vector2(0.0f), Vector2(getSize().x, t.titleBarHeight)};
-	list.rect(bounds, t.panelColor);
-	list.rect(title, t.titleBarColor);
+	list.shadow(bounds, t.panelRadius, t.shadowBlur, t.shadowColor);
+	list.roundedRect(bounds, t.panelColor, t.panelRadius);
+	// Title bar: rounded top corners, square bottom edge.
+	list.roundedRect(title, t.titleBarColor, t.panelRadius);
+	list.rect({Vector2(0.0f, title.size.y * 0.5f),
+			   Vector2(title.size.x, title.size.y * 0.5f)},
+			  t.titleBarColor);
 	ui::drawTextCenteredY(list, font(), m_title, t.titleFontSize, t.padding,
 						  title, t.textColor);
-	list.border(bounds, t.borderWidth, t.borderColor);
+	list.roundedRect(bounds, Vector4(0.0f), t.panelRadius, t.borderWidth,
+					 t.borderColor);
 }
 
 void UIWindow::drawOverlay(UIDrawList& list) {

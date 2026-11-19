@@ -9,6 +9,7 @@
 #include "ScreenObject.h"
 #include "UIEvents.h"
 #include "UILayout.h"
+#include "UIMenu.h"
 #include "UIPlatform.h"
 #include "UITheme.h"
 
@@ -88,11 +89,16 @@ class UIObject : public ScreenObject {
 	UIObject& setPivot(Vector2 pivot);
 	/** Pixel offset from the anchor point (same as setPosition). */
 	UIObject& setOffset(Vector2 offset);
+	/** Flow (default) or Absolute; see UILayoutMode. */
+	UIObject& setLayoutMode(UILayoutMode mode);
 	UIObject& setVisible(bool visible);
 	UIObject& setEnabled(bool enabled);
 	/** Text shown after hovering for UITheme::tooltipDelaySeconds. */
 	UIObject& setTooltip(std::string tooltip);
 	UIObject& setTheme(std::shared_ptr<UITheme> theme);
+	/** Menu opened at the cursor on a right click inside this node. */
+	UIObject& setContextMenu(std::vector<UIMenuItem> items);
+	const UIMenuItems& getContextMenu() const { return m_contextMenu; }
 
 	const UISizeRule& getWidth() const { return m_width; }
 	const UISizeRule& getHeight() const { return m_height; }
@@ -101,6 +107,11 @@ class UIObject : public ScreenObject {
 	const Vector2& getAnchorMin() const { return m_anchorMin; }
 	const Vector2& getAnchorMax() const { return m_anchorMax; }
 	const Vector2& getPivot() const { return m_pivot; }
+	/** True once setAnchor/setAnchors was called explicitly. */
+	bool hasExplicitAnchors() const { return m_anchorSet; }
+	UILayoutMode getLayoutMode() const { return m_layoutMode; }
+	/** Offset from the anchor (setOffset); a visual nudge inside stacks. */
+	const Vector2& getOffset() const { return m_position; }
 	const std::string& getTooltip() const { return m_tooltip; }
 	bool isVisible() const { return m_visible; }
 	bool isEnabled() const { return m_enabled; }
@@ -134,6 +145,8 @@ class UIObject : public ScreenObject {
 	bool containsPoint(const Vector2& screenPoint) const;
 	/** Local rect children are clipped to when clipping is enabled. */
 	virtual UIRect childClipRect() const;
+	/** Screen-space bounding box of this node. */
+	UIRect getScreenRect() const;
 	bool clipsChildren() const { return m_clipChildren; }
 
 	// ----------------------------------------------- behaviour (widgets)
@@ -156,6 +169,13 @@ class UIObject : public ScreenObject {
 	virtual void onFocus(bool focused) {}
 	/** Called every frame while this node has keyboard focus. */
 	virtual void update(float delta) {}
+	/**
+	 * Animation step for nodes registered with UIManager::animate.
+	 * @return true to keep animating, false to stop.
+	 */
+	virtual bool tick(float delta) { return false; }
+	/** Called on a popup's owner when the manager closes that popup. */
+	virtual void onPopupClosed(UIObject* popup) {}
 	/** Emits this node's own primitives in local space. */
 	virtual void draw(UIDrawList& list) {}
 	/** Emits primitives drawn above the children (e.g. scrollbars). */
@@ -209,8 +229,11 @@ class UIObject : public ScreenObject {
 	Vector2 m_anchorMax{0.0f};
 	Vector2 m_pivot{0.0f};
 	std::string m_tooltip;
+	UIMenuItems m_contextMenu;
 	bool m_visible = true;
 	bool m_enabled = true;
+	bool m_anchorSet = false;
+	UILayoutMode m_layoutMode = UILayoutMode::Flow;
 
 	Vector2 m_desired{0.0f};
 	Vector2 m_layoutPosition{0.0f};

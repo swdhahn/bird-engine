@@ -60,7 +60,7 @@ Vector2 UITextBox::measureContent(Vector2 /*available*/) {
 size_t UITextBox::caretIndexAt(float localX) const {
 	if (!font()) return 0;
 	const std::vector<float> offsets =
-		font()->caretOffsets(m_state.text(), fontSize());
+		font()->caretOffsets(displayText(), fontSize());
 	const float textX = localX - getPadding().left + m_scrollX;
 	// Nearest boundary: offsets are sorted, so binary search is O(log n).
 	auto it = std::lower_bound(offsets.begin(), offsets.end(), textX);
@@ -74,7 +74,7 @@ void UITextBox::afterEdit(bool changed) {
 	m_caretVisible = true;
 	if (font()) {
 		const float caretX =
-			font()->caretOffsets(m_state.text(), fontSize())[m_state.caret()];
+			font()->caretOffsets(displayText(), fontSize())[m_state.caret()];
 		const float innerWidth = std::max(contentSize().x, 1.0f);
 		if (caretX - m_scrollX > innerWidth) m_scrollX = caretX - innerWidth;
 		if (caretX < m_scrollX) m_scrollX = caretX;
@@ -144,7 +144,8 @@ bool UITextBox::onKey(const UIKeyEvent& event) {
 		case UIKey::C:
 		case UIKey::X:
 			if (!control) return false;
-			if (m_state.hasSelection() && platform()) {
+			// Masked text never reaches the clipboard.
+			if (m_state.hasSelection() && platform() && !m_password) {
 				platform()->setClipboardText(m_state.selectedText());
 				if (event.key == UIKey::X) afterEdit(m_state.eraseSelection());
 			}
@@ -166,9 +167,24 @@ bool UITextBox::onKey(const UIKeyEvent& event) {
 	}
 }
 
-bool UITextBox::onChar(uint32_t codepoint) {
+std::string UITextBox::displayText() const {
+	return m_password ? std::string(m_state.text().size(), kMaskCharacter)
+					  : m_state.text();
+}
+
+UITextBox& UITextBox::setPassword(bool password) {
+	m_password = password;
+	afterEdit(false);
+	return *this;
+}
+
+bool UITextBox::acceptsCharacter(uint32_t codepoint) const {
 	// The font atlas is ASCII; other characters and controls are ignored.
-	if (codepoint < 32 || codepoint > 126) return false;
+	return codepoint >= 32 && codepoint <= 126;
+}
+
+bool UITextBox::onChar(uint32_t codepoint) {
+	if (!acceptsCharacter(codepoint)) return false;
 	afterEdit(m_state.insert(std::string(1, static_cast<char>(codepoint))));
 	return true;
 }
@@ -193,9 +209,8 @@ void UITextBox::update(float delta) {
 void UITextBox::draw(UIDrawList& list) {
 	const UITheme& t = theme();
 	const UIRect bounds{Vector2(0.0f), getSize()};
-	list.rect(bounds, t.inputColor);
-	list.border(bounds, t.borderWidth,
-				isFocused() ? t.focusBorderColor : t.borderColor);
+	list.roundedRect(bounds, t.inputColor, t.controlRadius, t.borderWidth,
+					 isFocused() ? t.focusBorderColor : t.borderColor);
 	if (!font()) return;
 
 	const UIRect inner{getPadding().start(), contentSize()};
@@ -211,19 +226,19 @@ void UITextBox::draw(UIDrawList& list) {
 		}
 	} else {
 		const std::vector<float> offsets =
-			font()->caretOffsets(m_state.text(), fontSize());
+			font()->caretOffsets(displayText(), fontSize());
 		if (isFocused() && m_state.hasSelection()) {
 			const auto [start, end] = m_state.selection();
 			list.rect({Vector2(textX + offsets[start], textY),
 					   Vector2(offsets[end] - offsets[start], lineHeight)},
 					  t.selectionColor);
 		}
-		list.text(*font(), m_state.text(), Vector2(textX, textY), fontSize(),
+		list.text(*font(), displayText(), Vector2(textX, textY), fontSize(),
 				  isEffectivelyEnabled() ? t.textColor : t.disabledText);
 	}
 	if (isFocused() && m_caretVisible) {
 		const float caretX =
-			font()->caretOffsets(m_state.text(), fontSize())[m_state.caret()];
+			font()->caretOffsets(displayText(), fontSize())[m_state.caret()];
 		list.rect({Vector2(textX + caretX, textY),
 				   Vector2(kCaretWidth, lineHeight)},
 				  t.caretColor);

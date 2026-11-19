@@ -1,5 +1,7 @@
 #include "UIPanel.h"
 
+#include <algorithm>
+
 #include "UIDrawList.h"
 
 namespace bird {
@@ -27,10 +29,25 @@ UIPanel& UIPanel::setClipChildren(bool clip) {
 	return *this;
 }
 
+UIPanel& UIPanel::setCornerRadius(float radius) {
+	m_radius = std::max(radius, 0.0f);
+	markVisualDirty();
+	return *this;
+}
+
+UIPanel& UIPanel::setShadow(bool shadow) {
+	m_shadow = shadow;
+	markVisualDirty();
+	return *this;
+}
+
 void UIPanel::draw(UIDrawList& list) {
+	const UITheme& t = theme();
 	const UIRect bounds{Vector2(0.0f), getSize()};
-	list.rect(bounds, m_background.value_or(theme().panelColor));
-	if (m_border) list.border(bounds, theme().borderWidth, theme().borderColor);
+	const float radius = m_radius.value_or(t.panelRadius);
+	if (m_shadow) list.shadow(bounds, radius, t.shadowBlur, t.shadowColor);
+	list.roundedRect(bounds, m_background.value_or(t.panelColor), radius,
+					 m_border ? t.borderWidth : 0.0f, t.borderColor);
 }
 
 }  // namespace bird

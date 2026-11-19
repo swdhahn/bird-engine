@@ -6,6 +6,9 @@ layout(location = 0) in vec4 fragColor;
 layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) flat in vec4 fragClip;
 layout(location = 3) in vec2 fragPosition;
+layout(location = 4) in vec4 fragShape;
+layout(location = 5) flat in vec4 fragStyle;
+layout(location = 6) flat in vec4 fragBorderColor;
 
 layout(location = 0) out vec4 out_color;
 
@@ -17,5 +20,6 @@ void main() {
         fragPosition.x > fragClip.z || fragPosition.y > fragClip.w) {
         discard;
     }
-    out_color = uiShade(fragColor, atlas, fragTexCoord);
+    vec4 shaded = uiShade(fragColor, atlas, fragTexCoord);
+    out_color = applyShape(shaded, fragShape, fragStyle, fragBorderColor);
 }

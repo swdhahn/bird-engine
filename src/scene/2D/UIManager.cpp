@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "../../renders/generic/Font.h"
+#include "UIMenuPanel.h"
 #include "UITooltip.h"
 
 namespace bird {
@@ -56,6 +57,8 @@ void UIManager::deinit() {}
 void UIManager::process(float delta) {
 	m_time += delta;
 	flushRemovals();
+	tickAnimations(delta);
+	flushRemovals();
 	layoutNow();
 	updateTooltip(delta);
 	if (m_focused) m_focused->update(delta);
@@ -72,6 +75,8 @@ void UIManager::layoutNow() {
 	for (UIObject* layer : {m_root.get(), m_overlay.get()}) {
 		layer->setSize(m_viewport);
 		layer->measure(m_viewport);
+		// Popups are placed against their anchors once their size is known.
+		if (layer == m_overlay.get()) placePopups();
 		layer->arrange(Vector2(0.0f), m_viewport);
 		layer->updateTransforms(Matrix3(1.0f), UIRect::unbounded());
 	}
@@ -141,6 +146,20 @@ void UIManager::onSubtreeRemoved(UIObject* subtree) {
 	if (inside(m_tooltip)) m_tooltip = nullptr;
 	m_modals.erase(std::remove_if(m_modals.begin(), m_modals.end(), inside),
 				   m_modals.end());
+	m_animating.erase(
+		std::remove_if(m_animating.begin(), m_animating.end(), inside),
+		m_animating.end());
+	// A popup dies with its node; a popup whose owner dies is closed.
+	for (auto it = m_popups.begin(); it != m_popups.end();) {
+		if (inside(it->node)) {
+			it = m_popups.erase(it);
+		} else if (inside(it->owner)) {
+			scheduleRemoval(it->node);
+			it = m_popups.erase(it);
+		} else {
+			++it;
+		}
+	}
 	m_pendingRemovals.erase(
 		std::remove_if(m_pendingRemovals.begin(), m_pendingRemovals.end(),
 					   [subtree](UIObject* node) {
@@ -167,6 +186,9 @@ UIObject* UIManager::findTopmostAt(UIObject* root, const Vector2& point) {
 }
 
 UIObject* UIManager::hitTest(Vector2 position) const {
+	for (auto it = m_popups.rbegin(); it != m_popups.rend(); ++it) {
+		if (UIObject* hit = findTopmostAt(it->node, position)) return hit;
+	}
 	if (UIObject* modal = getTopModal()) {
 		return findTopmostAt(modal, position);
 	}
@@ -217,7 +239,25 @@ void UIManager::mouseButton(UIMouseButton button, bool pressed,
 		m_lastClickPosition = position;
 
 		UIObject* hit = hitTest(position);
+		// Light dismiss: a press outside every popup closes them and is
+		// consumed (pressing a dropdown's own button therefore toggles it).
+		if (!m_popups.empty() && !insidePopup(hit)) {
+			closeAllPopups();
+			m_swallowRelease = true;
+			flushRemovals();
+			updateCursor();
+			return;
+		}
 		setHovered(hit);
+		if (button == UIMouseButton::Right) {
+			for (UIObject* n = hit; n; n = n->getParent()) {
+				if (n->getContextMenu()) {
+					showContextMenu(n->getContextMenu(), position, n);
+					flushRemovals();
+					return;
+				}
+			}
+		}
 		// Focus the nearest focusable ancestor; clicking elsewhere blurs.
 		UIObject* focusTarget = hit;
 		while (focusTarget && !focusTarget->isFocusable()) {
@@ -230,6 +270,8 @@ void UIManager::mouseButton(UIMouseButton button, bool pressed,
 			m_captured->m_pressed = true;
 			invalidateDraw();
 		}
+	} else if (m_swallowRelease) {
+		m_swallowRelease = false;  // the dismissing click ends here
 	} else if (m_captured) {
 		UIObject* target = m_captured;
 		m_captured = nullptr;
@@ -258,6 +300,16 @@ void UIManager::key(UIKey key, bool pressed, bool repeat, uint8_t modifiers) {
 	flushRemovals();
 	layoutNow();
 	const UIKeyEvent event{key, modifiers, repeat};
+	if (UIObject* popup = getTopPopup()) {
+		if (key == UIKey::Tab) {
+			closeAllPopups();  // then move focus as usual
+		} else {
+			// Popups own navigation keys while open.
+			if (!popup->onKey(event) && key == UIKey::Escape) closePopup(popup);
+			flushRemovals();
+			return;
+		}
+	}
 	const bool handled =
 		bubble(m_focused, [&](UIObject* n) { return n->onKey(event); });
 	if (!handled) {
@@ -276,16 +328,20 @@ void UIManager::key(UIKey key, bool pressed, bool repeat, uint8_t modifiers) {
 
 void UIManager::character(uint32_t codepoint) {
 	flushRemovals();
-	if (m_focused) m_focused->onChar(codepoint);
+	if (UIObject* popup = getTopPopup()) {
+		popup->onChar(codepoint);  // type-ahead
+	} else if (m_focused) {
+		m_focused->onChar(codepoint);
+	}
 	flushRemovals();
 }
 
 bool UIManager::wantsKeyboard() const {
-	return m_focused && m_focused->capturesKeyboard();
+	return !m_popups.empty() || (m_focused && m_focused->capturesKeyboard());
 }
 
 bool UIManager::wantsMouse() const {
-	return m_captured || m_hovered || !m_modals.empty();
+	return m_captured || m_hovered || !m_modals.empty() || !m_popups.empty();
 }
 
 // --------------------------------------------------------------- focus
@@ -361,6 +417,7 @@ UIObject* UIManager::getOverlay() {
 }
 
 UIObject* UIManager::pushModal(std::unique_ptr<UIObject> modal) {
+	closeAllPopups();
 	modal->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
 	UIObject* raw = m_overlay->addChild(std::move(modal));
 	m_modals.push_back(raw);
@@ -382,6 +439,108 @@ void UIManager::closeModal(UIObject* modal) {
 
 UIObject* UIManager::getTopModal() const {
 	return m_modals.empty() ? nullptr : m_modals.back();
+}
+
+// -------------------------------------------------------------- popups
+
+UIObject* UIManager::openPopup(UIObject* owner, std::unique_ptr<UIObject> popup,
+							   UIRect anchorRect, UIPopupPlacement placement) {
+	if (!popup) throw std::invalid_argument("UIManager::openPopup: null");
+	hideTooltip();
+	UIObject* raw = m_overlay->addChild(std::move(popup));
+	m_popups.push_back({raw, owner, anchorRect, placement});
+	invalidateLayout();
+	return raw;
+}
+
+void UIManager::closePopup(UIObject* popup) {
+	auto it = std::find_if(m_popups.begin(), m_popups.end(),
+						   [popup](const PopupEntry& e) { return e.node == popup; });
+	if (it == m_popups.end()) return;
+	// Close from the newest down to (and including) this popup.
+	const size_t first = static_cast<size_t>(it - m_popups.begin());
+	while (m_popups.size() > first) {
+		const PopupEntry entry = m_popups.back();
+		m_popups.pop_back();
+		entry.node->removeFromParent();
+		if (entry.owner) entry.owner->onPopupClosed(entry.node);
+	}
+}
+
+void UIManager::closeAllPopups() {
+	if (!m_popups.empty()) closePopup(m_popups.front().node);
+}
+
+bool UIManager::isPopupOpen(const UIObject* popup) const {
+	return std::any_of(m_popups.begin(), m_popups.end(),
+					   [popup](const PopupEntry& e) { return e.node == popup; });
+}
+
+UIObject* UIManager::getTopPopup() const {
+	return m_popups.empty() ? nullptr : m_popups.back().node;
+}
+
+bool UIManager::insidePopup(const UIObject* node) const {
+	if (!node) return false;
+	return std::any_of(m_popups.begin(), m_popups.end(),
+					   [node](const PopupEntry& e) {
+						   return node->isDescendantOf(e.node);
+					   });
+}
+
+UIObject* UIManager::showContextMenu(UIMenuItems items, Vector2 position,
+									 UIObject* owner) {
+	closeAllPopups();
+	return openPopup(owner, std::make_unique<UIMenuPanel>(std::move(items)),
+					 UIRect{position, Vector2(0.0f)}, UIPopupPlacement::Below);
+}
+
+void UIManager::placePopups() {
+	for (const PopupEntry& entry : m_popups) {
+		const Vector2 size = entry.node->getDesiredSize();
+		const UIRect& a = entry.anchor;
+		Vector2 p;
+		if (entry.placement == UIPopupPlacement::Below) {
+			p = Vector2(a.position.x, a.max().y);
+			if (p.y + size.y > m_viewport.y && a.position.y - size.y >= 0.0f) {
+				p.y = a.position.y - size.y;  // flip above
+			}
+		} else {
+			p = Vector2(a.max().x, a.position.y);
+			if (p.x + size.x > m_viewport.x && a.position.x - size.x >= 0.0f) {
+				p.x = a.position.x - size.x;  // flip left
+			}
+		}
+		p = glm::clamp(p, Vector2(0.0f), glm::max(m_viewport - size, Vector2(0.0f)));
+		// Set directly: placement must not re-dirty the layout it is part of.
+		entry.node->setPosition(p);
+	}
+}
+
+// ----------------------------------------------------------- animation
+
+void UIManager::animate(UIObject* node) {
+	if (std::find(m_animating.begin(), m_animating.end(), node) ==
+		m_animating.end()) {
+		m_animating.push_back(node);
+	}
+}
+
+void UIManager::tickAnimations(float delta) {
+	// Iterate a copy: tick() may start or stop other animations.
+	const std::vector<UIObject*> active = m_animating;
+	for (UIObject* node : active) {
+		if (std::find(m_animating.begin(), m_animating.end(), node) ==
+			m_animating.end()) {
+			continue;
+		}
+		if (!node->tick(delta)) {
+			m_animating.erase(
+				std::remove(m_animating.begin(), m_animating.end(), node),
+				m_animating.end());
+		}
+		invalidateDraw();
+	}
 }
 
 // ------------------------------------------------------------- tooltip

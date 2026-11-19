@@ -15,6 +15,7 @@ UIDialog::UIDialog(std::string title, std::string message) {
 	m_panel->setAnchor(UIAlignment::Center);
 	m_panel->setPivot(UIAlignment::Center);
 	m_panel->setPadding(UIInsets::all(theme().padding * 2.0f));
+	m_panel->setShadow(true);
 	UISizeRule width = UISizeRule::fit();
 	width.min = 280.0f;
 	m_panel->setWidth(width);

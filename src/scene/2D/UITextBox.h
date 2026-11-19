@@ -30,6 +30,11 @@ class UITextBox : public UIObject {
 	/** Called when Enter is pressed. */
 	UITextBox& setOnSubmit(std::function<void(const std::string&)> onSubmit);
 	const UITextEditState& getEditState() const { return m_state; }
+	/** Masks the text with '*' and blocks copy/cut. */
+	UITextBox& setPassword(bool password);
+	bool isPassword() const { return m_password; }
+	/** The text as drawn (masked in password mode). */
+	std::string displayText() const;
 
 	/** @return the caret index closest to a local x coordinate. */
 	size_t caretIndexAt(float localX) const;
@@ -46,10 +51,12 @@ class UITextBox : public UIObject {
 	void update(float delta) override;
 	void draw(UIDrawList& list) override;
 
+	static constexpr char kMaskCharacter = '*';
+
    protected:
 	Vector2 measureContent(Vector2 available) override;
-
-   private:
+	/** Character filter for typing; subclasses narrow it (numbers). */
+	virtual bool acceptsCharacter(uint32_t codepoint) const;
 	/** Shows the caret, scrolls it into view and notifies listeners. */
 	void afterEdit(bool changed);
 	float fontSize() const { return theme().fontSize; }
@@ -58,6 +65,7 @@ class UITextBox : public UIObject {
 	std::string m_placeholder;
 	std::function<void(const std::string&)> m_onChanged;
 	std::function<void(const std::string&)> m_onSubmit;
+	bool m_password = false;
 	float m_scrollX = 0.0f;	 // horizontal text scroll inside the box
 	float m_blinkTime = 0.0f;
 	bool m_caretVisible = true;

@@ -17,7 +17,15 @@ namespace bird {
  * - align places children on the cross axis; Stretch (or a child with a
  *   Fill cross rule) makes them span it.
  *
- * Children's anchors are ignored inside a stack; margins are honoured.
+ * Anchors inside a stack (Flow children): the stack owns the main axis.
+ * On the cross axis, explicitly set anchors override align: unequal
+ * anchors stretch the child between those fractions of the cross space,
+ * an equal anchor places it at anchor * space - pivot * size. The child's
+ * offset nudges it visually without moving its siblings.
+ *
+ * Absolute children leave the flow: they take no space and are placed by
+ * their anchors inside the content box (badges, overlays). Margins are
+ * honoured in both modes.
  */
 class UIStack : public UIObject {
    public:

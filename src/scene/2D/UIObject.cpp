@@ -176,6 +176,7 @@ UIObject& UIObject::setAnchor(Vector2 anchor) {
 UIObject& UIObject::setAnchors(Vector2 anchorMin, Vector2 anchorMax) {
 	m_anchorMin = anchorMin;
 	m_anchorMax = anchorMax;
+	m_anchorSet = true;
 	markLayoutDirty();
 	return *this;
 }
@@ -188,6 +189,12 @@ UIObject& UIObject::setPivot(Vector2 pivot) {
 
 UIObject& UIObject::setOffset(Vector2 offset) {
 	setPosition(offset);
+	markLayoutDirty();
+	return *this;
+}
+
+UIObject& UIObject::setLayoutMode(UILayoutMode mode) {
+	m_layoutMode = mode;
 	markLayoutDirty();
 	return *this;
 }
@@ -210,6 +217,11 @@ UIObject& UIObject::setEnabled(bool enabled) {
 
 UIObject& UIObject::setTooltip(std::string tooltip) {
 	m_tooltip = std::move(tooltip);
+	return *this;
+}
+
+UIObject& UIObject::setContextMenu(std::vector<UIMenuItem> items) {
+	m_contextMenu = items.empty() ? nullptr : makeMenu(std::move(items));
 	return *this;
 }
 
@@ -318,6 +330,10 @@ bool UIObject::containsPoint(const Vector2& screenPoint) const {
 
 UIRect UIObject::childClipRect() const {
 	return {Vector2(0.0f), getSize()};
+}
+
+UIRect UIObject::getScreenRect() const {
+	return screenBounds(m_basis, {Vector2(0.0f), getSize()});
 }
 
 // ----------------------------------------------------------------- misc

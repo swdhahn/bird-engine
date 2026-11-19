@@ -121,12 +121,14 @@ bool UIScrollView::onMouseUp(const UIMouseEvent& /*event*/) {
 }
 
 void UIScrollView::draw(UIDrawList& list) {
-	list.rect({Vector2(0.0f), getSize()}, theme().inputColor);
+	list.roundedRect({Vector2(0.0f), getSize()}, theme().inputColor,
+					 theme().controlRadius);
 }
 
 void UIScrollView::drawOverlay(UIDrawList& list) {
 	if (getMaxScroll() <= 0.0f) return;
-	list.rect(thumbRect(), theme().scrollbarColor);
+	const UIRect thumb = thumbRect();
+	list.roundedRect(thumb, theme().scrollbarColor, thumb.size.x * 0.5f);
 }
 
 }  // namespace bird

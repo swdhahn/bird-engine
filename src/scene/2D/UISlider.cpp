@@ -11,7 +11,6 @@ namespace bird {
 namespace {
 constexpr float kDefaultWidth = 160.0f;
 constexpr float kTrackHeight = 4.0f;
-constexpr float kThumbHeight = 16.0f;
 constexpr float kKeyboardFraction = 0.05f;	// step when snapping is off
 }  // namespace
 
@@ -123,17 +122,21 @@ void UISlider::draw(UIDrawList& list) {
 	const float centerY = getPadding().top + contentSize().y * 0.5f;
 	const float start = trackStart();
 	const float thumbX = start + getFraction() * trackLength();
-	list.rect({Vector2(start, centerY - kTrackHeight * 0.5f),
-			   Vector2(trackLength(), kTrackHeight)},
-			  t.inputColor);
-	list.rect({Vector2(start, centerY - kTrackHeight * 0.5f),
-			   Vector2(thumbX - start, kTrackHeight)},
-			  isEffectivelyEnabled() ? t.accentColor : t.disabledText);
-	const UIRect thumb{Vector2(thumbX - t.sliderThumbWidth * 0.5f,
-							   centerY - kThumbHeight * 0.5f),
-					   Vector2(t.sliderThumbWidth, kThumbHeight)};
-	list.rect(thumb, isPressed() || isHovered() ? t.textColor : t.mutedTextColor);
-	if (isFocused()) list.border(thumb, t.borderWidth, t.focusBorderColor);
+	const float radius = kTrackHeight * 0.5f;
+	list.roundedRect({Vector2(start, centerY - radius),
+					  Vector2(trackLength(), kTrackHeight)},
+					 t.inputColor, radius);
+	list.roundedRect({Vector2(start, centerY - radius),
+					  Vector2(std::max(thumbX - start, kTrackHeight), kTrackHeight)},
+					 isEffectivelyEnabled() ? t.accentColor : t.disabledText,
+					 radius);
+	const float diameter = t.sliderThumbWidth;
+	const UIRect thumb{Vector2(thumbX, centerY) - Vector2(diameter * 0.5f),
+					   Vector2(diameter)};
+	list.roundedRect(thumb,
+					 isPressed() || isHovered() ? t.textColor : t.mutedTextColor,
+					 diameter * 0.5f, isFocused() ? 2.0f : 0.0f,
+					 t.focusBorderColor);
 }
 
 }  // namespace bird

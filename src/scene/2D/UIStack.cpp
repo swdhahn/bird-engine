@@ -62,7 +62,10 @@ Vector2 UIStack::measureContent(Vector2 available) {
 	float main = 0.0f, cross = 0.0f;
 	int count = 0;
 	for (auto& child : getChildren()) {
-		if (!child->isVisible()) continue;
+		if (!child->isVisible() ||
+			child->getLayoutMode() == UILayoutMode::Absolute) {
+			continue;
+		}
 		const Vector2 outer = child->getDesiredSize() + child->getMargin().total();
 		main += mainOf(outer, m_axis);
 		cross = std::max(cross, crossOf(outer, m_axis));
@@ -75,7 +78,12 @@ Vector2 UIStack::measureContent(Vector2 available) {
 void UIStack::arrangeChildren() {
 	std::vector<UIObject*> visible;
 	for (auto& child : getChildren()) {
-		if (child->isVisible()) visible.push_back(child.get());
+		if (!child->isVisible()) continue;
+		if (child->getLayoutMode() == UILayoutMode::Absolute) {
+			arrangeAnchored(*child, getPadding().start(), contentSize());
+		} else {
+			visible.push_back(child.get());
+		}
 	}
 	if (visible.empty()) return;
 
@@ -132,25 +140,41 @@ void UIStack::arrangeChildren() {
 
 		const float crossSpace =
 			std::max(contentCross - crossOf(margin.total(), m_axis), 0.0f);
-		const bool stretch = crossRule.mode == UISizeMode::Fill ||
-							 (m_align == UIAlign::Stretch &&
-							  crossRule.mode != UISizeMode::Fixed);
-		const float crossSize = stretch
-									? crossRule.clamp(crossSpace)
-									: crossOf(child->getDesiredSize(), m_axis);
-		float crossPos = 0.0f;
-		if (!stretch) {
-			if (m_align == UIAlign::Center) {
+		const float desiredCross = crossOf(child->getDesiredSize(), m_axis);
+		float crossSize, crossPos;
+		if (child->hasExplicitAnchors()) {
+			// Explicit anchors replace align on the cross axis.
+			const float aMin = crossOf(child->getAnchorMin(), m_axis);
+			const float aMax = crossOf(child->getAnchorMax(), m_axis);
+			if (aMin != aMax) {
+				crossSize = crossRule.clamp((aMax - aMin) * crossSpace);
+				crossPos = aMin * crossSpace;
+			} else {
+				crossSize = crossRule.mode == UISizeMode::Fill
+								? crossRule.clamp(crossSpace)
+								: desiredCross;
+				crossPos = aMin * crossSpace -
+						   crossOf(child->getPivot(), m_axis) * crossSize;
+			}
+		} else {
+			const bool stretch = crossRule.mode == UISizeMode::Fill ||
+								 (m_align == UIAlign::Stretch &&
+								  crossRule.mode != UISizeMode::Fixed);
+			crossSize = stretch ? crossRule.clamp(crossSpace) : desiredCross;
+			crossPos = 0.0f;
+			if (!stretch && m_align == UIAlign::Center) {
 				crossPos = (crossSpace - crossSize) * 0.5f;
-			} else if (m_align == UIAlign::End) {
+			} else if (!stretch && m_align == UIAlign::End) {
 				crossPos = crossSpace - crossSize;
 			}
 		}
 
 		pen += marginStart(margin, m_axis);
+		// The offset is a visual nudge: it moves this child only.
 		const Vector2 position =
 			getPadding().start() +
-			fromAxes(pen, marginStart(margin, cross) + crossPos, m_axis);
+			fromAxes(pen, marginStart(margin, cross) + crossPos, m_axis) +
+			child->getOffset();
 		child->arrange(position, fromAxes(main, crossSize, m_axis));
 		pen += main + mainOf(margin.total(), m_axis) -
 			   marginStart(margin, m_axis) + gap + extraGap;

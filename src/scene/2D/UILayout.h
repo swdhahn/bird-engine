@@ -48,6 +48,12 @@ struct UISizeRule {
 };
 
 enum class UIAxis : uint8_t { Horizontal, Vertical };
+/**
+ * Flow: the parent container positions the node (a UIStack lays it out in
+ * sequence). Absolute: the node leaves the flow, takes no space, and is
+ * placed by its anchors inside the parent's content box.
+ */
+enum class UILayoutMode : uint8_t { Flow, Absolute };
 /** Main-axis distribution of children in a UIStack. */
 enum class UIJustify : uint8_t { Start, Center, End, SpaceBetween };
 /** Cross-axis placement of children in a UIStack. */

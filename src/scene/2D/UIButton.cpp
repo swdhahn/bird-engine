@@ -63,9 +63,8 @@ Vector4 UIButton::backgroundColor() const {
 void UIButton::draw(UIDrawList& list) {
 	const UITheme& t = theme();
 	const UIRect bounds{Vector2(0.0f), getSize()};
-	list.rect(bounds, backgroundColor());
-	list.border(bounds, t.borderWidth,
-				isFocused() ? t.focusBorderColor : t.borderColor);
+	list.roundedRect(bounds, backgroundColor(), t.controlRadius, t.borderWidth,
+					 isFocused() ? t.focusBorderColor : t.borderColor);
 	ui::drawTextCentered(list, font(), m_text, t.fontSize, bounds,
 						 isEffectivelyEnabled() ? t.textColor : t.disabledText);
 }

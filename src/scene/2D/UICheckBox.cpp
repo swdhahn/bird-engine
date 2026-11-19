@@ -68,13 +68,22 @@ void UICheckBox::draw(UIDrawList& list) {
 	const UIRect content{origin, contentSize()};
 	const UIRect boxRect{origin + Vector2(0.0f, (content.size.y - box) * 0.5f),
 						 Vector2(box)};
-	list.rect(boxRect, isHovered() ? t.hoverColor : t.inputColor);
-	list.border(boxRect, t.borderWidth,
-				isFocused() ? t.focusBorderColor : t.borderColor);
+	const Vector4 edge = isFocused() ? t.focusBorderColor : t.borderColor;
 	if (m_checked) {
-		const float inset = box * 0.25f;
-		list.rect({boxRect.position + Vector2(inset), Vector2(box - 2 * inset)},
-				  isEffectivelyEnabled() ? t.accentColor : t.disabledText);
+		list.roundedRect(boxRect,
+						 isEffectivelyEnabled() ? t.accentColor : t.disabledText,
+						 t.controlRadius, isFocused() ? t.borderWidth : 0.0f,
+						 edge);
+		// Check mark: two strokes in box-relative coordinates.
+		const Vector2 o = boxRect.position;
+		const Vector2 a = o + Vector2(0.24f, 0.52f) * box;
+		const Vector2 b = o + Vector2(0.43f, 0.70f) * box;
+		const Vector2 c = o + Vector2(0.77f, 0.30f) * box;
+		list.line(a, b, 2.0f, t.textColor);
+		list.line(b, c, 2.0f, t.textColor);
+	} else {
+		list.roundedRect(boxRect, isHovered() ? t.hoverColor : t.inputColor,
+						 t.controlRadius, t.borderWidth, edge);
 	}
 	ui::drawTextCenteredY(list, font(), m_text, t.fontSize,
 						  origin.x + box + t.itemSpacing, content,

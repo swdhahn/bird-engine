@@ -66,6 +66,8 @@ class Font : public Resource {
 	 */
 	std::vector<float> caretOffsets(const std::string& text,
 									float pixelHeight) const;
+	/** Horizontal advance of one character at a pixel height. */
+	float advance(char character, float pixelHeight) const;
 
    private:
 	const format::FontGlyph& glyphFor(char character) const;

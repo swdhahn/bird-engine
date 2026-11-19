@@ -16,8 +16,14 @@ class Font;
 struct UIVertex {
 	Vector2 position;  // window coordinates
 	Vector2 uv;		   // font atlas; solid quads use its white texel
-	Vector4 color;	   // RGBA
+	Vector4 color;	   // RGBA fill
 	Vector4 clip;	   // screen-space clip rect: minX, minY, maxX, maxY
+	// Rounded-box shape, evaluated per fragment as a signed distance:
+	// xy = position relative to the box centre, zw = box half size.
+	// A zero half size disables the shape (glyphs, triangles, plain rects).
+	Vector4 shape;
+	Vector4 style;		  // x = corner radius, y = border width, z = softness
+	Vector4 borderColor;  // RGBA, blended in over the inner border band
 };
 
 /**
@@ -41,16 +47,28 @@ class UIDrawList {
 	/** @return the active clip rect in screen space. */
 	const UIRect& currentClip() const;
 
+	/** Square, crisp rectangle. */
 	void rect(const UIRect& localRect, const Vector4& color);
-	/** Draws a rectangle outline of the given thickness, inside the rect. */
+	/** Square outline of the given thickness, inside the rect. */
 	void border(const UIRect& localRect, float thickness, const Vector4& color);
-	/** Draws an atlas-textured quad (glyphs). */
+	/**
+	 * Anti-aliased rounded rectangle with an optional inner border.
+	 * @param radius - corner radius, clamped to half the shorter side.
+	 */
+	void roundedRect(const UIRect& localRect, const Vector4& fill, float radius,
+					 float borderWidth = 0.0f,
+					 const Vector4& borderColor = Vector4(0.0f));
+	/** Soft drop shadow: the rect's rounded shape blurred by `blur` px. */
+	void shadow(const UIRect& localRect, float radius, float blur,
+				const Vector4& color);
+	/** Solid triangle (chevrons, arrows). */
+	void triangle(Vector2 a, Vector2 b, Vector2 c, const Vector4& color);
+	/** Anti-aliased line segment with round caps. */
+	void line(Vector2 a, Vector2 b, float thickness, const Vector4& color);
+	/** Atlas-textured quad (glyphs). */
 	void quad(const UIRect& localRect, Vector2 uvMin, Vector2 uvMax,
 			  const Vector4& color);
-	/**
-	 * Draws one line of text with its top-left at localPosition.
-	 * @param pixelHeight - font size in pixels.
-	 */
+	/** One line of text with its top-left at localPosition. */
 	void text(const Font& font, const std::string& text, Vector2 localPosition,
 			  float pixelHeight, const Vector4& color);
 
@@ -58,9 +76,22 @@ class UIDrawList {
 	const std::vector<uint32_t>& indices() const { return m_indices; }
 
    private:
+	/** Corner order TL, BL, TR, BR in every array. */
+	struct QuadSpec {
+		Vector2 corners[4];
+		Vector2 uvs[4];
+		Vector2 shapeLocal[4]{Vector2(0.0f), Vector2(0.0f), Vector2(0.0f),
+							  Vector2(0.0f)};
+		Vector2 halfSize{0.0f};
+		Vector4 style{0.0f};
+		Vector4 borderColor{0.0f};
+	};
+
 	Vector2 toScreen(Vector2 local) const;
-	void emitQuad(const UIRect& localRect, Vector2 uvMin, Vector2 uvMax,
-				  const Vector4& color);
+	bool clipIsEmpty() const;
+	void emit(const QuadSpec& spec, const Vector4& color);
+	void plainQuad(const UIRect& localRect, Vector2 uvMin, Vector2 uvMax,
+				   const Vector4& color);
 
 	std::vector<UIVertex> m_vertices;
 	std::vector<uint32_t> m_indices;

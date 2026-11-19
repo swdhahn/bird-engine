@@ -51,6 +51,17 @@ struct UIHarness {
 		ui.mouseButton(UIMouseButton::Left, false, position, modifiers);
 	}
 	void click(UIObject* node) { click(at(node)); }
+	/** Screen position of a point given in a node's local coordinates. */
+	Vector2 atLocal(UIObject* node, Vector2 local) {
+		ui.layoutNow();
+		const Vector3 p = node->getWorldMatrix() * Vector3(local, 1.0f);
+		return Vector2(p.x, p.y);
+	}
+	void rightClick(Vector2 position) {
+		ui.mouseMove(position);
+		ui.mouseButton(UIMouseButton::Right, true, position);
+		ui.mouseButton(UIMouseButton::Right, false, position);
+	}
 	void press(UIKey key, uint8_t modifiers = UI_MOD_NONE) {
 		ui.key(key, true, false, modifiers);
 	}

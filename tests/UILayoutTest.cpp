@@ -161,3 +161,62 @@ TEST(UILayout, HiddenChildrenTakeNoSpace) {
 	h.ui.layoutNow();
 	EXPECT_FLOAT_EQ(stack->getSize().y, 25);  // 10 + 5 + 10
 }
+
+TEST(UIStackAnchors, CrossAxisAnchorPlacesChild) {
+	UIHarness h;
+	auto* stack = h.root()->add<UIStack>(UIAxis::Vertical);
+	stack->setSize({200, 100});
+	auto* child = fixedBox(stack, {50, 10});
+	child->setAnchor(UIAlignment::TopRight).setPivot(UIAlignment::TopRight);
+	h.ui.layoutNow();
+	EXPECT_FLOAT_EQ(child->getLayoutPosition().x, 150);
+}
+
+TEST(UIStackAnchors, UnequalCrossAnchorsStretch) {
+	UIHarness h;
+	auto* stack = h.root()->add<UIStack>(UIAxis::Vertical);
+	stack->setSize({200, 100});
+	auto* child = stack->add<UIObject>();
+	child->setHeight(UISizeRule::fixed(10));
+	child->setAnchors({0.25f, 0.0f}, {0.75f, 0.0f});
+	h.ui.layoutNow();
+	EXPECT_FLOAT_EQ(child->getLayoutPosition().x, 50);
+	EXPECT_FLOAT_EQ(child->getSize().x, 100);
+}
+
+TEST(UIStackAnchors, OffsetNudgesWithoutMovingSiblings) {
+	UIHarness h;
+	auto* stack = h.root()->add<UIStack>(UIAxis::Vertical);
+	stack->setGap(0.0f);
+	auto* a = fixedBox(stack, {10, 10});
+	a->setOffset({5, 7});
+	auto* b = fixedBox(stack, {10, 10});
+	h.ui.layoutNow();
+	expectVec(a->getLayoutPosition(), {5, 7});
+	expectVec(b->getLayoutPosition(), {0, 10});
+}
+
+TEST(UIStackAnchors, AbsoluteChildTakesNoSpace) {
+	UIHarness h;
+	auto* stack = h.root()->add<UIStack>(UIAxis::Vertical);
+	stack->setGap(5.0f);
+	stack->setWidth(UISizeRule::fixed(100));
+	fixedBox(stack, {10, 10});
+	fixedBox(stack, {10, 10});
+	auto* badge = fixedBox(stack, {20, 20});
+	badge->setLayoutMode(UILayoutMode::Absolute);
+	badge->setAnchor(UIAlignment::TopRight).setPivot(UIAlignment::TopRight);
+	h.ui.layoutNow();
+	EXPECT_FLOAT_EQ(stack->getSize().y, 25);  // badge excluded
+	expectVec(badge->getLayoutPosition(), {80, 0});
+}
+
+TEST(UIStackAnchors, DefaultAnchorsKeepStackAlign) {
+	UIHarness h;
+	auto* stack = h.root()->add<UIStack>(UIAxis::Vertical);
+	stack->setAlign(UIAlign::Center);
+	stack->setSize({200, 100});
+	auto* child = fixedBox(stack, {50, 10});
+	h.ui.layoutNow();
+	EXPECT_FLOAT_EQ(child->getLayoutPosition().x, 75);	// align, not TopLeft
+}

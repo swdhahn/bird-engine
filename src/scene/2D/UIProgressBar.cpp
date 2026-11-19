@@ -38,10 +38,14 @@ Vector2 UIProgressBar::measureContent(Vector2 /*available*/) {
 void UIProgressBar::draw(UIDrawList& list) {
 	const UITheme& t = theme();
 	const UIRect bounds{Vector2(0.0f), getSize()};
-	list.rect(bounds, t.inputColor);
-	list.rect({Vector2(0.0f), Vector2(bounds.size.x * m_value, bounds.size.y)},
-			  t.accentColor);
-	list.border(bounds, t.borderWidth, t.borderColor);
+	const float radius = bounds.size.y * 0.5f;
+	list.roundedRect(bounds, t.inputColor, radius, t.borderWidth, t.borderColor);
+	if (m_value > 0.0f) {
+		// Never narrower than the bar is tall, so the pill stays round.
+		const float width = std::max(bounds.size.x * m_value, bounds.size.y);
+		list.roundedRect({Vector2(0.0f), Vector2(width, bounds.size.y)},
+						 t.accentColor, radius);
+	}
 	if (m_showPercentage) {
 		const std::string label =
 			std::to_string(static_cast<int>(std::round(m_value * 100.0f))) + "%";

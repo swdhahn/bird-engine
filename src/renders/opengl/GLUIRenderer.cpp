@@ -30,6 +30,9 @@ GLUIRenderer::GLUIRenderer() {
 	attribute(1, 4, offsetof(UIVertex, color));
 	attribute(2, 2, offsetof(UIVertex, uv));
 	attribute(3, 4, offsetof(UIVertex, clip));
+	attribute(4, 4, offsetof(UIVertex, shape));
+	attribute(5, 4, offsetof(UIVertex, style));
+	attribute(6, 4, offsetof(UIVertex, borderColor));
 	m_indices = std::make_unique<GLBuffer>(
 		static_cast<BufferMode>(BUFFER_STAGED | BUFFER_DYNAMIC |
 								BUFFER_ELEMENT_ARRAY),

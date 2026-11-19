@@ -17,4 +17,11 @@ target_sources(scene PRIVATE
   UIScrollView.h UIScrollView.cpp
   UITabView.h UITabView.cpp
   UIWindow.h UIWindow.cpp
-  UIDialog.h UIDialog.cpp)
+  UIDialog.h UIDialog.cpp
+  UIMenu.h UIMenuPanel.h UIMenuPanel.cpp UIMenuBar.h UIMenuBar.cpp
+  UIToggle.h UIToggle.cpp
+  UIRadioGroup.h UIRadioGroup.cpp
+  UINumberField.h UINumberField.cpp
+  UIDropdown.h UIDropdown.cpp
+  UITextLayout.h UITextLayout.cpp
+  UITextArea.h UITextArea.cpp)

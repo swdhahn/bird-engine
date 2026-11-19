@@ -21,12 +21,18 @@ class UIPanel : public UIObject {
 	UIPanel& setBorder(bool border);
 	/** Clips children to the panel's bounds. */
 	UIPanel& setClipChildren(bool clip);
+	/** Corner radius; defaults to the theme's panelRadius. */
+	UIPanel& setCornerRadius(float radius);
+	/** Draws a soft drop shadow behind the panel. */
+	UIPanel& setShadow(bool shadow);
 
 	void draw(UIDrawList& list) override;
 
    private:
 	std::optional<Vector4> m_background;
 	bool m_border = true;
+	bool m_shadow = false;
+	std::optional<float> m_radius;
 };
 
 }  // namespace bird
