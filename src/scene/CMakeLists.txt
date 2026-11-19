@@ -7,8 +7,6 @@ add_library(
   WorldObject.h
   Camera.cpp
   Camera.h
-  Light.cpp
-  Light.h
   DefaultCamera.cpp
   DefaultCamera.h)
 

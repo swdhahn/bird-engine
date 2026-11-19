@@ -4,26 +4,32 @@
 
 #include "Shader.h"
 
+#include <stdexcept>
+
 #include "GLShader.h"
 
 namespace bird {
 
-std::unique_ptr<Shader> ShaderBuilder::create() {
-	std::unique_ptr<Shader> ptr = nullptr;
+std::string ShaderBuilder::cacheKey() const {
+	std::string key;
+	for (const auto& stage : m_shaderFiles) {
+		key += stage.first + "|";
+	}
+	return key;
+}
 
+std::shared_ptr<Shader> ShaderBuilder::build() const {
+	if (m_shaderFiles.empty()) {
+		throw std::logic_error("ShaderBuilder: no shader stage attached.");
+	}
 	switch (CURRENT_GRAPHICS_PIPELINE) {
 		case GRAPHICS_PIPELINE_OPENGL:
-			ptr = std::make_unique<gl::GLShader>(m_shaderFiles);
-
-			break;
+			return std::make_shared<gl::GLShader>(m_shaderFiles);
 		default:
 			throw std::runtime_error(
-				"No other graphics pipelines currently support shaders...");
+				"ShaderBuilder: the active graphics pipeline lacks shader "
+				"support.");
 	}
-
-	m_shaderFiles.clear();
-
-	return std::move(ptr);
 }
 
 ShaderBuilder& ShaderBuilder::attachShaderFile(

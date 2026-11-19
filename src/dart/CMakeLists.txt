@@ -12,11 +12,12 @@ set(BIRD_SCRIPT_HEADERS
     ${CMAKE_SOURCE_DIR}/src/scene/WorldObject.h
     ${CMAKE_SOURCE_DIR}/src/scene/Scene.h
     ${CMAKE_SOURCE_DIR}/src/scene/Camera.h
-    ${CMAKE_SOURCE_DIR}/src/scene/Light.h
+    ${CMAKE_SOURCE_DIR}/src/scene/components/LightComponent.h
     ${CMAKE_SOURCE_DIR}/src/scene/components/Component.h
     ${CMAKE_SOURCE_DIR}/src/scene/components/Script.h
     ${CMAKE_SOURCE_DIR}/src/scene/components/ProcessScript.h
     ${CMAKE_SOURCE_DIR}/src/scene/components/MeshComponent.h
+    ${CMAKE_SOURCE_DIR}/src/renders/generic/Material.h
     ${CMAKE_SOURCE_DIR}/src/physics/PhysicsLayers.h
     ${CMAKE_SOURCE_DIR}/src/physics/ContactEvent.h
     ${CMAKE_SOURCE_DIR}/src/physics/FixedStepClock.h

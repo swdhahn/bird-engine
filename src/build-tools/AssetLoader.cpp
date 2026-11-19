@@ -4,6 +4,7 @@
 
 #include "AssetLoader.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstring>
 #include <filesystem>
@@ -11,6 +12,9 @@
 #include <unordered_map>
 
 #include "FormatHeaders.h"
+#include "MaterialFormat.h"
+
+#include <assimp/GltfMaterial.h>
 #include "ShaderBaker.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -169,9 +173,149 @@ void DebugPrintAllTextures(const aiMaterial* mat) {
 	}
 }
 
+namespace {
+
+/**
+ * A baked model is current when newer than its source and its first material
+ * already uses the versioned PBR layout; older bakes lack tangents and roles.
+ */
+bool isModelBakeCurrent(const std::string& path) {
+	namespace fs = std::filesystem;
+	const std::string baked = path + ".bird";
+	if (!fs::exists(baked)) return false;
+	if (fs::last_write_time(baked) < fs::last_write_time(path)) return false;
+	std::ifstream material(path + "0.mat.bird", std::ios::binary);
+	if (!material.is_open()) return true;  // model without materials
+	char magic[4] = {};
+	material.read(magic, sizeof(magic));
+	return material &&
+		   std::memcmp(magic, format::MATERIAL_MAGIC, sizeof(magic)) == 0;
+}
+
+/** Maps glTF alpha mode strings onto baked blend identifiers. */
+uint8_t blendFromAlphaMode(const aiMaterial* material, float opacity) {
+	aiString alphaMode;
+	if (AI_SUCCESS == material->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode)) {
+		const std::string mode = alphaMode.C_Str();
+		if (mode == "MASK") return format::MATERIAL_BLEND_MASKED;
+		if (mode == "BLEND") return format::MATERIAL_BLEND_TRANSPARENT;
+		return format::MATERIAL_BLEND_OPAQUE;
+	}
+	return opacity < 0.999f ? format::MATERIAL_BLEND_TRANSPARENT
+							: format::MATERIAL_BLEND_OPAQUE;
+}
+
+/**
+ * Resolves the path written into the material for a texture reference:
+ * embedded textures ("*N") become the sibling "<model>_etexN" asset.
+ */
+std::string resolveTexturePath(const std::string& modelPath,
+							   const aiString& reference) {
+	std::string texturePath = reference.C_Str();
+	if (!texturePath.empty() && texturePath[0] == '*') {
+		return std::filesystem::path(modelPath).filename().string() + "_etex" +
+			   texturePath.substr(1);
+	}
+	return texturePath;
+}
+
+/** Extracts metallic-roughness PBR parameters and texture roles. */
+format::MaterialFileData extractMaterial(const aiMaterial* aiMat,
+										 const std::string& modelPath) {
+	format::MaterialFileData data;
+	aiColor4D color4;
+	aiColor3D color3;
+	if (AI_SUCCESS == aiMat->Get(AI_MATKEY_BASE_COLOR, color4)) {
+		data.baseColor[0] = color4.r;
+		data.baseColor[1] = color4.g;
+		data.baseColor[2] = color4.b;
+		data.baseColor[3] = color4.a;
+	} else if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_DIFFUSE, color3)) {
+		data.baseColor[0] = color3.r;
+		data.baseColor[1] = color3.g;
+		data.baseColor[2] = color3.b;
+	}
+	float opacity = 1.0f;
+	if (AI_SUCCESS == aiMat->Get(AI_MATKEY_OPACITY, opacity)) {
+		data.baseColor[3] = std::min(data.baseColor[3], opacity);
+	}
+
+	float metallic = 0.0f, roughness = 0.0f, shininess = 0.0f;
+	if (AI_SUCCESS == aiMat->Get(AI_MATKEY_METALLIC_FACTOR, metallic)) {
+		data.metallic = metallic;
+	}
+	if (AI_SUCCESS == aiMat->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness)) {
+		data.roughness = roughness;
+	} else if (AI_SUCCESS == aiMat->Get(AI_MATKEY_SHININESS, shininess)) {
+		data.roughness = format::shininessToRoughness(shininess);
+	}
+	if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_EMISSIVE, color3)) {
+		data.emissive[0] = color3.r;
+		data.emissive[1] = color3.g;
+		data.emissive[2] = color3.b;
+	}
+	float emissiveStrength = 1.0f;
+	if (AI_SUCCESS ==
+		aiMat->Get(AI_MATKEY_EMISSIVE_INTENSITY, emissiveStrength)) {
+		data.emissiveStrength = emissiveStrength;
+	}
+	float cutoff = 0.5f;
+	if (AI_SUCCESS == aiMat->Get(AI_MATKEY_GLTF_ALPHACUTOFF, cutoff)) {
+		data.alphaCutoff = cutoff;
+	}
+	int twoSided = 0;
+	if (AI_SUCCESS == aiMat->Get(AI_MATKEY_TWOSIDED, twoSided)) {
+		data.doubleSided = twoSided != 0;
+	}
+	int shadingModel = 0;
+	if (AI_SUCCESS == aiMat->Get(AI_MATKEY_SHADING_MODEL, shadingModel)) {
+		data.unlit = shadingModel == aiShadingMode_Unlit;
+	}
+	data.blendMode = blendFromAlphaMode(aiMat, data.baseColor[3]);
+
+	// Candidate assimp types per role, most specific first.
+	const std::pair<uint8_t, std::vector<aiTextureType>> roles[] = {
+		{format::MATERIAL_SLOT_BASE_COLOR,
+		 {aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE}},
+		{format::MATERIAL_SLOT_METALLIC_ROUGHNESS,
+		 {aiTextureType_UNKNOWN, aiTextureType_METALNESS,
+		  aiTextureType_DIFFUSE_ROUGHNESS}},
+		{format::MATERIAL_SLOT_NORMAL,
+		 {aiTextureType_NORMALS, aiTextureType_NORMAL_CAMERA,
+		  aiTextureType_HEIGHT}},
+		{format::MATERIAL_SLOT_OCCLUSION,
+		 {aiTextureType_AMBIENT_OCCLUSION, aiTextureType_LIGHTMAP}},
+		{format::MATERIAL_SLOT_EMISSIVE,
+		 {aiTextureType_EMISSION_COLOR, aiTextureType_EMISSIVE}},
+	};
+	for (const auto& [slot, candidates] : roles) {
+		for (aiTextureType type : candidates) {
+			aiString reference;
+			if (aiMat->GetTextureCount(type) > 0 &&
+				AI_SUCCESS == aiMat->GetTexture(type, 0, &reference)) {
+				data.textures.emplace_back(
+					slot, resolveTexturePath(modelPath, reference));
+				break;
+			}
+		}
+	}
+	// Emissive factors default to black in glTF even when a texture exists.
+	const bool hasEmissiveTexture =
+		std::any_of(data.textures.begin(), data.textures.end(),
+					[](const auto& t) {
+						return t.first == format::MATERIAL_SLOT_EMISSIVE;
+					});
+	if (hasEmissiveTexture && data.emissive[0] + data.emissive[1] +
+									  data.emissive[2] <= 0.0f) {
+		data.emissive[0] = data.emissive[1] = data.emissive[2] = 1.0f;
+	}
+	return data;
+}
+
+}  // namespace
+
 void AssetLoader::loadModel(const std::string& path) {
-	// load model
-	if (std::filesystem::exists(path + ".bird")) {
+	if (isModelBakeCurrent(path)) {
 		return;
 	}
 
@@ -222,9 +366,13 @@ void AssetLoader::loadModel(const std::string& path) {
 	file.write((char*)&scene->mNumMeshes, sizeof(uint16_t));
 
 	for (int i = 0; i < scene->mNumMeshes; i++) {
-		file.write((char*)&scene->mMeshes[i]->mMaterialIndex,
-				   sizeof(uint16_t));				 // material index
-		file.write((char*)&zero, sizeof(uint32_t));	 // extra buffer data points
+		const aiMesh* mesh = scene->mMeshes[i];
+		const bool hasTangents =
+			mesh->HasTangentsAndBitangents() && mesh->HasNormals();
+		const uint32_t extraStreams = hasTangents ? 1 : 0;
+		file.write((char*)&mesh->mMaterialIndex,
+				   sizeof(uint16_t));  // material index
+		file.write((char*)&extraStreams, sizeof(uint32_t));
 
 		int numIndices = 0;
 		for (int j = 0; j < scene->mMeshes[i]->mNumFaces; j++) {
@@ -274,108 +422,34 @@ void AssetLoader::loadModel(const std::string& path) {
 					   scene->mMeshes[i]->mNumVertices * sizeof(aiVector2D));
 		}
 
-		// handle extra buffer data, it is currently 0 but we'll allow custom
-		// data to be added later
+		// Extra stream 0: tangent xyz plus bitangent handedness in w, so
+		// shaders rebuild the bitangent as cross(N, T) * w.
+		if (hasTangents) {
+			std::vector<float> tangents(mesh->mNumVertices * 4);
+			for (unsigned int v = 0; v < mesh->mNumVertices; v++) {
+				const aiVector3D& n = mesh->mNormals[v];
+				const aiVector3D& t = mesh->mTangents[v];
+				const aiVector3D& b = mesh->mBitangents[v];
+				const float handedness = ((n ^ t) * b) < 0.0f ? -1.0f : 1.0f;
+				tangents[v * 4 + 0] = t.x;
+				tangents[v * 4 + 1] = t.y;
+				tangents[v * 4 + 2] = t.z;
+				tangents[v * 4 + 3] = handedness;
+			}
+			const uint8_t four = 4;
+			file.write((char*)&mesh->mNumVertices, sizeof(uint32_t));
+			file.write((char*)&four, sizeof(uint8_t));
+			file.write((char*)tangents.data(), tangents.size() * sizeof(float));
+		}
 	}
 
 	file.close();
 	std::cout << "File saved" << std::endl;
-	aiColor3D eColor(0.f, 0.f, 0.f);
-
-	// material order: diffuse, specular, ambient, shininess, opacity, emission,
-	// reflectivity
-
-	for (int i = 0; i < scene->mNumMaterials; i++) {
+	for (unsigned int i = 0; i < scene->mNumMaterials; i++) {
 		std::fstream mf((path + std::to_string(i)) + ".mat.bird",
-						std::ios::out | std::ios::binary);
-
-		aiMaterial* aiMat = scene->mMaterials[i];
-		DebugPrintAllTextures(aiMat);
-		aiColor3D color(0.f, 0.f, 0.f);
-		float shininess = 32, opacity = 1.0, reflectivity = 0.0, zero = 0;
-
-		// Diffuse color
-		if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_DIFFUSE, color)) {
-			mf.write((char*)&color.r, 3 * sizeof(float));
-		} else {
-			mf.write((char*)&eColor.r, 3 * sizeof(float));
-		}
-
-		// Specular color
-		if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_SPECULAR, color)) {
-			mf.write((char*)&color.r, 3 * sizeof(float));
-		} else {
-			eColor = aiColor3D(1.0);
-			mf.write((char*)&eColor.r, 3 * sizeof(float));
-			eColor = aiColor3D(0.0);
-		}
-
-		// Ambient color
-		if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_AMBIENT, color)) {
-			mf.write((char*)&color.r, 3 * sizeof(float));
-		} else {
-			eColor = aiColor3D(1.0);
-			mf.write((char*)&eColor.r, 3 * sizeof(float));
-			eColor = aiColor3D(0.0);
-		}
-
-		// Shininess
-		if (AI_SUCCESS == aiMat->Get(AI_MATKEY_SHININESS, shininess)) {
-			mf.write((char*)&shininess, sizeof(float));
-		} else {
-			mf.write((char*)&shininess, sizeof(float));
-		}
-
-		// Opacity
-		if (AI_SUCCESS == aiMat->Get(AI_MATKEY_OPACITY, opacity)) {
-			mf.write((char*)&opacity, sizeof(float));
-		} else {
-			mf.write((char*)&opacity, sizeof(float));
-		}
-
-		// Emission
-		if (AI_SUCCESS == aiMat->Get(AI_MATKEY_COLOR_EMISSIVE, color)) {
-			mf.write((char*)&color.r, 3 * sizeof(float));
-		} else {
-			mf.write((char*)&eColor.r, 3 * sizeof(float));
-		}
-
-		// Reflectivity
-		if (AI_SUCCESS == aiMat->Get(AI_MATKEY_REFLECTIVITY, reflectivity)) {
-			mf.write((char*)&reflectivity, sizeof(float));
-		} else {
-			mf.write((char*)&reflectivity, sizeof(float));
-		}
-
-		uint8_t totalTexCount = 0;	// max 256 textures per material
-		for (unsigned int t = aiTextureType_DIFFUSE; t <= aiTextureType_UNKNOWN;
-			 ++t) {
-			aiTextureType texType = static_cast<aiTextureType>(t);
-			totalTexCount += aiMat->GetTextureCount(texType);
-		}
-
-		mf.write((char*)&totalTexCount, sizeof(uint8_t));
-
-		aiString apath;
-		for (unsigned int t = aiTextureType_DIFFUSE; t <= aiTextureType_UNKNOWN;
-			 ++t) {
-			aiTextureType texType = static_cast<aiTextureType>(t);
-			unsigned int texCount = aiMat->GetTextureCount(texType);
-			for (unsigned int i = 0; i < texCount; ++i) {
-				if (AI_SUCCESS == aiMat->GetTexture(texType, i, &apath)) {
-					std::string np = apath.C_Str();
-					auto fp = std::filesystem::path(np);
-					if (!fp.has_extension()) {
-						np = std::filesystem::path(path).filename().string() +
-							 "_etex" + fp.filename().string().substr(1);
-					}
-					uint16_t npl = np.size();
-					mf.write((char*)&npl, sizeof(uint16_t));
-					mf.write((char*)np.c_str(), npl);
-				}
-			}
-		}
-
+						std::ios::out | std::ios::binary | std::ios::trunc);
+		format::writeMaterialFile(mf,
+								  extractMaterial(scene->mMaterials[i], path));
 		mf.close();
 	}
 

@@ -69,16 +69,9 @@ layout(location = 0) in vec3 fragNormal;
 layout(location = 1) in vec2 fragTexCoord;
 layout(location = 2) in vec3 fragWorldPos;
 
-// Material uniform block (binding 1)
-layout(binding = 1) uniform MaterialBlock {
-    vec4 color;
-    vec3 specularColor;
-    vec3 ambientColor;
-    float shininess;
-} material;
-
-// Diffuse texture sampler (binding 2)
-layout(binding = 2) uniform sampler2D diffuseMap;
+// Engine-wide blocks live in shared includes; this one declares the
+// metallic-roughness Material block (binding 1) and sampler slots 0..4.
+#include "include/material.glsl"
 
 layout(location = 0) out vec4 outColor;
 
@@ -87,8 +80,11 @@ void main() {
     vec3 L = normalize(vec3(0.5, 1.0, 0.3)); // Simple directional sun
     float NdotL = max(dot(N, L), 0.2);
 
-    vec4 texColor = texture(diffuseMap, fragTexCoord);
-    outColor = vec4(texColor.rgb * material.color.rgb * NdotL, material.color.a);
+    vec4 albedo = baseColor;
+    if ((textureMask & TEX_BASE_COLOR) != 0u) {
+        albedo *= texture(baseColorMap, fragTexCoord);
+    }
+    outColor = vec4(albedo.rgb * NdotL, albedo.a);
 }
 ```
 
@@ -109,33 +105,37 @@ Run `BuildTools` from your project or engine root:
 
 ---
 
-## 5. Loading and Using Shaders in C++
+## 5. Loading Shaders and Configuring Materials in C++
 
-Load your custom shader using `ShaderBuilder` and assign it to a `Material`:
+Engine passes select their own shaders: a material describes a surface,
+and the renderer chooses the G-buffer or forward program from the
+material's domain and blend mode (see
+[Rendering Pipeline](../architecture/rendering_pipeline.md)). Custom
+programs load through `ResourceManager::loadShader` for passes of your own:
 
 ```cpp
-#include <renders/generic/Shader.h>
 #include <renders/generic/Material.h>
+#include <renders/generic/Shader.h>
+#include <scene/components/MeshComponent.h>
 #include <util/ResourceManager.h>
 
-// 1. Build and load the shader pipeline
+// 1. Load a custom shader program (cached per ordered stage list). Programs
+//    with more stages pass a bird::ShaderBuilder to the same function.
 auto customShader = resource_manager()->loadShader(
-    bird::ShaderBuilder()
-        .attachShaderFile("assets/shaders/custom.vert", bird::VERTEX)
-        .attachShaderFile("assets/shaders/custom.frag", bird::FRAGMENT)
-);
+    "assets/shaders/custom.vert", "assets/shaders/custom.frag");
 
-// 2. Create and configure a material
-auto mat = std::make_shared<bird::Material>();
-mat->setShader(customShader);
-mat->setDiffuseColor(bird::Vector3(1.0f, 0.8f, 0.8f));
-mat->addTexture(resource_manager()->loadTexture("assets/textures/wood.png"));
+// 2. Create and configure a PBR material. Color textures load as sRGB.
+auto wood = bird::Material::create();
+wood->setBaseColor(bird::Vector4(1.0f, 0.8f, 0.8f, 1.0f))
+    .setRoughness(0.7f)
+    .setTexture(bird::TextureSlot::BaseColor,
+                resource_manager()->loadColorTexture("assets/textures/wood.png"))
+    .setTexture(bird::TextureSlot::Normal,
+                resource_manager()->loadTexture("assets/textures/wood_n.png"));
 
-// 3. Assign material to loaded mesh
-auto meshes = resource_manager()->loadMesh("assets/models/cube.obj");
-for (auto& mesh : meshes) {
-    mesh->setMaterial(mat);
-}
+// 3. Override the material on one object; the shared mesh stays untouched.
+auto meshComponent = bird::_own_mk<bird::MeshComponent>("assets/models/cube.obj");
+meshComponent->setAllMaterials(wood);
 ```
 
 ---

@@ -14,17 +14,30 @@
 #include "GLShader.h"
 #include "GLTexture.h"
 #include "GLDebugRenderer.h"
+#include "GLRenderState.h"
+#include "GLRenderTargets.h"
 #include "GLUIRenderer.h"
+#include "passes/GLForwardPass.h"
+#include "passes/GLGBufferPass.h"
+#include "passes/GLLightingPass.h"
+#include "passes/GLPostProcessPass.h"
+#include "passes/GLShadowPass.h"
 
 namespace bird::gl {
 
 /**
- * OpenGL 4.1+/4.6 graphics pipeline backend.
+ * OpenGL 4.1+/4.6 graphics pipeline backend: deferred by default, with a
+ * forward pass for what deferred shading cannot express.
  *
- * Implements a three-phase rendering sequence:
- * 1. Scene Pass: Renders 3D meshes into an offscreen HDR/color framebuffer.
- * 2. Post-Process Pass: Draws full-screen quad applying FXAA antialiasing.
- * 3. 2D UI Pass: Renders batched orthographic UI draw commands with alpha blending.
+ * Frame sequence:
+ *  1. Shadow:   caster depth into directional cascades and a local atlas.
+ *  2. G-buffer: opaque and masked lit surfaces; emissive seeds HDR.
+ *  3. Depth copy from the G-buffer into the HDR target.
+ *  4. Lighting: ambient + directional fullscreen, point/spot volumes.
+ *  5. Forward:  unlit/force-forward opaque, then sorted transparency.
+ *  6. Debug lines into HDR.
+ *  7. Post:     exposure + ACES tone mapping, then FXAA to the screen.
+ *  8. UI.
  */
 class GLPipeline : public GraphicsPipeline {
    public:
@@ -47,19 +60,35 @@ class GLPipeline : public GraphicsPipeline {
 	std::string getName() const override;
 
    private:
-	void renderScene(Scene* scene);
+	/** Executes passes 1 through 7 for the active camera. */
+	void renderWorld();
 
-	/** Draws the debug line list into the scene target (before post). */
+	/** Draws the debug line list into the HDR target (before post). */
 	void renderDebugLines();
 
 	/** Draws the batched UI mesh with an orthographic projection. */
 	void renderUI();
 
-	/** (Re)creates the post-processed scene target at the current size. */
-	void createSceneFramebuffer();
+	/** (Re)creates the screen-sized targets at the current size. */
+	void createRenderTargets();
+
+	/**
+	 * Development aid: when BIRD_CAPTURE names a file, writes the finished
+	 * frame number BIRD_CAPTURE_FRAME (default 60) as a binary PPM.
+	 */
+	void captureFrameIfRequested();
 
 	std::shared_ptr<Shader> ui_shader;
 	std::shared_ptr<Shader> m_postProcessShader;
+	GLRenderState m_state;
+	uint64_t m_frameIndex = 0;
+	std::unique_ptr<GLRenderTargets> m_targets;
+	std::unique_ptr<Buffer<LightsUBOData>> m_lightsBlock;
+	std::unique_ptr<GLShadowPass> m_shadowPass;
+	std::unique_ptr<GLGBufferPass> m_gBufferPass;
+	std::unique_ptr<GLLightingPass> m_lightingPass;
+	std::unique_ptr<GLForwardPass> m_forwardPass;
+	std::unique_ptr<GLPostProcessPass> m_postProcessPass;
 	std::unique_ptr<GLUIRenderer> m_uiRenderer;
 	std::shared_ptr<Shader> m_debugLineShader;
 	std::unique_ptr<GLDebugRenderer> m_debugRenderer;

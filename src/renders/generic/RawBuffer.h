@@ -52,6 +52,12 @@ class RawBuffer {
 	 */
 	virtual void update(void* pData, size_t size, uint32_t offset) = 0;
 
+	/**
+	 * Attaches a uniform buffer to its binding point, so that several
+	 * buffers may share one binding and be switched between draws.
+	 */
+	virtual void bindToBindingPoint() = 0;
+
 	void* m_pData;
 
 	size_t m_size;

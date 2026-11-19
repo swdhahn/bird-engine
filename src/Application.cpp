@@ -23,9 +23,11 @@ Application::Application() {}
 Application::~Application() {}
 
 void Application::init(Script<Scene>* script) {
+	// The pipeline loads its shaders through the cache during init(); the
+	// cache's own init() needs the context that the pipeline creates.
+	RESOURCE_MANAGER = new ResourceManager();
 	m_graphicsPipeline = new gl::GLPipeline();
 	m_graphicsPipeline->init();
-	RESOURCE_MANAGER = new ResourceManager();
 	RESOURCE_MANAGER->init();
 	APPLICATION = this;
 

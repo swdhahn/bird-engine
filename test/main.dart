@@ -19,6 +19,7 @@ class POVCamera extends BirdScript<Camera> {
 
   double _yaw = 0.0;
   double _pitch = 0.0;
+  bool _debugViewHeld = false;
 
   @override
   Camera wrapHost(ffi.Pointer<ffi.Void> ptr) =>
@@ -26,13 +27,28 @@ class POVCamera extends BirdScript<Camera> {
 
   @override
   void init() {
-    object.getWorldEnvironment().clearColor = Vector3(0.2, 0.6, 0.85);
+    final env = object.getWorldEnvironment();
+    env.clearColor = Vector3(0.2, 0.6, 0.85);
+    env.ambientColor = Vector3(0.55, 0.7, 0.95);
+    env.ambientIntensity = 0.35;
+    env.exposure = 1.0;
+    // BIRD_DEBUG_VIEW=1..4 starts in a G-buffer debug view (V cycles).
+    env.debugView =
+        int.tryParse(Platform.environment['BIRD_DEBUG_VIEW'] ?? '') ?? 0;
   }
 
   @override
   void process(double delta) {
     final inp = inputManager;
     if (inp == null) return;
+
+    // V cycles G-buffer debug views: lit, albedo, normal, rough/metal, depth.
+    final debugViewDown = inp.getActionValue('debug_view') > 0.5;
+    if (debugViewDown && !_debugViewHeld) {
+      final env = object.getWorldEnvironment();
+      env.debugView = (env.debugView + 1) % 5;
+    }
+    _debugViewHeld = debugViewDown;
 
     const speed = 10.0;
     // Hold right mouse button to look around (always while walking).
@@ -439,6 +455,121 @@ void buildDartUI(UIManager ui) {
   });
 }
 
+/// Circles its host around a center point (animated point light).
+class OrbitScript extends BirdScript<WorldObject> {
+  OrbitScript(this.center, this.radius, this.speed);
+
+  final Vector3 center;
+  final double radius;
+  final double speed;
+  double _angle = 0.0;
+
+  @override
+  WorldObject wrapHost(ffi.Pointer<ffi.Void> ptr) =>
+      WorldObject.fromHandle(ptr, owned: false);
+
+  @override
+  void process(double delta) {
+    _angle += speed * delta;
+    object.setWorldPosition(center +
+        Vector3(math.cos(_angle) * radius, 0.0, math.sin(_angle) * radius));
+  }
+}
+
+/// Adds a light on its own object.
+WorldObject _addLight(Scene scene, LightComponent light, Vector3 position,
+    [Quaternion? rotation]) {
+  final obj = WorldObject();
+  obj.addComponent(light);
+  obj.setWorldPosition(position);
+  if (rotation != null) obj.setWorldRotation(rotation);
+  scene.addChild(obj);
+  return obj;
+}
+
+/// Adds a static mesh object rendered with a material override.
+void _addMaterialObject(Scene scene, List<MeshRef> meshes, Vector3 position,
+    Vector3 scale, MaterialRef material) {
+  final mesh = MeshComponent.fromMeshRefList(meshes);
+  mesh.setAllMaterials(material);
+  final obj = WorldObject();
+  obj.addComponent(mesh);
+  obj.setWorldPosition(position);
+  obj.setScale(scale);
+  scene.addChild(obj);
+}
+
+/// Dynamic lighting showcase matching `buildLighting` in `test/main.cpp`:
+/// a shadowed sun, colored and orbiting point lights, a shadowed spot light,
+/// and forward-rendered transparent and unlit materials.
+void buildLighting(Scene scene) {
+  final up = Vector3(0.0, 1.0, 0.0);
+  final right = Vector3(1.0, 0.0, 0.0);
+
+  final sun = LightComponent(LightType.Directional)
+    ..setColor(Vector3(1.0, 0.95, 0.85))
+    ..setIntensity(3.0)
+    ..setCastsShadows(true);
+  _addLight(scene, sun, Vector3(0.0, 20.0, 0.0),
+      fromAngleAxis(0.6, up) * fromAngleAxis(-0.9, right));
+
+  final playground = Vector3(0.0, -1.0, -18.0);
+  final red = LightComponent(LightType.Point)
+    ..setColor(Vector3(1.0, 0.25, 0.2))
+    ..setIntensity(25.0)
+    ..setRange(9.0);
+  _addLight(scene, red, playground + Vector3(-7.0, 0.5, 2.0));
+  final blue = LightComponent(LightType.Point)
+    ..setColor(Vector3(0.25, 0.45, 1.0))
+    ..setIntensity(25.0)
+    ..setRange(9.0);
+  _addLight(scene, blue, playground + Vector3(7.0, 0.5, 2.0));
+
+  final orbiting = LightComponent(LightType.Point)
+    ..setColor(Vector3(1.0, 0.85, 0.6))
+    ..setIntensity(40.0)
+    ..setRange(12.0)
+    ..setCastsShadows(true);
+  final orbitObject = _addLight(scene, orbiting, playground);
+  final orbit = OrbitScript(playground + Vector3(0.0, 1.5, 0.0), 6.0, 0.8);
+  _activeScripts.add(orbit);
+  orbitObject.addComponent(orbit.createComponent());
+
+  final spot = LightComponent(LightType.Spot)
+    ..setColor(Vector3(0.9, 1.0, 0.9))
+    ..setIntensity(120.0)
+    ..setRange(25.0)
+    ..setConeAngles(0.3, 0.45)
+    ..setCastsShadows(true);
+  _addLight(scene, spot, Vector3(0.0, 10.0, -8.0), fromAngleAxis(-1.0, right));
+
+  final cube = resourceManager!.loadMesh('assets/models/cube.obj');
+  final glass = Material.create()!;
+  glass.object
+    ..setBaseColor(Vector4(0.6, 0.85, 1.0, 0.35))
+    ..setRoughness(0.1)
+    ..setBlendMode(BlendMode.Transparent);
+  _addMaterialObject(scene, cube, Vector3(5.0, -1.0, -11.0),
+      Vector3(1.0, 1.0, 1.0), glass);
+
+  final neon = Material.create()!;
+  neon.object
+    ..setBaseColor(Vector4(0.0, 0.0, 0.0, 1.0))
+    ..setEmissive(Vector3(1.0, 0.3, 0.9))
+    ..setEmissiveStrength(4.0)
+    ..setDomain(MaterialDomain.Unlit);
+  _addMaterialObject(scene, cube, Vector3(-5.0, -1.0, -11.0),
+      Vector3(0.6, 0.6, 0.6), neon);
+
+  final metal = Material.create()!;
+  metal.object
+    ..setBaseColor(Vector4(0.95, 0.64, 0.54, 1.0))
+    ..setMetallic(1.0)
+    ..setRoughness(0.3);
+  _addMaterialObject(scene, cube, Vector3(0.0, -1.0, -11.0),
+      Vector3(0.8, 0.8, 0.8), metal);
+}
+
 /// Called by `Bird` when launching `test/main.dart`.
 @pragma('vm:entry-point')
 void appEntry(int sceneAddr) {
@@ -454,6 +585,7 @@ void appEntry(int sceneAddr) {
   inp.addAction(Action('physics_push')..addKey(KEY_F));
   inp.addAction(Action('physics_reset')..addKey(KEY_R));
   inp.addAction(Action('physics_walk')..addKey(KEY_C));
+  inp.addAction(Action('debug_view')..addKey(KEY_V));
 
   final rootScene = sceneFromAddress(sceneAddr);
   final rm = resourceManager!;
@@ -480,6 +612,8 @@ void appEntry(int sceneAddr) {
   cam.addComponent(pov.createComponent());
   cam.enable();
   rootScene.addChild(cam);
+
+  buildLighting(rootScene);
 
   final ui = application?.getUIManager();
   if (ui != null) {

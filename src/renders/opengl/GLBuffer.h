@@ -35,6 +35,7 @@ class GLBuffer : public RawBuffer {
 
 	/** Streams updated data into sub-region via glBufferSubData. */
 	void update(void* pData, size_t size, uint32_t offset) override;
+	void bindToBindingPoint() override;
 
    private:
 	uint32_t m_bufferId;

@@ -21,7 +21,21 @@ add_library(
   generic/Shader.cpp
   generic/Shader.h
   generic/FrameBuffer.h
-  generic/FrameBuffer.cpp)
+  generic/FrameBuffer.cpp
+  generic/Bounds.h
+  generic/GpuLayouts.h
+  generic/RenderQueue.h
+  generic/RenderQueue.cpp
+  generic/LightList.h
+  generic/LightList.cpp
+  generic/ShadowAtlas.h
+  generic/ShadowAtlas.cpp
+  generic/ShadowMath.h
+  generic/ShadowMath.cpp
+  generic/ShadowPlanner.h
+  generic/ShadowPlanner.cpp
+  generic/PrimitiveMeshes.h
+  generic/PrimitiveMeshes.cpp)
 
 # add_subdirectory(vulkan)
 

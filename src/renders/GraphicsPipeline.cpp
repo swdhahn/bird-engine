@@ -7,6 +7,7 @@
 #include <cstring>
 #include <memory>
 
+#include "generic/Material.h"
 #include "generic/Mesh.h"
 #include "generic/RawBuffer.h"
 
@@ -35,18 +36,10 @@ GraphicsPipeline::~GraphicsPipeline() {
 void GraphicsPipeline::initializeGraphicSpecifics() {
 	std::unique_ptr<GlobalUBOData[]> globalUBOData =
 		std::make_unique<GlobalUBOData[]>(1);
-	m_globalUBO = createBuffer<GlobalUBOData>(
-		static_cast<BufferMode>(BUFFER_UNIFORM | BUFFER_STAGED),
-		std::move(globalUBOData), 1);
-	m_globalUBO->setBindingPoint(0);
-	m_globalUBO->initialize();
-	std::unique_ptr<MaterialUBOData[]> material =
-		std::make_unique<MaterialUBOData[]>(1);
-	m_materialUBO = createBuffer<MaterialUBOData>(
-		static_cast<BufferMode>(BUFFER_UNIFORM | BUFFER_STAGED),
-		std::move(material), 1);
-	m_materialUBO->setBindingPoint(1);
-	m_materialUBO->initialize();
+	m_globalUBO = BufferBuilder<GlobalUBOData>(BUFFER_UNIFORM | BUFFER_STAGED)
+					  .data(std::move(globalUBOData), 1)
+					  .bindingPoint(UBO_BINDING_GLOBAL)
+					  .build();
 
 	const float vertices[] = {
 		-1.0f, 1.0f,  0.0f,	 // 0: Top-Left
@@ -77,18 +70,19 @@ void GraphicsPipeline::initializeGraphicSpecifics() {
 		std::make_unique<uint32_t[]>(sizeof(uint32_t) * 6);
 	memcpy(ind.get(), indices, sizeof(uint32_t) * 6);
 
-	std::unique_ptr<bird::Buffer<float>> vertexBuffer = createBuffer<float>(
-		static_cast<bird::BufferMode>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY),
-		std::move(vert), 3 * 4);
+	std::unique_ptr<bird::Buffer<float>> vertexBuffer =
+		BufferBuilder<float>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY)
+			.data(std::move(vert), 3 * 4)
+			.build();
 	std::unique_ptr<bird::Buffer<float, 2>> texCoordBuffer =
-		createBuffer<float, 2>(static_cast<bird::BufferMode>(
-								   bird::BUFFER_STAGED | bird::BUFFER_ARRAY),
-							   std::move(tex), 2 * 4);
+		BufferBuilder<float, 2>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY)
+			.data(std::move(tex), 2 * 4)
+			.build();
 	std::unique_ptr<bird::Buffer<uint32_t>> indicesBuffer =
-		createBuffer<uint32_t>(
-			static_cast<bird::BufferMode>(bird::BUFFER_STAGED |
-										  bird::BUFFER_ELEMENT_ARRAY),
-			std::move(ind), 6);
+		BufferBuilder<uint32_t>(bird::BUFFER_STAGED |
+								bird::BUFFER_ELEMENT_ARRAY)
+			.data(std::move(ind), 6)
+			.build();
 	s_quad_mesh = MeshBuilder()
 					  .setIndexBuffer(std::move(indicesBuffer))
 					  .setVertexBuffer(std::move(vertexBuffer))
@@ -128,5 +122,69 @@ void GraphicsPipeline::addMesh(MeshComponent* mesh) {
 void GraphicsPipeline::removeMesh(MeshComponent* mesh) {
 	m_meshes.erase(std::remove(m_meshes.begin(), m_meshes.end(), mesh),
 				   m_meshes.end());
+}
+
+void GraphicsPipeline::addLight(LightComponent* light) {
+	if (std::find(m_lights.begin(), m_lights.end(), light) == m_lights.end()) {
+		m_lights.push_back(light);
+	}
+}
+
+void GraphicsPipeline::removeLight(LightComponent* light) {
+	m_lights.erase(std::remove(m_lights.begin(), m_lights.end(), light),
+				   m_lights.end());
+}
+
+GlobalUBOData GraphicsPipeline::buildGlobalData() const {
+	const WorldEnvironment& env = m_camera->getWorldEnvironment();
+	GlobalUBOData global{};
+	global.perspective = m_camera->getPerspectiveMatrix();
+	global.view = m_camera->getViewMatrix();
+	global.viewPos = Vector4(m_camera->getWorldPosition(), 1.0f);
+	global.inverseProjection = glm::inverse(global.perspective);
+	global.inverseView = glm::inverse(global.view);
+	const float width = static_cast<float>(WINDOW_WIDTH);
+	const float height = static_cast<float>(WINDOW_HEIGHT);
+	global.screenSize = Vector4(width, height, 1.0f / width, 1.0f / height);
+	global.ambientAndExposure =
+		Vector4(env.ambientColor * env.ambientIntensity, env.exposure);
+	global.cameraParams =
+		Vector4(m_camera->getNearPlane(), m_camera->getFarPlane(),
+				static_cast<float>(env.debugView), 0.0f);
+	return global;
+}
+
+void GraphicsPipeline::buildRenderQueue(const Frustum& frustum) {
+	m_renderQueue.clear();
+	m_shadowCasters.clear();
+	const Matrix4 view = m_camera->getViewMatrix();
+	for (MeshComponent* component : m_meshes) {
+		const Matrix4& model = component->world_object()->getTransformMatrix();
+		const int meshCount = component->getMeshCount();
+		for (int i = 0; i < meshCount; i++) {
+			Material* material = component->getMaterial(i).get();
+			if (material == nullptr) continue;
+			RenderItem item;
+			item.mesh = component->getMeshes()[i].get();
+			item.material = material;
+			item.model = model;
+			item.worldBounds = item.mesh->getLocalBounds().transformed(model);
+			if (material->castsShadows()) m_shadowCasters.push_back(item);
+			if (!frustum.intersects(item.worldBounds)) continue;
+			item.viewDepth =
+				-(view * Vector4(item.worldBounds.center(), 1.0f)).z;
+			m_renderQueue.submit(item);
+		}
+	}
+	m_renderQueue.sort();
+}
+
+std::vector<LightSnapshot> GraphicsPipeline::snapshotLights() {
+	std::vector<LightSnapshot> snapshots;
+	snapshots.reserve(m_lights.size());
+	for (LightComponent* light : m_lights) {
+		snapshots.push_back(snapshotLight(*light));
+	}
+	return snapshots;
 }
 }  // namespace bird

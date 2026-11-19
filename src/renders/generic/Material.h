@@ -5,70 +5,148 @@
 #ifndef BIRD_MATERIAL_H
 #define BIRD_MATERIAL_H
 
+#include <array>
+#include <cstdint>
+#include <memory>
+
 #include "../../util/Math.h"
+#include "../../util/Memory.hpp"
 #include "../../util/Resource.h"
-#include "Shader.h"
+#include "Buffer.h"
+#include "GpuLayouts.h"
 #include "Texture.h"
 
 namespace bird {
 
+/** Lighting model applied to a material. */
+enum class MaterialDomain : uint8_t {
+	/** Metallic-roughness PBR, lit by dynamic lights. */
+	Lit = 0,
+	/** Base color plus emissive only; ignores lights. */
+	Unlit = 1
+};
+
+/** How a material's coverage combines with what lies behind. */
+enum class BlendMode : uint8_t {
+	/** Fully opaque; deferred when lit. */
+	Opaque = 0,
+	/** Opaque with alpha-tested cutout; deferred when lit. */
+	Masked = 1,
+	/** Alpha blended; always forward, sorted back to front. */
+	Transparent = 2,
+	/** Additively blended; always forward, sorted back to front. */
+	Additive = 3
+};
+
+/** Named texture roles; the value equals the sampler binding. */
+enum class TextureSlot : uint8_t {
+	BaseColor = 0,
+	MetallicRoughness = 1,
+	Normal = 2,
+	Occlusion = 3,
+	Emissive = 4,
+	Count = 5
+};
+
 /**
- * Surface shading parameters and texture bindings.
+ * Metallic-roughness PBR surface description.
  *
- * Encapsulates Phong/Blinn-Phong illumination attributes (diffuse, specular,
- * ambient, shininess), emission, opacity, and texture maps. Linked to a
- * Shader pipeline and applied to meshes during draw submission.
+ * Holds scalar factors and up to one texture per TextureSlot. A material
+ * maps onto a std140 uniform block that is uploaded lazily, only after a
+ * setter has changed a value. The pipeline selects the shader from the
+ * domain and blend mode, so materials carry no shader reference.
  */
 class Material : public Resource {
    public:
 	Material();
-	~Material() = default;
+	~Material() override;
+
+	/** Creates a shared material, assignable to meshes and scripts. */
+	static _ref<Material> create();
 
 	void read() override;
 	void write() override;
 
-	Material& setDiffuseColor(const Vector3& color);
-	Material& setSpecularColor(const Vector3& color);
-	Material& setAmbientColor(const Vector3& color);
-	Material& setShininess(const float& shininess);
-
-	Material& setOpacity(const float& opacity);
-	Material& setEmission(const Vector3& emission);
-	Material& setReflectivity(const float& reflectivity);
+	/** Sets the linear base color; alpha drives masking and blending. */
+	Material& setBaseColor(const Vector4& color);
+	/** Sets metalness in [0, 1]; values are clamped. */
+	Material& setMetallic(float metallic);
+	/** Sets perceptual roughness in [0.02, 1]; values are clamped. */
+	Material& setRoughness(float roughness);
+	/** Sets linear emissive color. */
+	Material& setEmissive(const Vector3& color);
+	/** Sets emissive multiplier, allowing HDR glow above 1. */
+	Material& setEmissiveStrength(float strength);
+	/** Sets the alpha-test threshold for BlendMode::Masked. */
+	Material& setAlphaCutoff(float cutoff);
+	/** Scales tangent-space normal perturbation. */
+	Material& setNormalScale(float scale);
+	/** Sets how strongly the occlusion texture darkens ambient light. */
+	Material& setOcclusionStrength(float strength);
+	Material& setDomain(MaterialDomain domain);
+	Material& setBlendMode(BlendMode mode);
+	/** Disables back-face culling for this material. */
+	Material& setDoubleSided(bool doubleSided);
+	/** Routes an opaque lit material through the forward pass. */
+	Material& setForceForward(bool forceForward);
+	/** Sets castsShadows; transparent materials never cast. */
+	Material& setCastsShadows(bool castsShadows);
 
 	/**
-	 * Binds a texture sampler to the material.
-	 * Textures are bound sequentially starting at texture slot 0.
+	 * Assigns a texture to a role; nullptr clears the slot.
+	 * @throws std::out_of_range for TextureSlot::Count.
 	 */
-	Material& addTexture(std::shared_ptr<Texture> texture);
+	Material& setTexture(TextureSlot slot, std::shared_ptr<Texture> texture);
 
-	/** Assigns the shader used to render geometry with this material. */
-	Material& setShader(std::shared_ptr<Shader> shader);
+	const Vector4& getBaseColor() const { return m_baseColor; }
+	float getMetallic() const { return m_metallic; }
+	float getRoughness() const { return m_roughness; }
+	const Vector3& getEmissive() const { return m_emissive; }
+	float getEmissiveStrength() const { return m_emissiveStrength; }
+	float getAlphaCutoff() const { return m_alphaCutoff; }
+	float getNormalScale() const { return m_normalScale; }
+	float getOcclusionStrength() const { return m_occlusionStrength; }
+	MaterialDomain getDomain() const { return m_domain; }
+	BlendMode getBlendMode() const { return m_blendMode; }
+	bool isDoubleSided() const { return m_doubleSided; }
+	bool isForceForward() const { return m_forceForward; }
+	bool castsShadows() const;
 
-	const Vector3& getDiffuseColor() const;
-	const Vector3& getSpecularColor() const;
-	const Vector3& getAmbientColor() const;
-	const float& getShininess() const;
+	/** @return Texture in the slot, or nullptr. */
+	const std::shared_ptr<Texture>& getTexture(TextureSlot slot) const;
 
-	const float& getOpacity() const;
-	const Vector3& getEmission() const;
-	const float& getReflectivity() const;
+	/** Packs the current parameters into the std140 block. Pure CPU. */
+	MaterialUBOData buildGpuData() const BIRD_NO_EXPORT;
 
-	const std::vector<std::shared_ptr<Texture>>& getTextures() const;
-	const std::shared_ptr<Shader>& getShader() const;
+	/**
+	 * Returns the material's uniform buffer, creating or re-uploading the
+	 * buffer when parameters changed. Requires a live graphics context.
+	 */
+	Buffer<MaterialUBOData>* acquireUniformBuffer() BIRD_NO_EXPORT;
 
-   public:
-	Vector3 m_diffuseColor;
-	Vector3 m_specularColor;
-	Vector3 m_ambientColor;
-	float m_shininess;
+   private:
+	Material& markDirty();
 
-	float m_opacity;
-	Vector3 m_emission;
-	float m_reflectivity;
+	Vector4 m_baseColor{1.0f};
+	Vector3 m_emissive{0.0f};
+	float m_emissiveStrength = 1.0f;
+	float m_metallic = 0.0f;
+	float m_roughness = 0.5f;
+	float m_alphaCutoff = 0.5f;
+	float m_normalScale = 1.0f;
+	float m_occlusionStrength = 1.0f;
+	MaterialDomain m_domain = MaterialDomain::Lit;
+	BlendMode m_blendMode = BlendMode::Opaque;
+	bool m_doubleSided = false;
+	bool m_forceForward = false;
+	bool m_castsShadows = true;
 
-	std::vector<std::shared_ptr<Texture>> m_textures;
-	std::shared_ptr<Shader> m_shader;
+	std::array<std::shared_ptr<Texture>,
+			   static_cast<size_t>(TextureSlot::Count)>
+		m_textures;
+
+	std::unique_ptr<Buffer<MaterialUBOData>> m_uniformBuffer;
+	bool m_gpuDirty = true;
 };
 
 }  // namespace bird
