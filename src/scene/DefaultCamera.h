@@ -9,6 +9,10 @@
 
 namespace bird {
 
+/**
+ * Built-in fallback camera created by the graphics pipeline when no user camera
+ * is actively bound.
+ */
 class DefaultCamera : public Camera {
    public:
 	DefaultCamera(uint32_t width, uint32_t height);

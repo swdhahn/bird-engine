@@ -10,6 +10,10 @@
 
 namespace bird {
 
+/**
+ * Environmental rendering settings associated with a camera view,
+ * including viewport clear color and ambient background.
+ */
 class WorldEnvironment {
    public:
 	Vector3 clearColor;
@@ -17,21 +21,39 @@ class WorldEnvironment {
 	WorldEnvironment() : clearColor(0, 0, 0) {}
 };
 
+/**
+ * 3D perspective camera entity.
+ *
+ * Inherits from WorldObject to allow spatial positioning and rotation within
+ * the scene tree. Computes the 3D perspective projection matrix (FOV 70°,
+ * near 0.1, far 1000.0) and supplies view matrix data to shaders.
+ */
 class Camera : public WorldObject {
 	BIRD_OBJECT(CAMERA)
-
+   public:
+	/**
+	 * Creates a perspective camera configured for the given render target dimensions.
+	 * @param width Viewport width in pixels (must be non-zero).
+	 * @param height Viewport height in pixels (must be non-zero).
+	 */
 	Camera(uint32_t width, uint32_t height);
 	virtual ~Camera();
 
+	/**
+	 * Binds this camera as the active rendering camera in the graphics pipeline.
+	 */
 	void enable();
 
 	const Matrix4& getPerspectiveMatrix() const;
+
 	/**
-	 * Rebuilds the projection for a new aspect ratio.
-	 * @param width, height - render target size in pixels; both non-zero.
+	 * Rebuilds the projection matrix for a new viewport aspect ratio.
+	 * @param width Render target width in pixels (must be > 0).
+	 * @param height Render target height in pixels (must be > 0).
 	 * @throws std::invalid_argument when either dimension is zero.
 	 */
 	void setViewportSize(uint32_t width, uint32_t height);
+
 	void setWorldEnvironment(WorldEnvironment env);
 	WorldEnvironment& getWorldEnvironment();
 

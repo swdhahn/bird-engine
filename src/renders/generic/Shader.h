@@ -7,6 +7,8 @@
 
 #include <string>
 #include <vector>
+#include <memory>
+#include <utility>
 
 #include "../../util/File.h"
 #include "../../util/Resource.h"
@@ -14,22 +16,38 @@
 
 namespace bird {
 
+/**
+ * Shader pipeline stage bitmask flags.
+ */
 enum ShaderPipeline { VERTEX = 1, FRAGMENT = 2, GEOMETRY = 4, TESSELATION = 8 };
 
 class Shader;
 
-/*
- * TODO: UBO turn into uint32_t bc all u need is index?
+/**
+ * Fluent builder for linking multi-stage GPU shader programs.
  */
 class ShaderBuilder {
    public:
+	/** Compiles and links the configured shader files into a GPU Shader program. */
 	std::unique_ptr<Shader> create();
+
+	/**
+	 * Attaches a shader stage file to be compiled into the program pipeline.
+	 * @param fileName Path to the shader source file (or baked .bird shader).
+	 * @param shaderStage Pipeline stage (VERTEX, FRAGMENT, etc.).
+	 */
 	ShaderBuilder& attachShaderFile(std::string fileName,
 									const ShaderPipeline shaderStage);
 
 	std::vector<std::pair<std::string, ShaderPipeline>> m_shaderFiles;
 };
 
+/**
+ * GPU shader program pipeline abstraction.
+ *
+ * Encapsulates compiled vertex, fragment, and geometry stages. Manages uniform
+ * block bindings and emulated push-constant uploads across Vulkan and OpenGL backends.
+ */
 class Shader : public Resource {
    public:
 	Shader();
@@ -42,9 +60,9 @@ class Shader : public Resource {
 	 * Writes push-constant bytes, laid out exactly like the shader's
 	 * push_constant block (std430). Vulkan forwards them to
 	 * vkCmdPushConstants; OpenGL writes the matching uniforms.
-	 * @param data - source bytes, typically a struct mirroring the block.
-	 * @param size - number of bytes to write.
-	 * @param offset - byte offset within the block.
+	 * @param data Source bytes, typically a struct mirroring the block.
+	 * @param size Number of bytes to write.
+	 * @param offset Byte offset within the block.
 	 * @throws std::out_of_range when the range exceeds the block.
 	 */
 	virtual void setPushConstants(const void* data, uint32_t size,

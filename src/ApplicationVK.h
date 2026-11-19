@@ -28,30 +28,47 @@
 
 namespace bird {
 
+    /**
+     * Standard transformation matrices sent to the Vulkan uniform buffer.
+     * Aligned to std140 layout requirements.
+     */
     struct UniformBufferObject {
         glm::mat4 model;
         glm::mat4 view;
         glm::mat4 proj;
     };
 
+    /**
+     * Interleaved vertex layout for Vulkan pipeline testing.
+     * Supplies position, vertex color, and texture coordinates.
+     */
     struct Vertex {
         glm::vec3 position;
         glm::vec3 color;
         glm::vec2 texCoord;
 
+        /** Generates Vulkan vertex input binding description for this vertex structure. */
         static VkVertexInputBindingDescription getBindingDescription();
+        /** Generates Vulkan attribute descriptions for position, color, and UV. */
         static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions();
     };
 
+    /**
+     * Stores indices for device queue families required for rendering and presentation.
+     */
     struct QueueFamilyIndices {
         std::optional<uint32_t> graphicsFamily;
         std::optional<uint32_t> presentFamily;
 
+        /** Returns true when all required queue families have been located. */
         bool isComplete() {
             return graphicsFamily.has_value() && presentFamily.has_value();
         }
     };
 
+    /**
+     * Details queried from a physical device surface for swap chain negotiation.
+     */
     struct SwapChainSupportDetails {
         VkSurfaceCapabilitiesKHR capabilities;
         std::vector<VkSurfaceFormatKHR> formats;
@@ -74,8 +91,19 @@ namespace bird {
     extern const std::vector<Vertex> vertices;
     extern const std::vector<uint16_t> indices;
 
+    /**
+     * Standalone Vulkan application and reference renderer harness.
+     *
+     * Implements a complete Vulkan 1.x pipeline lifecycle: instance creation,
+     * validation layers, surface creation, physical device selection, queue
+     * acquisition, swapchain management, render pass setup, command buffer
+     * recording, MSAA resolve, depth buffering, and frame synchronization.
+     */
     class ApplicationVK {
     public:
+        /**
+         * Initializes window, Vulkan runtime, and enters the main draw loop.
+         */
         void run();
 
     private:
@@ -127,6 +155,7 @@ namespace bird {
         void generateMipmaps(VkImage image, VkFormat  format, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
         void createColorResources();
 
+        /** Acquires swapchain image, submits recorded command buffers, and presents frame. */
         void drawFrame();
 
         SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);

@@ -12,14 +12,26 @@
 
 namespace bird {
 
+/**
+ * Logical action mapping that bundles multiple physical input triggers.
+ *
+ * Can bind multiple keyboard keys (addKey) and mouse buttons (addMouseButton).
+ * Maintains an analog intensity value in [0.0, 1.0].
+ */
 class Action {
    public:
+	/**
+	 * Creates a named action mapping (e.g. "move_forward", "jump").
+	 * @param name Unique string identifier for the action.
+	 */
 	Action(std::string name);
 
+	/** Binds a keyboard key code to this action. Returns *this for chaining. */
 	Action& addKey(int keyCode);
+	/** Binds a mouse button code to this action. Returns *this for chaining. */
 	Action& addMouseButton(int mouseCode);
 
-	// value between 0 and 1
+	/** Returns normalized action value between 0.0 (inactive) and 1.0 (active). */
 	float getValue();
 	void setValue(float value);
 
@@ -35,16 +47,45 @@ class Action {
 	std::vector<int> m_mouseButtons;
 };
 
+/**
+ * Global input management subsystem.
+ *
+ * Maintains registered actions, captures platform window events from GLFW,
+ * and tracks mouse cursor position and movement.
+ */
 class Input {
    public:
+	/**
+	 * Creates the input subsystem attached to a platform window.
+	 * Registers GLFW keyboard and mouse event callbacks.
+	 */
 	Input(Window* window);
 
+	/**
+	 * Registers a logical action.
+	 */
 	void addAction(Action action);
+
+	/**
+	 * Queries the current activation intensity of a named action.
+	 * @param name Identifier of the action registered via addAction().
+	 * @return Float between 0.0 and 1.0 (0.0 if action not registered or not pressed).
+	 */
 	float getActionValue(std::string name);
 
+	/**
+	 * Controls mouse cursor visibility and capturing mode.
+	 * @param cursorMode CURSOR_NORMAL, CURSOR_HIDDEN, or CURSOR_DISABLED.
+	 */
 	void setMouseMode(int cursorMode);
+
+	/** Enables or disables unaccelerated raw mouse motion. */
 	void setMouseRawMotion(bool rawMotion);
 
+	/**
+	 * Per-frame input update tick. Evaluates current key and mouse states
+	 * against registered actions.
+	 */
 	void tick();
 
    private:

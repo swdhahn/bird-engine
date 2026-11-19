@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "../scene/Camera.h"
 #include "../scene/DefaultCamera.h"
@@ -17,18 +18,27 @@
 
 namespace bird {
 
-/** Mirrors the std140 `Global` block (binding 0); written once per frame. */
+/**
+ * Standard uniform buffer layout for camera and view parameters.
+ * Matches std140 layout for binding 0 in engine vertex shaders.
+ */
 struct GlobalUBOData {
 	Matrix4 perspective;
 	Matrix4 view;
 	Vector4 viewPos;
 };
 
-/** Mirrors the `ObjectConstants` push_constant block; written per draw. */
+/**
+ * Push constant block providing per-draw object transformation matrices.
+ * Matches Vulkan-style push_constant layout in engine shaders.
+ */
 struct ObjectPushConstants {
 	Matrix4 model;
 };
 
+/**
+ * Standard uniform buffer layout for surface material properties.
+ */
 struct MaterialUBOData {
 	Vector4 color;
 	Vector3 specularColor;
@@ -36,25 +46,49 @@ struct MaterialUBOData {
 	float shininess;
 };
 
+/**
+ * Abstract graphics backend abstraction.
+ *
+ * Implements rendering orchestration across OpenGL, Vulkan, Metal, and DirectX.
+ * Owns the application window, active camera, standard global/material uniform
+ * buffers, orthographic UI projection, and active mesh component registries.
+ */
 class GraphicsPipeline {
    public:
+	/**
+	 * @param graphicsPipeline Type identifier of this backend implementation.
+	 */
 	GraphicsPipeline(GraphicsPipelineType graphicsPipeline);
 	virtual ~GraphicsPipeline();
+
+	/** Initializes graphic API contexts, windowing, buffers, and pipeline shaders. */
 	virtual void init() = 0;
+
+	/** Tears down graphics contexts and frees GPU resources. */
 	virtual void cleanUp() = 0;
 
+	/** Prepares common engine buffers and default mesh primitives. */
 	void initializeGraphicSpecifics();
 
+	/**
+	 * Renders an entire scene hierarchy, executes post-processing, and blits UI.
+	 * @param scene Active root scene node to render.
+	 */
 	virtual void renderRootScene(Scene* scene) = 0;
 
+	/** Returns human-readable backend name (e.g. "OpenGL", "Vulkan"). */
 	virtual std::string getName() const = 0;
 
 	std::unique_ptr<Window>& getWindow();
 
 	/**
 	 * Adapts every size-dependent resource to a new window size.
-	 * @param framebufferWidth, framebufferHeight - render target pixels.
-	 * @param uiWidth, uiHeight - window coordinates, for the UI projection.
+	 *
+	 * Rebuilds post-process framebuffers and updates orthographic projection.
+	 * @param framebufferWidth Render target width in physical pixels.
+	 * @param framebufferHeight Render target height in physical pixels.
+	 * @param uiWidth Window coordinate width for UI projection.
+	 * @param uiHeight Window coordinate height for UI projection.
 	 */
 	virtual void resize(uint32_t framebufferWidth, uint32_t framebufferHeight,
 						uint32_t uiWidth, uint32_t uiHeight);
@@ -62,9 +96,13 @@ class GraphicsPipeline {
 	void setCamera(Camera* camera);
 	Camera* getCamera();
 
+	/** Registers an active mesh component to be drawn during scene rendering. */
 	void addMesh(MeshComponent* mesh);
+
+	/** Removes an active mesh component from the drawing list. */
 	void removeMesh(MeshComponent* mesh);
 
+	/** Shared full-screen quad mesh used for post-processing passes. */
 	static std::shared_ptr<Mesh> s_quad_mesh;
 
    protected:
@@ -75,7 +113,6 @@ class GraphicsPipeline {
 	std::unique_ptr<Buffer<MaterialUBOData>> m_materialUBO;
 	std::unique_ptr<Buffer<GlobalUBOData>> m_globalUBO;
 
-	// std::list fix this
 	std::vector<MeshComponent*> m_meshes;
 	std::vector<std::unique_ptr<FrameBuffer>> m_framebuffers;
 };
