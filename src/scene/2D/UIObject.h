@@ -61,10 +61,26 @@ class UIObject : public ScreenObject {
 	/**
 	 * Composes this object's transforms from its parent's basis. Position
 	 * and rotation are inherited; scale is not, so children are placed in
-	 * pixels relative to the parent's origin.
+	 * pixels relative to the parent's top-left corner.
 	 * @param parentBasis - the parent's getChildBasis().
+	 * @param parentSize - the parent's size in pixels, for anchoring.
 	 */
-	void updateWorldMatrix(const Matrix3& parentBasis);
+	void updateWorldMatrix(const Matrix3& parentBasis,
+						   const Vector2& parentSize);
+
+	/**
+	 * Sets the point on the parent this object is placed from, as a fraction
+	 * of the parent's size (see UIAlignment). Position becomes an offset
+	 * from that point. Defaults to UIAlignment::TopLeft.
+	 */
+	void setAnchor(const Vector2& anchor);
+	const Vector2& getAnchor() const;
+	/**
+	 * Sets the point on this object, as a fraction of its own size, that
+	 * lands on the anchor. Defaults to UIAlignment::TopLeft.
+	 */
+	void setPivot(const Vector2& pivot);
+	const Vector2& getPivot() const;
 	/** @return the unit-quad-to-screen transform (includes scale). */
 	const Matrix3& getWorldMatrix() const;
 	/** @return the transform handed to children (excludes scale). */
@@ -85,6 +101,8 @@ class UIObject : public ScreenObject {
 	std::shared_ptr<UITheme> m_theme;
 	Matrix3 m_worldMatrix;
 	Matrix3 m_childBasis;
+	Vector2 m_anchor;
+	Vector2 m_pivot;
 	Vector2 m_bounds;
 	bool m_enabled;
 	bool m_interactive;

@@ -23,6 +23,8 @@ class GLPipeline : public GraphicsPipeline {
 	void cleanUp() override;
 
 	void renderRootScene(Scene* scene) override;
+	void resize(uint32_t framebufferWidth, uint32_t framebufferHeight,
+				uint32_t uiWidth, uint32_t uiHeight) override;
 
 	std::string getName() const override;
 
@@ -30,8 +32,11 @@ class GLPipeline : public GraphicsPipeline {
 	void renderScene(Scene* scene);
 	/** Draws the batched UI mesh with an orthographic projection. */
 	void renderUI();
+	/** (Re)creates the post-processed scene target at the current size. */
+	void createSceneFramebuffer();
 
 	std::shared_ptr<Shader> ui_shader;
+	std::shared_ptr<Shader> m_postProcessShader;
 };
 
 }  // namespace bird::gl

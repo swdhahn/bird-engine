@@ -39,6 +39,11 @@ class UIManager {
 	 */
 	void processMouseUI(double mx, double my, int action);
 	void setUpdateUIFlag();
+	/**
+	 * Resizes the root to the window so that anchored widgets re-layout.
+	 * @param width, height - window size in screen coordinates.
+	 */
+	void setViewportSize(uint32_t width, uint32_t height);
 
 	std::shared_ptr<Mesh> getUIMesh();
 	const std::shared_ptr<Font>& getFont() const;
@@ -56,7 +61,8 @@ class UIManager {
 
    private:
 	void updateUI();
-	void processTreeUI(UIObject* object, const Matrix3& parentBasis);
+	void processTreeUI(UIObject* object, const Matrix3& parentBasis,
+					   const Vector2& parentSize);
 	std::unique_ptr<UIObject> m_root;
 
 	std::shared_ptr<Mesh> m_mesh;

@@ -34,6 +34,25 @@ inline Matrix3 makeBasis(const Vector2& position, float rotation) {
 	return Matrix3(c, s, 0.0f, -s, c, 0.0f, position.x, position.y, 1.0f);
 }
 
+/**
+ * Builds an object's child basis (its top-left corner frame) from anchoring
+ * rules, so that layout adapts when the parent or window is resized.
+ * @param parentSize - parent's size in pixels (the window for the root).
+ * @param anchor - point on the parent, as a fraction of parentSize.
+ * @param pivot - point on the object, as a fraction of size, that lands on
+ *                anchor + offset; rotation also turns about this point.
+ * @param offset - pixel offset from the anchor point.
+ * @param rotation - rotation in radians.
+ * @param size - the object's size in pixels.
+ */
+inline Matrix3 makeAnchoredBasis(const Vector2& parentSize,
+								 const Vector2& anchor, const Vector2& pivot,
+								 const Vector2& offset, float rotation,
+								 const Vector2& size) {
+	return makeBasis(anchor * parentSize + offset, rotation) *
+		   makeBasis(-pivot * size, 0.0f);
+}
+
 /** @return a matrix scaling the unit quad to the given pixel size. */
 inline Matrix3 makeScale(const Vector2& scale) {
 	return Matrix3(scale.x, 0.0f, 0.0f, 0.0f, scale.y, 0.0f, 0.0f, 0.0f,

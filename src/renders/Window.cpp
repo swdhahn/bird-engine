@@ -65,6 +65,39 @@ GLFWwindow* const Window::getGLFWWindow() const {
 	return m_pWindow;
 }
 
+bool Window::pollResize() {
+	int framebufferWidth = 0, framebufferHeight = 0, width = 0, height = 0;
+	glfwGetFramebufferSize(m_pWindow, &framebufferWidth, &framebufferHeight);
+	glfwGetWindowSize(m_pWindow, &width, &height);
+	// A minimized window reports zero; keep the last usable size.
+	if (framebufferWidth <= 0 || framebufferHeight <= 0 || width <= 0 ||
+		height <= 0) {
+		return false;
+	}
+	const bool changed = static_cast<uint32_t>(framebufferWidth) != m_framebufferWidth ||
+						 static_cast<uint32_t>(framebufferHeight) != m_framebufferHeight ||
+						 static_cast<uint32_t>(width) != m_width ||
+						 static_cast<uint32_t>(height) != m_height;
+	m_framebufferWidth = framebufferWidth;
+	m_framebufferHeight = framebufferHeight;
+	m_width = width;
+	m_height = height;
+	return changed;
+}
+
+uint32_t Window::getFramebufferWidth() const {
+	return m_framebufferWidth;
+}
+uint32_t Window::getFramebufferHeight() const {
+	return m_framebufferHeight;
+}
+uint32_t Window::getWidth() const {
+	return m_width;
+}
+uint32_t Window::getHeight() const {
+	return m_height;
+}
+
 Window::~Window() {
 	glfwDestroyWindow(m_pWindow);
 	glfwTerminate();

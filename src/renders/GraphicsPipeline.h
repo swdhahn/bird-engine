@@ -46,6 +46,14 @@ class GraphicsPipeline {
 
 	std::unique_ptr<Window>& getWindow();
 
+	/**
+	 * Adapts every size-dependent resource to a new window size.
+	 * @param framebufferWidth, framebufferHeight - render target pixels.
+	 * @param uiWidth, uiHeight - window coordinates, for the UI projection.
+	 */
+	virtual void resize(uint32_t framebufferWidth, uint32_t framebufferHeight,
+						uint32_t uiWidth, uint32_t uiHeight);
+
 	void setCamera(Camera* camera);
 	Camera* getCamera();
 

@@ -33,6 +33,8 @@ void Application::init(Script<Scene>* script) {
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	m_uiManager = new UIManager();
 	m_uiManager->init(RESOURCE_MANAGER->loadFont(UIManager::kDefaultFontPath));
+	// The compositor may already have resized the window (e.g. tiling).
+	handleResize();
 
 	m_scene = new Scene();
 	m_scene->addComponent(std::unique_ptr<Script<Scene>>(script));
@@ -73,6 +75,7 @@ void Application::run() {
 		}
 		INPUT->tick();
 		m_graphicsPipeline->getWindow()->pollWindow();
+		handleResize();
 	}
 
 	deinit();
@@ -116,6 +119,15 @@ bird::Camera* Application::getCamera() {
 
 GraphicsPipeline* Application::getGraphicsPipeline() {
 	return m_graphicsPipeline;
+}
+
+void Application::handleResize() {
+	Window* window = m_graphicsPipeline->getWindow().get();
+	if (!window->pollResize()) return;
+	m_graphicsPipeline->resize(
+		window->getFramebufferWidth(), window->getFramebufferHeight(),
+		window->getWidth(), window->getHeight());
+	m_uiManager->setViewportSize(window->getWidth(), window->getHeight());
 }
 
 UIManager* Application::getUIManager() {

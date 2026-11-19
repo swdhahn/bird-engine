@@ -41,6 +41,9 @@ class Application {
 	UIManager* getUIManager();
 
    private:
+	/** Propagates a window size change to the renderer, camera and UI. */
+	void handleResize();
+
 	GraphicsPipeline* m_graphicsPipeline;
 	UIManager* m_uiManager;
 	Scene* m_scene;

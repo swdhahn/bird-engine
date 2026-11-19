@@ -45,17 +45,31 @@ void GLPipeline::init() {
 					.attachShaderFile("assets/shaders/ui.frag", FRAGMENT)
 					.create();
 
+	m_postProcessShader =
+		ShaderBuilder()
+			.attachShaderFile("assets/shaders/passthrough.vert", VERTEX)
+			.attachShaderFile("assets/shaders/fxaa.frag", FRAGMENT)
+			.create();
+	createSceneFramebuffer();
+}
+
+void GLPipeline::createSceneFramebuffer() {
+	// The builder reads WINDOW_WIDTH/HEIGHT, so this follows resize().
 	FrameBufferBuilder builder;
 	builder.addTextureAttachment(
 		TextureBuilder(nullptr, WINDOW_WIDTH, WINDOW_HEIGHT, FORMAT_8RGBA)
 			.build());
-	builder.setShader(
-		ShaderBuilder()
-			.attachShaderFile("assets/shaders/passthrough.vert", VERTEX)
-			.attachShaderFile("assets/shaders/fxaa.frag", FRAGMENT)
-			.create());
+	builder.setShader(m_postProcessShader);
 	builder.addOpts(FRAMEBUFFER_OPT_DEPTH | FRAMEBUFFER_OPT_STENCIL);
+	m_framebuffers.clear();
 	m_framebuffers.emplace_back(builder.build());
+}
+
+void GLPipeline::resize(uint32_t framebufferWidth, uint32_t framebufferHeight,
+						uint32_t uiWidth, uint32_t uiHeight) {
+	GraphicsPipeline::resize(framebufferWidth, framebufferHeight, uiWidth,
+							 uiHeight);
+	createSceneFramebuffer();
 }
 
 void GLPipeline::renderRootScene(Scene* scene) {

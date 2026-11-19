@@ -102,6 +102,19 @@ std::unique_ptr<Window>& GraphicsPipeline::getWindow() {
 
 void GraphicsPipeline::setCamera(Camera* camera) {
 	m_camera = camera;
+	// A camera built before a resize must adopt the current aspect ratio.
+	m_camera->setViewportSize(WINDOW_WIDTH, WINDOW_HEIGHT);
+}
+
+void GraphicsPipeline::resize(uint32_t framebufferWidth,
+							  uint32_t framebufferHeight, uint32_t uiWidth,
+							  uint32_t uiHeight) {
+	WINDOW_WIDTH = framebufferWidth;
+	WINDOW_HEIGHT = framebufferHeight;
+	m_orthoMatrix = glm::ortho(0.0f, static_cast<float>(uiWidth),
+							   static_cast<float>(uiHeight), 0.0f, -1.0f, 1.0f);
+	m_defaultCamera->setViewportSize(framebufferWidth, framebufferHeight);
+	m_camera->setViewportSize(framebufferWidth, framebufferHeight);
 }
 
 Camera* GraphicsPipeline::getCamera() {

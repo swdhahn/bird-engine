@@ -106,7 +106,7 @@ void UIManager::updateUI() {
 	m_colors.clear();
 	m_indices.clear();
 
-	processTreeUI(m_root.get(), Matrix3(1.0f));
+	processTreeUI(m_root.get(), Matrix3(1.0f), m_root->getScale());
 	m_indexCount = static_cast<uint32_t>(m_indices.size());
 	if (m_indexCount == 0) return;
 
@@ -118,9 +118,10 @@ void UIManager::updateUI() {
 	m_mesh->updateMesh();
 }
 
-void UIManager::processTreeUI(UIObject* object, const Matrix3& parentBasis) {
+void UIManager::processTreeUI(UIObject* object, const Matrix3& parentBasis,
+							  const Vector2& parentSize) {
 	object->layout();
-	object->updateWorldMatrix(parentBasis);
+	object->updateWorldMatrix(parentBasis, parentSize);
 	const Matrix3& world = object->getWorldMatrix();
 	const Vector2 whiteUV = m_font->getWhiteUV();
 
@@ -147,7 +148,7 @@ void UIManager::processTreeUI(UIObject* object, const Matrix3& parentBasis) {
 	}
 
 	for (auto& child : object->getChildren()) {
-		processTreeUI(child.get(), object->getChildBasis());
+		processTreeUI(child.get(), object->getChildBasis(), object->getScale());
 	}
 }
 
@@ -168,6 +169,12 @@ UIObject* UIManager::getRoot() {
 }
 
 void UIManager::setUpdateUIFlag() {
+	m_shouldUpdateUI = true;
+}
+
+void UIManager::setViewportSize(uint32_t width, uint32_t height) {
+	m_root->setScale(
+		Vector2(static_cast<float>(width), static_cast<float>(height)));
 	m_shouldUpdateUI = true;
 }
 

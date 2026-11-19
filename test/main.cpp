@@ -82,7 +82,10 @@ class MainScript : public bird::Script<bird::Scene> {
 		object()->addChild(std::move(cam));
 		auto button = bird::_own_mk<bird::UIButton>();
 		button->setScale(bird::Vector2(200, 100));
-		button->setPosition(bird::Vector2(600, 400));
+		// Stays centred, 100px below the middle, as the window resizes.
+		button->setAnchor(bird::UIAlignment::Center);
+		button->setPivot(bird::UIAlignment::Center);
+		button->setPosition(bird::Vector2(0, 100));
 		button->setText("Click me");
 		button->setOnClick([] { std::cout << "Button clicked" << std::endl; });
 

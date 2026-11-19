@@ -23,8 +23,26 @@ namespace bird {
 
         GLFWwindow* const getGLFWWindow() const;
 
+        /**
+         * Re-reads the window and framebuffer sizes. Polling once per frame
+         * coalesces bursts of resize events into a single rebuild.
+         * @return true when a size changed and the window is not minimized.
+         */
+        bool pollResize();
+        /** @return framebuffer size in pixels, for render targets. */
+        uint32_t getFramebufferWidth() const;
+        uint32_t getFramebufferHeight() const;
+        /** @return window size in screen coordinates, matching cursor input. */
+        uint32_t getWidth() const;
+        uint32_t getHeight() const;
+
     private:
         GLFWwindow* m_pWindow;
+        // Zero until the first pollResize, which therefore always reports.
+        uint32_t m_framebufferWidth = 0;
+        uint32_t m_framebufferHeight = 0;
+        uint32_t m_width = 0;
+        uint32_t m_height = 0;
 
     };
 

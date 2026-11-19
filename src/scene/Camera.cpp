@@ -4,13 +4,14 @@
 
 #include "Camera.h"
 
+#include <stdexcept>
+
 #include "../Application.h"
 
 namespace bird {
 
 Camera::Camera(uint32_t width, uint32_t height) : WorldObject() {
-	m_perspectiveMatrix =
-		createPerspectiveMatrix(width, height, 70.0f, 0.1f, 1000.0f);
+	setViewportSize(width, height);
 	translate({0.0f, 0.0f, -5.0f});
 	updateTransformationMatrix();
 }
@@ -23,6 +24,14 @@ void Camera::enable() {
 
 const Matrix4& Camera::getPerspectiveMatrix() const {
 	return m_perspectiveMatrix;
+}
+
+void Camera::setViewportSize(uint32_t width, uint32_t height) {
+	if (width == 0 || height == 0) {
+		throw std::invalid_argument("Camera: viewport size must be non-zero");
+	}
+	m_perspectiveMatrix = createPerspectiveMatrix(width, height, kFieldOfView,
+												  kNearPlane, kFarPlane);
 }
 
 void Camera::setWorldEnvironment(WorldEnvironment env) {

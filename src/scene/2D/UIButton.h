@@ -21,8 +21,6 @@ class UIButton : public UIObject {
 	void onPress(float mx, float my) override;
 	void onRelease(float mx, float my) override;
 	void onHover(bool hovered) override;
-	/** Keeps the caption centred within the button. */
-	void layout() override;
 
 	/** Sets the centred caption, creating its label on first use. */
 	void setText(const std::string& text);
