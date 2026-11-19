@@ -3,7 +3,9 @@
 #include <scene/2D/UICheckBox.h>
 #include <scene/2D/UIDialog.h>
 #include <scene/2D/UIDropdown.h>
+#include <scene/2D/UIExpander.h>
 #include <scene/2D/UILabel.h>
+#include <scene/2D/UIListView.h>
 #include <scene/2D/UIMenuBar.h>
 #include <scene/2D/UINumberField.h>
 #include <scene/2D/UIPanel.h>
@@ -16,6 +18,7 @@
 #include <scene/2D/UITextArea.h>
 #include <scene/2D/UITextBox.h>
 #include <scene/2D/UIToggle.h>
+#include <scene/2D/UITreeView.h>
 #include <scene/2D/UIWindow.h>
 #include <scene/2D/UIManager.h>
 #include <scene/Camera.h>
@@ -252,6 +255,56 @@ void buildTextTab(UIObject* page) {
 	count->setText(std::to_string(notes->getText().size()) + " characters");
 }
 
+void buildListsTab(UIObject* page) {
+	auto* column = page->add<UIStack>(UIAxis::Vertical);
+	column->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
+	column->setAlign(UIAlign::Stretch);
+	column->setGap(8.0f);
+	auto* status = column->add<UILabel>("Ctrl/Shift+click to multi-select");
+	status->setColor(Vector4(0.55f, 0.75f, 1.0f, 1.0f));
+
+	auto* views = column->add<UIStack>(UIAxis::Horizontal);
+	views->setAlign(UIAlign::Stretch);
+	// 10,000 generated rows: only the visible ones are ever built.
+	auto* list = views->add<UIListView>();
+	list->setItemProvider(10000, [](size_t i) {
+		return "Asset " + std::to_string(i + 1) + (i % 7 == 0 ? ".png" : ".mesh");
+	});
+	list->setSelectionMode(UISelectionMode::Multiple);
+	list->setWidth(UISizeRule::fill());
+	list->setVisibleRows(8);
+	list->setOnSelectionChanged([status, list] {
+		status->setText(std::to_string(list->getSelection().size()) +
+						" of 10000 assets selected");
+	});
+	list->select(2);
+
+	auto* tree = views->add<UITreeView>(std::vector<UITreeNode>{
+		UITreeNode::branch(
+			"Village",
+			{UITreeNode::leaf("Main Camera"), UITreeNode::leaf("Sun"),
+			 UITreeNode::branch("Houses",
+								{UITreeNode::leaf("Inn"), UITreeNode::leaf("Smithy"),
+								 UITreeNode::branch("Market", {UITreeNode::leaf("Stall A"),
+															   UITreeNode::leaf("Stall B")})},
+								true),
+			 UITreeNode::branch("Trees", {UITreeNode::leaf("Oak"), UITreeNode::leaf("Pine")})},
+			true),
+		UITreeNode::leaf("Skybox")});
+	tree->setWidth(UISizeRule::fill());
+	tree->setVisibleRows(8);
+	tree->setOnSelectionChanged([status](UITreeNode& node, const UITreePath&) {
+		status->setText("Selected " + node.text);
+	});
+	tree->selectPath({0, 2, 1});
+
+	auto* advanced = column->add<UIExpander>("Import options", true);
+	advanced->getContent()->add<UICheckBox>("Generate mipmaps", true);
+	column->add<UIExpander>("Collapsed section", false)
+		->getContent()
+		->add<UILabel>("Hidden until expanded");
+}
+
 void buildScrollTab(UIObject* page) {
 	auto* scroll = page->add<UIScrollView>();
 	scroll->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
@@ -267,13 +320,14 @@ void buildScrollTab(UIObject* page) {
 }
 
 void openGalleryWindow(UIManager* ui) {
-	auto* window = ui->getRoot()->add<UIWindow>("UI Gallery", Vector2(500, 470));
+	auto* window = ui->getRoot()->add<UIWindow>("UI Gallery", Vector2(540, 470));
 	window->setOffset(Vector2(40.0f, 120.0f));
 	auto* tabs = window->getContent()->add<UITabView>();
 	tabs->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
 	buildControlsTab(ui, tabs->addTab<UIObject>("Controls"));
 	buildChoicesTab(tabs->addTab<UIObject>("Choices"));
 	buildTextTab(tabs->addTab<UIObject>("Text"));
+	buildListsTab(tabs->addTab<UIObject>("Lists"));
 	buildLayoutTab(tabs->addTab<UIObject>("Layout"));
 	buildScrollTab(tabs->addTab<UIObject>("Scroll"));
 }

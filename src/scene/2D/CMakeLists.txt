@@ -24,4 +24,8 @@ target_sources(scene PRIVATE
   UINumberField.h UINumberField.cpp
   UIDropdown.h UIDropdown.cpp
   UITextLayout.h UITextLayout.cpp
-  UITextArea.h UITextArea.cpp)
+  UITextArea.h UITextArea.cpp
+  UIRowView.h UIRowView.cpp
+  UIListView.h UIListView.cpp
+  UITreeView.h UITreeView.cpp
+  UIExpander.h UIExpander.cpp)
