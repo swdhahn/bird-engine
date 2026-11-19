@@ -8,12 +8,31 @@
 
 namespace bird::gl {
 
+namespace {
+
+/**
+ * Uploads a vertex stream and binds the stream to a fixed attribute location
+ * when present. Fixed locations let every shader assume the same layout.
+ */
+template <typename T, uint8_t N>
+void bindAttribute(Buffer<T, N>* buffer, GLuint location) {
+	if (buffer == nullptr || buffer->getBufferSize() == 0) return;
+	buffer->initialize();
+	glEnableVertexAttribArray(location);
+	glVertexAttribPointer(location, N, GL_FLOAT, GL_FALSE, N * sizeof(float),
+						  nullptr);
+}
+
+}  // namespace
+
 GLMesh::GLMesh(std::unique_ptr<Buffer<uint32_t>> indexBuffer,
 			   std::unique_ptr<Buffer<float>> vertexBuffer,
 			   std::unique_ptr<Buffer<float>> normalBuffer,
-			   std::unique_ptr<Buffer<float, 2>> textureCoordBuffer)
+			   std::unique_ptr<Buffer<float, 2>> textureCoordBuffer,
+			   std::unique_ptr<Buffer<float, 4>> tangentBuffer)
 	: Mesh(std::move(indexBuffer), std::move(vertexBuffer),
-		   std::move(normalBuffer), std::move(textureCoordBuffer)) {
+		   std::move(normalBuffer), std::move(textureCoordBuffer),
+		   std::move(tangentBuffer)) {
 	glGenVertexArrays(1, &m_vao);
 	glBindVertexArray(m_vao);
 
@@ -21,31 +40,14 @@ GLMesh::GLMesh(std::unique_ptr<Buffer<uint32_t>> indexBuffer,
 		m_indexBuffer->initialize();
 	}
 
-	glEnableVertexAttribArray(0);
+	bindAttribute(m_vertexBuffer.get(), ATTRIBUTE_POSITION);
+	bindAttribute(m_normalBuffer.get(), ATTRIBUTE_NORMAL);
+	bindAttribute(m_textureCoordBuffer.get(), ATTRIBUTE_TEXCOORD);
+	bindAttribute(m_tangentBuffer.get(), ATTRIBUTE_TANGENT);
 
-	m_vertexBuffer->initialize();
-	glVertexAttribPointer(
-		0, m_vertexBuffer->getAttributeSize(), GL_FLOAT, GL_FALSE,
-		m_vertexBuffer->getAttributeSize() * sizeof(float), (void*)0);
-	int nextIndex = 1;
-	if (m_normalBuffer != nullptr && m_normalBuffer->getBufferSize() > 0) {
-		glEnableVertexAttribArray(nextIndex);
-		m_normalBuffer->initialize();
-		glVertexAttribPointer(
-			nextIndex, m_normalBuffer->getAttributeSize(), GL_FLOAT, GL_FALSE,
-			m_normalBuffer->getAttributeSize() * sizeof(float), (void*)0);
-		nextIndex++;
-	}
-	if (m_textureCoordBuffer != nullptr &&
-		m_textureCoordBuffer->getBufferSize() > 0) {
-		glEnableVertexAttribArray(nextIndex);
-		m_textureCoordBuffer->initialize();
-		glVertexAttribPointer(
-			nextIndex, m_textureCoordBuffer->getAttributeSize(), GL_FLOAT,
-			GL_FALSE, m_textureCoordBuffer->getAttributeSize() * sizeof(float),
-			(void*)0);
-		nextIndex++;
-	}
+	// Absent streams read the default generic attribute (0, 0, 0, 1);
+	// shaders detect a zero tangent and derive a frame from derivatives.
+	glBindVertexArray(0);
 }
 
 GLMesh::~GLMesh() {

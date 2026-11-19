@@ -272,3 +272,62 @@ TEST_F(IncludeTree, AngleBracketIncludeIsRejected) {
 				   "void main() { color = vec4(1.0); }\n",
 				   "not supported");
 }
+
+// ------------------------------------------------- engine shader regression
+
+namespace {
+
+std::string readFile(const std::filesystem::path& path) {
+	std::ifstream in(path, std::ios::binary);
+	return std::string(std::istreambuf_iterator<char>(in), {});
+}
+
+uint32_t bindingOf(const ShaderBinary& binary, const std::string& name) {
+	for (const auto& resource : binary.resources) {
+		if (resource.name == name) return resource.binding;
+	}
+	ADD_FAILURE() << "resource " << name << " not reflected";
+	return ~0u;
+}
+
+}  // namespace
+
+class EngineShader : public ::testing::TestWithParam<const char*> {};
+
+TEST_P(EngineShader, BakesForEveryTarget) {
+	const std::filesystem::path path =
+		std::filesystem::path(BIRD_SOURCE_DIR) / "assets/shaders" / GetParam();
+	ASSERT_TRUE(std::filesystem::exists(path)) << path;
+	const ShaderBinary binary = bakeShader(path.string(), readFile(path));
+	EXPECT_FALSE(text(binary, format::SHADER_TARGET_GLSL_410).empty());
+	EXPECT_FALSE(text(binary, format::SHADER_TARGET_GLSL_460).empty());
+	EXPECT_LE(binary.pushConstantSize, 128u);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+	RenderingPipeline, EngineShader,
+	::testing::Values("mesh.vert", "gbuffer.frag", "forward.frag",
+					  "light_directional.frag", "light_volume.vert",
+					  "light_volume.frag", "shadow_depth.vert",
+					  "shadow_depth.frag", "tonemap.frag", "passthrough.vert",
+					  "fxaa.frag", "ui.vert", "ui.frag", "debug_line.vert"));
+
+TEST(EngineShaderBindings, MatchGpuLayoutConventions) {
+	const auto root = std::filesystem::path(BIRD_SOURCE_DIR) / "assets/shaders";
+	const ShaderBinary forward =
+		bakeShader((root / "forward.frag").string(),
+				   readFile(root / "forward.frag"));
+	// Values mirror renders/generic/GpuLayouts.h.
+	EXPECT_EQ(bindingOf(forward, "Global"), 0u);
+	EXPECT_EQ(bindingOf(forward, "Material"), 1u);
+	EXPECT_EQ(bindingOf(forward, "Lights"), 2u);
+	EXPECT_EQ(bindingOf(forward, "Shadows"), 3u);
+	EXPECT_EQ(bindingOf(forward, "normalMap"), 2u);
+	EXPECT_EQ(bindingOf(forward, "localShadowAtlas"), 9u);
+
+	const ShaderBinary volume =
+		bakeShader((root / "light_volume.frag").string(),
+				   readFile(root / "light_volume.frag"));
+	EXPECT_EQ(volume.pushConstantSize, 128u);
+	EXPECT_EQ(bindingOf(volume, "gDepth"), 7u);
+}

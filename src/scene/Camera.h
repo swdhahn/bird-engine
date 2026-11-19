@@ -16,9 +16,27 @@ namespace bird {
  */
 class WorldEnvironment {
    public:
+	/** Background color in linear HDR space, shown where no geometry lies. */
 	Vector3 clearColor;
+	/** Uniform ambient light color (linear). */
+	Vector3 ambientColor;
+	/** Ambient light multiplier. */
+	float ambientIntensity;
+	/** Linear exposure multiplier applied before tone mapping. */
+	float exposure;
+	/**
+	 * G-buffer debug visualization: 0 final image, 1 albedo, 2 normals,
+	 * 3 roughness/metallic, 4 linear depth, 5 directional shadow atlas,
+	 * 6 local shadow atlas.
+	 */
+	int debugView;
 
-	WorldEnvironment() : clearColor(0, 0, 0) {}
+	WorldEnvironment()
+		: clearColor(0, 0, 0),
+		  ambientColor(0.6f, 0.7f, 0.9f),
+		  ambientIntensity(0.15f),
+		  exposure(1.0f),
+		  debugView(0) {}
 };
 
 /**
@@ -63,6 +81,11 @@ class Camera : public WorldObject {
 
 	void setWorldEnvironment(WorldEnvironment env);
 	WorldEnvironment& getWorldEnvironment();
+
+	/** Vertical field of view in radians. */
+	float getFieldOfView() const { return kFieldOfView; }
+	float getNearPlane() const { return kNearPlane; }
+	float getFarPlane() const { return kFarPlane; }
 
    protected:
 	WorldEnvironment m_env;

@@ -20,15 +20,39 @@
 namespace bird {
 
 /**
- * Texture pixel formats and generation flags.
+ * Texture pixel formats and modifier flags.
+ *
+ * The 8-bit layouts equal (1 << channelCount), which the baked texture loader
+ * relies upon. Exactly one storage format must be set; FORMAT_SRGB modifies
+ * the 8-bit color formats only.
  */
 enum TextureFormat {
 	FORMAT_HAS_MIPMAPS = 1,
 	FORMAT_8G = 1 << 1,
 	FORMAT_8GA = 1 << 2,
 	FORMAT_8RGB = 1 << 3,
-	FORMAT_8RGBA = 1 << 4
+	FORMAT_8RGBA = 1 << 4,
+	/** Half-float RGBA; HDR light accumulation and G-buffer normals. */
+	FORMAT_RGBA16F = 1 << 5,
+	/** Half-float RG. */
+	FORMAT_RG16F = 1 << 6,
+	/** Packed depth/stencil, sampleable as depth. */
+	FORMAT_DEPTH24_STENCIL8 = 1 << 7,
+	/** 32-bit float depth; shadow atlases. */
+	FORMAT_DEPTH32F = 1 << 8,
+	/** Stores 8-bit color as sRGB so sampling returns linear values. */
+	FORMAT_SRGB = 1 << 9
 };
+
+/** @return True when the format holds depth (and optionally stencil). */
+constexpr bool isDepthFormat(uint32_t format) {
+	return (format & (FORMAT_DEPTH24_STENCIL8 | FORMAT_DEPTH32F)) != 0;
+}
+
+/** @return True when the format holds floating-point color. */
+constexpr bool isFloatColorFormat(uint32_t format) {
+	return (format & (FORMAT_RGBA16F | FORMAT_RG16F)) != 0;
+}
 
 class Texture;
 
@@ -49,6 +73,18 @@ class TextureBuilder {
 	/** Sets minification/magnification filter to nearest-neighbor (pixelated). */
 	TextureBuilder& filterNearest();
 
+	/** Stores 8-bit color data as sRGB (albedo, emissive, UI imagery). */
+	TextureBuilder& srgb();
+
+	/** Clamps texture coordinates to the edge instead of repeating. */
+	TextureBuilder& clampToEdge();
+
+	/**
+	 * Enables hardware depth comparison (sampler2DShadow) on a depth format.
+	 * @throws std::logic_error at build() when the format is not depth.
+	 */
+	TextureBuilder& depthCompare();
+
 	/** Instantiates and uploads the GPU texture using the active backend. */
 	std::shared_ptr<Texture> build();
 
@@ -59,11 +95,9 @@ class TextureBuilder {
 	bool m_generateMipMaps = false;
 	bool m_linearFiltering = false;
 	bool m_nearestFiltering = false;
-
-	void createLinearInterpolated(uint8_t* srcData, uint8_t* dstData,
-								  uint32_t nWidth, uint32_t nHeight);
-	void createNearestInterpolated(uint8_t* srcData, uint8_t* dstData,
-								   uint32_t nWidth, uint32_t nHeight);
+	bool m_srgb = false;
+	bool m_clampToEdge = false;
+	bool m_depthCompare = false;
 };
 
 /**

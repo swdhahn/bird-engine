@@ -23,10 +23,19 @@ void ResourceManager::init() {
 }
 
 std::shared_ptr<Texture> ResourceManager::loadTexture(std::string path) {
-	if (m_resources[ASSET_TYPE_TEXTURE].find(path) !=
-		m_resources[ASSET_TYPE_TEXTURE].end()) {
-		return std::static_pointer_cast<Texture>(
-			m_resources[ASSET_TYPE_TEXTURE].at(path));
+	return loadTextureWithColorSpace(path, false);
+}
+
+std::shared_ptr<Texture> ResourceManager::loadColorTexture(std::string path) {
+	return loadTextureWithColorSpace(path, true);
+}
+
+std::shared_ptr<Texture> ResourceManager::loadTextureWithColorSpace(
+	const std::string& path, bool srgb) {
+	const std::string cacheKey = srgb ? path + "#srgb" : path;
+	auto& textures = m_resources[ASSET_TYPE_TEXTURE];
+	if (textures.find(cacheKey) != textures.end()) {
+		return std::static_pointer_cast<Texture>(textures.at(cacheKey));
 	}
 
 	std::fstream file(RESOURCE_PATH + path + ".bird",
@@ -59,9 +68,11 @@ std::shared_ptr<Texture> ResourceManager::loadTexture(std::string path) {
 	// std::cout << "Img: " << width << " " << height << " " << channels << " "
 	//		  << form << std::endl;
 
-	std::shared_ptr<Texture> tex =
-		TextureBuilder(data, width, height, form).build();
-	addResource(path, tex, ASSET_TYPE_TEXTURE);
+	TextureBuilder builder(data, width, height, form);
+	builder.generateMipMaps();
+	if (srgb) builder.srgb();
+	std::shared_ptr<Texture> tex = builder.build();
+	addResource(cacheKey, tex, ASSET_TYPE_TEXTURE);
 	return tex;
 }
 
@@ -105,6 +116,7 @@ std::shared_ptr<Font> ResourceManager::loadFont(std::string path) {
 	std::shared_ptr<Texture> atlas =
 		TextureBuilder(rgba, header.atlasWidth, header.atlasHeight,
 					   FORMAT_8RGBA)
+			.generateMipMaps()
 			.build();
 
 	auto font = std::make_shared<Font>(header, std::move(glyphs), atlas);
@@ -173,6 +185,28 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 		file.read(reinterpret_cast<char*>(textureCoords.get()),
 				  textureCoordCount * textureCoordSize * sizeof(float));
 
+		// Extra streams follow the fixed ones; stream 0 holds tangents
+		// (xyz + handedness). Unknown streams are skipped.
+		std::unique_ptr<Buffer<float, 4>> tangents = nullptr;
+		for (uint32_t extra = 0; extra < extraBufferPoints; extra++) {
+			uint32_t count = 0;
+			uint8_t floatsPer = 0;
+			file.read(reinterpret_cast<char*>(&count), sizeof(uint32_t));
+			file.read(reinterpret_cast<char*>(&floatsPer), sizeof(uint8_t));
+			const size_t floatCount = static_cast<size_t>(count) * floatsPer;
+			auto values = std::make_unique<float[]>(floatCount);
+			file.read(reinterpret_cast<char*>(values.get()),
+					  floatCount * sizeof(float));
+			if (extra == 0 && floatsPer == 4 && count == vertexCount) {
+				tangents = createBuffer<float, 4>(
+					static_cast<BufferMode>(BUFFER_STAGED | BUFFER_ARRAY),
+					std::move(values), floatCount);
+			}
+		}
+		if (!file) {
+			throw std::runtime_error("Truncated mesh file: " + path + ".bird");
+		}
+
 		std::unique_ptr<bird::Buffer<uint32_t>> indexBuffer =
 			createBuffer<uint32_t>(
 				static_cast<bird::BufferMode>(bird::BUFFER_STAGED |
@@ -195,18 +229,16 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 
 		bird::MeshBuilder mb = bird::MeshBuilder();
 
-		std::cout << vertexBuffer.get()->getBufferSize() << std::endl;
 		mb.setIndexBuffer(std::move(indexBuffer))
 			.setVertexBuffer(std::move(vertexBuffer))
 			.setNormalBuffer(std::move(normalBuffer))
 			.setTextureCoordBuffer(std::move(textureCoordBuffer));
 
-		// Load Material
+		if (tangents) mb.setTangentBuffer(std::move(tangents));
+
 		std::shared_ptr<Material> mat =
 			loadMaterial(path + std::to_string(materialIndex) + ".mat");
-
-		mat->setShader(m_defaultShader);
-
+		if (!mat) mat = std::make_shared<Material>();
 		mb.setMaterial(mat);
 		meshes.data()[i] = mb.build();
 		// addResource(path + std::to_string(i), meshes.data()[i], MESH);
@@ -236,34 +268,41 @@ std::shared_ptr<Material> ResourceManager::loadMaterial(std::string path) {
 		return std::shared_ptr<Material>(0);
 	}
 
-	std::shared_ptr<Material> mat = std::make_shared<Material>();
-	file.read(reinterpret_cast<char*>(&mat->m_diffuseColor), sizeof(float) * 3);
-	file.read(reinterpret_cast<char*>(&mat->m_specularColor),
-			  sizeof(float) * 3);
-	file.read(reinterpret_cast<char*>(&mat->m_ambientColor), sizeof(float) * 3);
-	file.read(reinterpret_cast<char*>(&mat->m_shininess), sizeof(float));
-	file.read(reinterpret_cast<char*>(&mat->m_opacity), sizeof(float));
-	file.read(reinterpret_cast<char*>(&mat->m_emission), sizeof(float) * 3);
-	file.read(reinterpret_cast<char*>(&mat->m_reflectivity), sizeof(float));
+	const format::MaterialFileData data = format::readMaterialFile(file);
 
-	uint8_t textureCount = 0;
-	file.read(reinterpret_cast<char*>(&textureCount), sizeof(uint8_t));
-	for (int i = 0; i < textureCount; i++) {
-		std::string texPath = "";
-		uint16_t texPathSize = 0;
+	auto mat = std::make_shared<Material>();
+	mat->setBaseColor(Vector4(data.baseColor[0], data.baseColor[1],
+							  data.baseColor[2], data.baseColor[3]))
+		.setEmissive(
+			Vector3(data.emissive[0], data.emissive[1], data.emissive[2]))
+		.setEmissiveStrength(data.emissiveStrength)
+		.setMetallic(data.metallic)
+		.setRoughness(data.roughness)
+		.setAlphaCutoff(data.alphaCutoff)
+		.setNormalScale(data.normalScale)
+		.setOcclusionStrength(data.occlusionStrength)
+		.setBlendMode(static_cast<BlendMode>(data.blendMode))
+		.setDomain(data.unlit ? MaterialDomain::Unlit : MaterialDomain::Lit)
+		.setDoubleSided(data.doubleSided != 0);
 
-		file.read(reinterpret_cast<char*>(&texPathSize), sizeof(uint16_t));
-		texPath.resize(texPathSize);
-		file.read(reinterpret_cast<char*>(&texPath[0]), texPathSize);
-
-		std::filesystem::path p(path);
-		p = p.remove_filename();
-		texPath = std::string(p.string() + texPath);
-
-		std::cout << texPath << std::endl;
-		std::shared_ptr<Texture> tex = loadTexture(texPath);
-
-		mat->addTexture(tex);
+	const std::string directory =
+		std::filesystem::path(path).remove_filename().string();
+	for (const auto& [slot, relativePath] : data.textures) {
+		const auto textureSlot = static_cast<TextureSlot>(slot);
+		// Color data is authored in sRGB; data maps (normals, roughness)
+		// are linear and must not be gamma decoded.
+		const bool isColor = textureSlot == TextureSlot::BaseColor ||
+							 textureSlot == TextureSlot::Emissive;
+		const std::string texturePath = directory + relativePath;
+		std::shared_ptr<Texture> texture = isColor
+											   ? loadColorTexture(texturePath)
+											   : loadTexture(texturePath);
+		if (texture) mat->setTexture(textureSlot, texture);
+	}
+	// glTF semantics: a texture multiplies its factor, so a legacy diffuse
+	// texture replaces the diffuse color the old shader ignored.
+	if (data.legacy && mat->getTexture(TextureSlot::BaseColor)) {
+		mat->setBaseColor(Vector4(1.0f, 1.0f, 1.0f, data.baseColor[3]));
 	}
 
 	file.close();
@@ -274,9 +313,18 @@ std::shared_ptr<Material> ResourceManager::loadMaterial(std::string path) {
 }
 
 std::shared_ptr<Shader> ResourceManager::loadShader(ShaderBuilder& builder) {
+	// Programs are keyed by every attached stage, since one vertex stage is
+	// commonly paired with several fragment stages.
+	std::string cacheKey;
+	for (const auto& stage : builder.m_shaderFiles) {
+		cacheKey += stage.first + "|";
+	}
+	auto& shaders = m_resources[ASSET_TYPE_SHADER];
+	if (shaders.find(cacheKey) != shaders.end()) {
+		return std::static_pointer_cast<Shader>(shaders.at(cacheKey));
+	}
 	std::shared_ptr<Shader> shader = builder.create();
-	addResource(builder.m_shaderFiles.data()[0].first, shader,
-				ASSET_TYPE_SHADER);
+	addResource(cacheKey, shader, ASSET_TYPE_SHADER);
 	return shader;
 }
 

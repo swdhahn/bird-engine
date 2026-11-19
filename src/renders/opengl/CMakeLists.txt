@@ -15,7 +15,23 @@ add_library(
   GLUIRenderer.h
   GLUIRenderer.cpp
   GLDebugRenderer.h
-  GLDebugRenderer.cpp)
+  GLDebugRenderer.cpp
+  GLRenderState.h
+  GLRenderState.cpp
+  GLRenderTargets.h
+  GLRenderTargets.cpp
+  GLDrawCommands.h
+  GLDrawCommands.cpp
+  passes/GLShadowPass.h
+  passes/GLShadowPass.cpp
+  passes/GLGBufferPass.h
+  passes/GLGBufferPass.cpp
+  passes/GLLightingPass.h
+  passes/GLLightingPass.cpp
+  passes/GLForwardPass.h
+  passes/GLForwardPass.cpp
+  passes/GLPostProcessPass.h
+  passes/GLPostProcessPass.cpp)
 set_target_properties(opengl-renderer PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 if(MSVC)
     set_target_properties(opengl-renderer PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)

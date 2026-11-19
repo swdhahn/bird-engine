@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <memory>
 
+#include "Bounds.h"
 #include "Buffer.h"
 #include "Material.h"
 
@@ -24,11 +25,13 @@ class Mesh : public Resource {
 	 * @param vertexBuffer - the vertex buffer
 	 * @param normalBuffer - the normal buffer
 	 * @param textureCoordBuffer - the texture coordinate buffer
+	 * @param tangentBuffer - xyz tangent plus w handedness, or nullptr
 	 */
 	Mesh(std::unique_ptr<Buffer<uint32_t>> indexBuffer,
 		 std::unique_ptr<Buffer<float>> vertexBuffer,
 		 std::unique_ptr<Buffer<float>> normalBuffer,
-		 std::unique_ptr<Buffer<float, 2>> textureCoordBuffer);
+		 std::unique_ptr<Buffer<float, 2>> textureCoordBuffer,
+		 std::unique_ptr<Buffer<float, 4>> tangentBuffer = nullptr);
 	virtual ~Mesh();
 
 	/**
@@ -45,6 +48,10 @@ class Mesh : public Resource {
 	Buffer<float>* getVertexBuffer();
 	Buffer<float>* getNormalBuffer();
 	Buffer<float, 2>* getTextureCoordBuffer();
+	Buffer<float, 4>* getTangentBuffer();
+
+	/** Object-space bounds computed from the vertex positions at creation. */
+	const AABB& getLocalBounds() const;
 
 	void setMaterial(const std::shared_ptr<Material>& material);
 	const std::shared_ptr<Material>& getMaterial() const;
@@ -54,9 +61,10 @@ class Mesh : public Resource {
 	std::unique_ptr<Buffer<float>> m_vertexBuffer = nullptr;
 	std::unique_ptr<Buffer<float>> m_normalBuffer = nullptr;
 	std::unique_ptr<Buffer<float, 2>> m_textureCoordBuffer = nullptr;
+	std::unique_ptr<Buffer<float, 4>> m_tangentBuffer = nullptr;
 
 	std::shared_ptr<Material> m_material = nullptr;
-	//	std::shared_ptr<ColliderShape> m_colliderShape;
+	AABB m_localBounds;
 };
 
 class MeshBuilder {
@@ -74,6 +82,7 @@ class MeshBuilder {
 	MeshBuilder& setNormalBuffer(std::unique_ptr<Buffer<float>> normalBuffer);
 	MeshBuilder& setTextureCoordBuffer(
 		std::unique_ptr<Buffer<float, 2>> textureCoordBuffer);
+	MeshBuilder& setTangentBuffer(std::unique_ptr<Buffer<float, 4>> tangentBuffer);
 	MeshBuilder& setMaterial(std::shared_ptr<Material> material);
 
 	/**
@@ -87,6 +96,7 @@ class MeshBuilder {
 	std::unique_ptr<Buffer<float>> m_vertexBuffer = nullptr;
 	std::unique_ptr<Buffer<float>> m_normalBuffer = nullptr;
 	std::unique_ptr<Buffer<float, 2>> m_textureCoordBuffer = nullptr;
+	std::unique_ptr<Buffer<float, 4>> m_tangentBuffer = nullptr;
 	std::shared_ptr<Material> m_material = nullptr;
 };
 }  // namespace bird

@@ -13,15 +13,21 @@ namespace bird::gl {
 /**
  * OpenGL Vertex Array Object (VAO) mesh implementation.
  *
- * Configures vertex attribute pointers for position (location 0), normal
- * (location 1), and UV coordinates (location 2), backed by GLBuffer handles.
+ * Binds vertex streams to fixed attribute locations shared by every engine
+ * shader: position 0, normal 1, uv 2, tangent 3.
  */
 class GLMesh : public Mesh {
    public:
+	static constexpr uint32_t ATTRIBUTE_POSITION = 0;
+	static constexpr uint32_t ATTRIBUTE_NORMAL = 1;
+	static constexpr uint32_t ATTRIBUTE_TEXCOORD = 2;
+	static constexpr uint32_t ATTRIBUTE_TANGENT = 3;
+
 	GLMesh(std::unique_ptr<Buffer<uint32_t>> indexBuffer,
 		   std::unique_ptr<Buffer<float>> vertexBuffer,
 		   std::unique_ptr<Buffer<float>> normalBuffer,
-		   std::unique_ptr<Buffer<float, 2>> textureCoordBuffer);
+		   std::unique_ptr<Buffer<float, 2>> textureCoordBuffer,
+		   std::unique_ptr<Buffer<float, 4>> tangentBuffer);
 	~GLMesh();
 
 	/** Re-uploads and reconfigures attribute pointers on the VAO. */

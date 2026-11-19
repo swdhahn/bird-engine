@@ -71,6 +71,11 @@ class Buffer {
 		return t_attributeSize;
 	}
 
+	/** Attaches this uniform buffer to its binding point. */
+	void bindToBindingPoint() {
+		m_rawBuffer->bindToBindingPoint();
+	}
+
 	/** Sets uniform or shader storage binding index. */
 	void setBindingPoint(uint32_t bindingPoint) {
 		m_rawBuffer->m_bindingPoint = bindingPoint;

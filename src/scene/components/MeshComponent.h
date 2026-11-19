@@ -9,6 +9,7 @@
 namespace bird {
 
 class Mesh;
+class Material;
 
 /**
  * 3D mesh rendering component attached to a WorldObject.
@@ -50,8 +51,31 @@ class MeshComponent : public Component {
 	/** Returns the collection of meshes associated with this component. */
 	std::vector<_ref<Mesh>>& getMeshes();
 
+	/** @return Number of meshes (one material each). */
+	int getMeshCount();
+
+	/**
+	 * Returns the material one mesh renders with: this component's override
+	 * when set, otherwise the mesh's own material.
+	 * @throws std::out_of_range for an invalid index.
+	 */
+	_ref<Material> getMaterial(int meshIndex);
+
+	/**
+	 * Overrides the material of one mesh for this component only; meshes
+	 * loaded from one model are shared, so the mesh itself is untouched.
+	 * Passing null restores the mesh's own material.
+	 * @throws std::out_of_range for an invalid index.
+	 */
+	void setMaterial(int meshIndex, _ref<Material> material);
+
+	/** Overrides the material of every mesh of this component. */
+	void setAllMaterials(_ref<Material> material);
+
    protected:
 	std::vector<_ref<Mesh>> m_meshes;
+	/** Per-mesh overrides; empty or null entries fall back to the mesh. */
+	std::vector<_ref<Material>> m_materialOverrides;
 };
 
 }  // namespace bird

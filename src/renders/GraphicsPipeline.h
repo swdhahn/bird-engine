@@ -12,50 +12,17 @@
 #include "../scene/Camera.h"
 #include "../scene/DefaultCamera.h"
 #include "../scene/Scene.h"
+#include "../scene/components/LightComponent.h"
 #include "../scene/components/MeshComponent.h"
 #include "DebugDraw.h"
 #include "Window.h"
+#include "generic/Buffer.h"
 #include "generic/FrameBuffer.h"
+#include "generic/GpuLayouts.h"
+#include "generic/LightList.h"
+#include "generic/RenderQueue.h"
 
 namespace bird {
-
-/**
- * Standard uniform buffer layout for camera and view parameters.
- * Matches std140 layout for binding 0 in engine vertex shaders.
- */
-struct GlobalUBOData {
-	Matrix4 perspective;
-	Matrix4 view;
-	Vector4 viewPos;
-};
-
-/**
- * Push constant block providing per-draw object transformation matrices.
- * Matches Vulkan-style push_constant layout in engine shaders.
- */
-struct ObjectPushConstants {
-	Matrix4 model;
-	/** Inverse-transpose of the model's 3x3, as std430 mat3 (vec3 columns
-	 * padded to 16 bytes). Lights normals correctly on rotated objects. */
-	Vector4 normalMatrix[3];
-
-	explicit ObjectPushConstants(const Matrix4& modelMatrix) : model(modelMatrix) {
-		const Matrix3 normal = glm::transpose(glm::inverse(Matrix3(modelMatrix)));
-		for (int column = 0; column < 3; column++) {
-			normalMatrix[column] = Vector4(normal[column], 0.0f);
-		}
-	}
-};
-
-/**
- * Standard uniform buffer layout for surface material properties.
- */
-struct MaterialUBOData {
-	Vector4 color;
-	Vector3 specularColor;
-	Vector3 ambientColor;
-	float shininess;
-};
 
 /**
  * Abstract graphics backend abstraction.
@@ -113,6 +80,12 @@ class GraphicsPipeline {
 	/** Removes an active mesh component from the drawing list. */
 	void removeMesh(MeshComponent* mesh);
 
+	/** Registers an active light to illuminate the scene. */
+	void addLight(LightComponent* light);
+
+	/** Removes an active light. */
+	void removeLight(LightComponent* light);
+
 	/**
 	 * World-space debug lines drawn over this frame's 3D scene. The
 	 * Application clears the list at the start of each frame.
@@ -123,14 +96,30 @@ class GraphicsPipeline {
 	static std::shared_ptr<Mesh> s_quad_mesh;
 
    protected:
+	/** Packs camera, screen, and environment constants for this frame. */
+	GlobalUBOData buildGlobalData() const;
+
+	/**
+	 * Rebuilds m_renderQueue from every registered mesh: culls against the
+	 * camera frustum, buckets by material, and sorts. Also gathers every
+	 * shadow-casting draw, unculled, into m_shadowCasters.
+	 * @param frustum Camera frustum.
+	 */
+	void buildRenderQueue(const Frustum& frustum);
+
+	/** Captures every registered light's world-space state. */
+	std::vector<LightSnapshot> snapshotLights();
+
 	std::unique_ptr<Window> m_pWindow = nullptr;
 	Camera* m_camera;
 	Matrix4 m_orthoMatrix;
 	DefaultCamera* m_defaultCamera;
-	std::unique_ptr<Buffer<MaterialUBOData>> m_materialUBO;
 	std::unique_ptr<Buffer<GlobalUBOData>> m_globalUBO;
 
 	std::vector<MeshComponent*> m_meshes;
+	std::vector<LightComponent*> m_lights;
+	RenderQueue m_renderQueue;
+	std::vector<RenderItem> m_shadowCasters;
 	std::vector<std::unique_ptr<FrameBuffer>> m_framebuffers;
 	DebugDrawList m_debugDraw;
 };

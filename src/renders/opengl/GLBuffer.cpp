@@ -100,4 +100,13 @@ void GLBuffer::update(void* pData, size_t size, uint32_t offset) {
 	}
 }
 
+void GLBuffer::bindToBindingPoint() {
+	if (m_bufferTarget != GL_UNIFORM_BUFFER) {
+		throw std::logic_error(
+			"GLBuffer::bindToBindingPoint: only uniform buffers bind to "
+			"indexed binding points.");
+	}
+	glBindBufferBase(GL_UNIFORM_BUFFER, m_bindingPoint, m_bufferId);
+}
+
 }  // namespace bird::gl

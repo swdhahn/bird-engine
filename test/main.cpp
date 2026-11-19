@@ -30,6 +30,8 @@
 #include <scene/Camera.h>
 #include <scene/Scene.h>
 #include <scene/components/ProcessScript.h>
+#include <renders/generic/Material.h>
+#include <scene/components/LightComponent.h>
 #include <scene/components/MeshComponent.h>
 #include <scene/components/Script.h>
 #include <util/Assets.h>
@@ -54,13 +56,29 @@ class POVCamera : public bird::ProcessScript<bird::Camera> {
 	~POVCamera() {}
 
 	void init() {
-		object()->getWorldEnvironment().clearColor =
-			bird::Vector3(0.2, 0.6, 0.85);
+		bird::WorldEnvironment& env = object()->getWorldEnvironment();
+		env.clearColor = bird::Vector3(0.2, 0.6, 0.85);
+		env.ambientColor = bird::Vector3(0.55, 0.7, 0.95);
+		env.ambientIntensity = 0.35f;
+		env.exposure = 1.0f;
+		// BIRD_DEBUG_VIEW=1..4 starts in a G-buffer debug view (V cycles).
+		if (const char* view = std::getenv("BIRD_DEBUG_VIEW")) {
+			env.debugView = std::atoi(view);
+		}
 	}
 
 	void deinit() {}
 
 	void process(float delta) {
+		// V cycles G-buffer debug views: lit, albedo, normal, rough/metal,
+		// depth.
+		const bool debugViewDown = input()->getActionValue("debug_view") > 0.5f;
+		if (debugViewDown && !m_debugViewHeld) {
+			bird::WorldEnvironment& env = object()->getWorldEnvironment();
+			env.debugView = (env.debugView + 1) % 5;
+		}
+		m_debugViewHeld = debugViewDown;
+
 		const float speed = 10;
 		// Hold the right mouse button to look around (always while walking).
 		// The captured cursor is hidden and the UI ignores the pointer.
@@ -95,6 +113,7 @@ class POVCamera : public bird::ProcessScript<bird::Camera> {
 	static constexpr float kSensitivity = 0.0025f;	// radians per pixel
 	float m_yaw = 0.0f;
 	float m_pitch = 0.0f;
+	bool m_debugViewHeld = false;
 };
 
 
@@ -718,6 +737,128 @@ void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui) {
 
 }  // namespace playground
 
+namespace lighting {
+
+/** Circles its host around a center point (animated point light). */
+class OrbitScript : public bird::ProcessScript<bird::WorldObject> {
+   public:
+	OrbitScript(bird::Vector3 center, float radius, float speed)
+		: m_center(center), m_radius(radius), m_speed(speed) {}
+
+	void init() override {}
+	void deinit() override {}
+
+	void process(float delta) override {
+		m_angle += m_speed * delta;
+		object()->setWorldPosition(
+			m_center + bird::Vector3(std::cos(m_angle) * m_radius, 0.0f,
+									 std::sin(m_angle) * m_radius));
+	}
+
+   private:
+	bird::Vector3 m_center;
+	float m_radius;
+	float m_speed;
+	float m_angle = 0.0f;
+};
+
+/** Adds a light on its own object and returns that object. */
+bird::WorldObject* addLight(bird::Scene* scene,
+							std::unique_ptr<bird::LightComponent> light,
+							bird::Vector3 position,
+							bird::Quaternion rotation = bird::Quaternion(1, 0, 0, 0)) {
+	auto object = bird::_own_mk<bird::WorldObject>();
+	object->addComponent(std::move(light));
+	object->setWorldPosition(position);
+	object->setWorldRotation(rotation);
+	bird::WorldObject* raw = object.get();
+	scene->addChild(std::move(object));
+	return raw;
+}
+
+/** Adds a static mesh object rendered with a material override. */
+void addMaterialObject(bird::Scene* scene,
+					   const std::vector<std::shared_ptr<bird::Mesh>>& meshes,
+					   bird::Vector3 position, bird::Vector3 scale,
+					   std::shared_ptr<bird::Material> material) {
+	auto mesh = bird::_own_mk<bird::MeshComponent>(meshes);
+	mesh->setAllMaterials(std::move(material));
+	auto object = bird::_own_mk<bird::WorldObject>();
+	object->addComponent(std::move(mesh));
+	object->setWorldPosition(position);
+	object->setScale(scale);
+	scene->addChild(std::move(object));
+}
+
+/**
+ * Dynamic lighting showcase: a shadowed sun, colored and orbiting point
+ * lights, a shadowed spot light, and forward-rendered transparent and unlit
+ * materials. Mirrored by `buildLighting` in test/main.dart.
+ */
+void build(bird::Scene* scene) {
+	using namespace bird;
+	const Vector3 up(0, 1, 0), right(1, 0, 0);
+
+	auto sun = _own_mk<LightComponent>(LightType::Directional);
+	sun->setColor(Vector3(1.0f, 0.95f, 0.85f));
+	sun->setIntensity(3.0f);
+	sun->setCastsShadows(true);
+	addLight(scene, std::move(sun), Vector3(0, 20, 0),
+			 glm::angleAxis(0.6f, up) * glm::angleAxis(-0.9f, right));
+
+	const Vector3 playground(0.0f, -1.0f, -18.0f);
+	auto red = _own_mk<LightComponent>(LightType::Point);
+	red->setColor(Vector3(1.0f, 0.25f, 0.2f));
+	red->setIntensity(25.0f);
+	red->setRange(9.0f);
+	addLight(scene, std::move(red), playground + Vector3(-7.0f, 0.5f, 2.0f));
+	auto blue = _own_mk<LightComponent>(LightType::Point);
+	blue->setColor(Vector3(0.25f, 0.45f, 1.0f));
+	blue->setIntensity(25.0f);
+	blue->setRange(9.0f);
+	addLight(scene, std::move(blue), playground + Vector3(7.0f, 0.5f, 2.0f));
+
+	auto orbiting = _own_mk<LightComponent>(LightType::Point);
+	orbiting->setColor(Vector3(1.0f, 0.85f, 0.6f));
+	orbiting->setIntensity(40.0f);
+	orbiting->setRange(12.0f);
+	orbiting->setCastsShadows(true);
+	WorldObject* orbitObject = addLight(scene, std::move(orbiting), playground);
+	orbitObject->addComponent(_own_mk<OrbitScript>(
+		playground + Vector3(0.0f, 1.5f, 0.0f), 6.0f, 0.8f));
+
+	auto spot = _own_mk<LightComponent>(LightType::Spot);
+	spot->setColor(Vector3(0.9f, 1.0f, 0.9f));
+	spot->setIntensity(120.0f);
+	spot->setRange(25.0f);
+	spot->setConeAngles(0.3f, 0.45f);
+	spot->setCastsShadows(true);
+	addLight(scene, std::move(spot), Vector3(0, 10, -8),
+			 glm::angleAxis(-1.0f, right));
+
+	auto cube = RESOURCE_MANAGER->loadMesh("assets/models/cube.obj");
+	auto glass = Material::create();
+	glass->setBaseColor(Vector4(0.6f, 0.85f, 1.0f, 0.35f))
+		.setRoughness(0.1f)
+		.setBlendMode(BlendMode::Transparent);
+	addMaterialObject(scene, cube, Vector3(5, -1, -11), Vector3(1.0f), glass);
+
+	auto neon = Material::create();
+	neon->setBaseColor(Vector4(0, 0, 0, 1))
+		.setEmissive(Vector3(1.0f, 0.3f, 0.9f))
+		.setEmissiveStrength(4.0f)
+		.setDomain(MaterialDomain::Unlit);
+	addMaterialObject(scene, cube, Vector3(-5, -1, -11), Vector3(0.6f), neon);
+
+	auto metal = Material::create();
+	metal->setBaseColor(Vector4(0.95f, 0.64f, 0.54f, 1.0f))
+		.setMetallic(1.0f)
+		.setRoughness(0.3f);
+	addMaterialObject(scene, cube, Vector3(0, -1, -11), Vector3(0.8f), metal);
+}
+
+}  // namespace lighting
+
 class MainScript : public bird::Script<bird::Scene> {
    public:
 	void init() override {
@@ -734,6 +875,7 @@ class MainScript : public bird::Script<bird::Scene> {
 		bird::INPUT->addAction(bird::Action("physics_push").addKey(KEY_F));
 		bird::INPUT->addAction(bird::Action("physics_reset").addKey(KEY_R));
 		bird::INPUT->addAction(bird::Action("physics_walk").addKey(KEY_C));
+		bird::INPUT->addAction(bird::Action("debug_view").addKey(KEY_V));
 
 		// The village map: rendered as one object, collided as a few static
 		// triangle-mesh chunks (3 x 3 grid) sharing its transform.
@@ -759,6 +901,7 @@ class MainScript : public bird::Script<bird::Scene> {
 		bird::Camera* camera = cam.get();
 		object()->addChild(std::move(cam));
 		buildGallery(bird::APPLICATION->getUIManager());
+		lighting::build(object());
 		playground::build(object(), camera, bird::APPLICATION->getUIManager());
 		// BIRD_PHYSICS_DEBUG=1 starts with collider wireframes on (G toggles).
 		if (std::getenv("BIRD_PHYSICS_DEBUG") != nullptr) {

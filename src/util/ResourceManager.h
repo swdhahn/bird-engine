@@ -19,6 +19,8 @@
 #include "../renders/generic/Mesh.h"
 #include "../renders/generic/Shader.h"
 #include "../renders/generic/Texture.h"
+#include "../renders/generic/Material.h"
+#include "../build-tools/MaterialFormat.h"
 #include "Resource.h"
 
 namespace bird {
@@ -58,6 +60,15 @@ class ResourceManager {
 	 * @return Shared pointer to the GPU Texture.
 	 */
 	std::shared_ptr<Texture> loadTexture(std::string path);
+
+	/**
+	 * Loads a texture holding color data authored in sRGB (albedo, emissive),
+	 * so that shader sampling returns linear values. Cached apart from
+	 * loadTexture() because the GPU storage differs.
+	 * @param path File path to the baked .bird texture asset.
+	 * @return Shared pointer to the GPU Texture, or nullptr when missing.
+	 */
+	std::shared_ptr<Texture> loadColorTexture(std::string path);
 
 	/**
 	 * Loads a 3D model, decomposing it into individual meshes and caching them.
@@ -110,6 +121,9 @@ class ResourceManager {
 	static inline std::string RESOURCE_PATH = "";
 
    private:
+	std::shared_ptr<Texture> loadTextureWithColorSpace(const std::string& path,
+													   bool srgb);
+
 	std::shared_ptr<Shader> m_defaultShader;
 	std::unordered_map<std::string, std::shared_ptr<Resource>>* m_resources;
 	std::unordered_map<std::string, std::vector<std::shared_ptr<Mesh>>>

@@ -1,122 +1,123 @@
 # Architecture: Rendering Pipeline
 
-Bird Engine isolates graphics hardware details behind an abstract pipeline interface (`bird::GraphicsPipeline`), allowing multiple backend implementations.
+Bird Engine renders through an abstract pipeline interface (`bird::GraphicsPipeline`); the OpenGL backend (`bird::gl::GLPipeline`) is the sole complete implementation. The renderer is **deferred by default**, with a **forward pass** for every surface that deferred shading cannot express. All features target OpenGL 4.1, so macOS remains supported: no compute shaders and no storage buffers are required.
 
 ---
 
-## 1. Graphics Backend Architecture
+## 1. Frame Overview
 
 ```
-                    +---------------------------+
-                    | bird::GraphicsPipeline    |
-                    +-------------+-------------+
-                                  |
-            +---------------------+---------------------+
-            |                                           |
-+-----------v-----------+                   +-----------v-----------+
-|  bird::gl::GLPipeline |                   |  bird::vk::VKPipeline |
-|  (OpenGL 4.1 / 4.6)   |                   |  (Vulkan 1.x)         |
-+-----------------------+                   +-----------------------+
+ GraphicsPipeline::buildRenderQueue      frustum culling, bucketing, sorting
+ planShadows                             cascades + atlas tiles, CPU only
+        |
+        v
+ 1. Shadow pass      caster depth -> directional atlas (4 cascades)
+                                  -> local atlas (spot: 1 tile, point: 6 tiles)
+ 2. G-buffer pass    opaque + masked lit surfaces -> RT0, RT1, HDR (emissive), depth
+ 3. Depth copy       G-buffer depth -> HDR target depth renderbuffer
+ 4. Lighting pass    fullscreen: ambient + directional lights (+ cascaded shadows)
+                     volumes: point spheres, spot cones, additive into HDR
+ 5. Forward pass     unlit / force-forward opaque, then transparency back to front
+ 6. Debug lines      into HDR
+ 7. Post-process     exposure + ACES tone map (or G-buffer debug view) -> LDR,
+                     then FXAA -> default framebuffer
+ 8. UI               orthographic overlay, untouched by post-processing
 ```
+
+Each pass occupies its own class under `src/renders/opengl/passes/`; `GLPipeline::renderWorld` only orchestrates them. `GLRenderState` caches fixed-function state, and each pass declares the complete state upon which the pass depends.
 
 ---
 
-## 2. Standard Shading Interfaces
+## 2. Render Targets (`GLRenderTargets`)
 
-Bird Engine standardizes uniform blocks and push constants across all backends:
+| Target | Format | Contents |
+|---|---|---|
+| RT0 | `SRGB8_ALPHA8` | base color (rgb), ambient occlusion (a) |
+| RT1 | `RGBA16F` | octahedral normal (xy), roughness (z), metallic (w) |
+| HDR | `RGBA16F` | emissive written by the G-buffer pass; every light accumulates on top |
+| Depth | `DEPTH24_STENCIL8` texture | world position is reconstructed from depth and the inverse matrices |
+| LDR | `RGBA8` | tone-mapped, sRGB-encoded input to FXAA |
 
-### `GlobalUBOData` (Binding 0, std140)
-Written once per frame with camera transformations:
-```cpp
-struct GlobalUBOData {
-    Matrix4 perspective; // 4x4 perspective or orthographic matrix
-    Matrix4 view;        // Camera::getViewMatrix(): inverse of the camera pose
-    Vector4 viewPos;     // Camera eye position in world space
-};
-```
-
-### `ObjectPushConstants` (std430)
-Written per draw call for individual object transformations:
-```cpp
-struct ObjectPushConstants {
-    Matrix4 model;           // 4x4 model transform matrix (T * R * S)
-    Vector4 normalMatrix[3]; // inverse-transpose of model's 3x3, as std430 mat3
-};
-```
-The normal matrix is computed on the CPU per draw, so normals stay perpendicular to surfaces under rotation and non-uniform scale (the shader uses `object.normalMatrix * normal`). The block is 112 bytes, inside the 128-byte push-constant minimum.
-- In Vulkan, forwarded directly via `vkCmdPushConstants`.
-- In OpenGL, emulated through uniform buffer updates or reflected uniform locations.
-
-### `MaterialUBOData` (Binding 1, std140)
-Defines surface shading parameters:
-```cpp
-struct MaterialUBOData {
-    Vector4 color;          // Diffuse RGBA
-    Vector3 specularColor;  // Specular reflection
-    Vector3 ambientColor;   // Ambient contribution
-    float shininess;        // Specular exponent
-};
-```
+The HDR texture is attached both to the G-buffer framebuffer (as RT2) and to the HDR framebuffer, which owns a separate depth renderbuffer. After the G-buffer pass, depth is blitted into that renderbuffer. Light volumes and forward surfaces can therefore depth-test while the lighting shaders sample the G-buffer depth texture, avoiding any sampling/attachment feedback loop.
 
 ---
 
-## 3. The OpenGL Three-Pass Pipeline (`GLPipeline`)
+## 3. Materials (`bird::Material`)
 
-The primary OpenGL backend executes a three-phase rendering pass every frame:
+Materials follow the glTF **metallic-roughness** model:
 
-```mermaid
-flowchart LR
-    subgraph Pass 1: Scene Pass
-        Scene["Scene Meshes"] -->|"Render to FBO"| SceneFBO["Scene Framebuffer (HDR Color + Depth + Stencil)"]
-    end
+- **Factors:** base color (rgba), metallic, roughness, emissive color and strength, alpha cutoff, normal scale, occlusion strength.
+- **Texture slots (`TextureSlot`):** `BaseColor`, `MetallicRoughness` (glTF packing: G roughness, B metal), `Normal`, `Occlusion`, `Emissive`. The slot value equals the sampler binding. Base color and emissive textures load as sRGB through `ResourceManager::loadColorTexture`; data maps load linear through `loadTexture`.
+- **Routing (`classifyMaterial`):**
 
-    subgraph Pass 2: Post-Processing
-        SceneFBO -->|"Read as Texture"| FullQuad["Full-screen Quad"]
-        FullQuad -->|"FXAA / Color Grading"| BackBuffer["Default Backbuffer (0)"]
-    end
+| Material | Bucket | Pass |
+|---|---|---|
+| `Lit` + `Opaque` / `Masked` | `Deferred` | G-buffer, sorted by material then front to back |
+| `Unlit`, or `setForceForward(true)` | `ForwardOpaque` | forward, before transparency |
+| `Transparent` / `Additive` | `Transparent` | forward, sorted back to front, no depth writes |
 
-    subgraph Pass 3: 2D UI Overlay
-        BackBuffer -->|"Render with Alpha Blending"| UIRender["GLUIRenderer (DrawList)"]
-        UIRender --> FinalDisplay["Final Screen Display"]
-    end
-```
+A material owns a small std140 uniform block, re-uploaded only after a setter changes a value. A shader variant per texture combination is avoided: a `textureMask` bitfield tells the shaders which slots hold textures. `MeshComponent::setMaterial` and `setAllMaterials` override materials per component, leaving the shared, cached `Mesh` untouched.
 
-### Pass 1: Offscreen Scene Pass
-- Binds offscreen `GLFrameBuffer`.
-- Enables `GL_DEPTH_TEST`.
-- Clears color and depth buffers.
-- Binds `GlobalUBOData` with the 3D perspective projection and view matrices.
-- Loops through all registered `MeshComponent` instances:
-  - Binds mesh material and diffuse textures.
-  - Updates `ObjectPushConstants` from `obj->getTransformMatrix()` (model and normal matrix).
-  - Binds the mesh VAO (`GLMesh::getVAO()`) and submits `glDrawElements(GL_TRIANGLES, ...)`.
-
-### Pass 2: Post-Processing Pass
-- Binds the default window backbuffer (`glBindFramebuffer(GL_FRAMEBUFFER, 0)`).
-- Disables depth testing (`glDisable(GL_DEPTH_TEST)`).
-- Binds the scene color attachment texture to texture slot 0.
-- Binds the post-processing shader (`passthrough.vert` + `fxaa.frag`).
-- Renders the shared full-screen quad mesh (`s_quad_mesh`), applying fast approximate anti-aliasing (FXAA).
-
-### Pass 3: 2D UI Overlay Pass
-- Retains default backbuffer.
-- Re-binds `GlobalUBOData` with an orthographic projection (`m_orthoMatrix`) spanning window coordinates `(0, 0)` to `(width, height)`.
-- Binds font atlas texture to slot 0.
-- Enables alpha blending:
-  ```cpp
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-  ```
-- Submits the aggregated 2D UI geometry via `GLUIRenderer`. Because UI is drawn *after* post-processing, font glyphs and UI borders remain sharp and unaffected by FXAA blur.
+**Baking:** `AssetLoader` writes version 2 material files (`src/build-tools/MaterialFormat.h`) holding PBR factors, the glTF alpha mode, double-sidedness, and texture roles. Meshes gain a tangent stream (xyz plus handedness). Legacy unversioned Blinn-Phong files still load: diffuse becomes base color, shininess maps to roughness, and the first texture becomes the base color map. Models rebake automatically when the source is newer or the material files predate version 2.
 
 ---
 
-## 4. Multi-Backend Status
+## 4. Lights (`bird::LightComponent`)
 
-| Feature | OpenGL (`GLPipeline`) | Vulkan (`VKPipeline`) | Metal (`MLPipeline`) | DirectX 12 (`DXPipeline`) |
+| Type | Geometry | Deferred evaluation | Shadows |
+|---|---|---|---|
+| `Directional` | host -Z axis | fullscreen pass | 4 cascades, practical split scheme, bounding-sphere fit with texel snapping (no shimmer) |
+| `Point` | host position, `range` | sphere volume | six faces in the local atlas; the shader selects the face by major axis |
+| `Spot` | host -Z axis, inner/outer cone | cone volume | one perspective tile in the local atlas |
+
+- **Radiance** equals `color * intensity`. Point and spot lights fall off with the inverse square of distance, windowed smoothly to zero at `range`.
+- **Volumes** rasterize both faces with depth test `GREATER` and depth clamping, so only surfaces inside the volume are shaded, including when the camera stands inside the light.
+- **Forward lighting** uses a uniform block of up to 32 lights: every directional light, then visible local lights nearest the camera first (`selectForwardLights`).
+- **Shadow atlases** are single `DEPTH32F` 2D textures with hardware comparison (`sampler2DShadow`) and 3x3 PCF, clamped inside each tile. `ShadowAtlas` is a power-of-two quadtree allocator; local lights are prioritized by projected size, degrade to smaller tiles under pressure, and finally render unshadowed. Acne is controlled by slope-scaled polygon offset in the caster pass, plus per-light depth and normal-offset biases in texel units.
+- **Ambient light** and **exposure** are configured per camera through `WorldEnvironment` (`ambientColor`, `ambientIntensity`, `exposure`).
+
+---
+
+## 5. Shader Interfaces (`src/renders/generic/GpuLayouts.h`)
+
+Every block is mirrored by a C++ struct whose std140 offsets are pinned with `static_assert`.
+
+| Binding | Block / sampler | Contents |
+|---|---|---|
+| UBO 0 | `Global` | projection, view, their inverses, camera position, screen size, ambient, exposure, near/far, debug view |
+| UBO 1 | `Material` | PBR factors, texture mask, flags |
+| UBO 2 | `Lights` | 32 `GpuLight` entries, counts |
+| UBO 3 | `Shadows` | 64 shadow matrices, atlas rectangles, texel sizes, cascade splits |
+| push | `ObjectConstants` / `LightVolume` / `ShadowConstants` | per-draw model data (at most 128 bytes) |
+| samplers 0..4 | material slots | see `TextureSlot` |
+| samplers 5..7 | G-buffer | albedo, normal, depth |
+| samplers 8..9 | shadow atlases | directional, local |
+
+Shared GLSL lives in `assets/shaders/include/` (`globals`, `material`, `pbr`, `lights`, `shadows`, `gbuffer`). The BRDF is Cook-Torrance with GGX distribution, height-correlated Smith visibility, and Schlick Fresnel. Vertex inputs use fixed locations for every mesh: position 0, normal 1, uv 2, tangent 3. Meshes without tangents fall back to a derivative-based tangent frame.
+
+---
+
+## 6. Debugging
+
+- **G-buffer views:** set `WorldEnvironment::debugView` to 1 (albedo), 2 (normals), 3 (roughness/metallic), or 4 (linear depth). The demos cycle views with **V** and accept `BIRD_DEBUG_VIEW=n`.
+- **Frame capture:** `BIRD_CAPTURE=/path/frame.ppm BIRD_CAPTURE_FRAME=120` writes the finished frame as a binary PPM.
+
+---
+
+## 7. Backend Status
+
+| Feature | OpenGL (`GLPipeline`) | Vulkan | Metal | DirectX 12 |
 |---|---|---|---|---|
-| **Status** | Full Production | Pipeline & Swapchain Core | Architecture Stub | Architecture Stub |
-| **Windowing** | GLFW / X11 / Win32 / Cocoa | GLFW / Volk | Native / Cocoa | Win32 |
-| **Shader Source** | Baked `.bird` (GLSL 410/460) | Baked `.bird` (SPIR-V) | SPIR-V to MSL | SPIR-V to HLSL |
-| **Post-Processing** | FXAA & FBOs | Subpass / RenderPass | Planned | Planned |
-| **2D UI Overlay** | `GLUIRenderer` | `VKDrawList` (Planned) | Planned | Planned |
+| **Status** | Complete | Not compiled (legacy experiment) | Stub | Stub |
+| **Shading** | Deferred + forward, PBR, HDR | None | None | None |
+| **Shadows** | Cascaded, spot, point (atlas) | None | None | None |
+| **Shader source** | Baked `.bird` (GLSL 410/460) | Baked SPIR-V (planned) | Planned | Planned |
+
+---
+
+## 8. Known Limitations and Next Steps
+
+- Masked (alpha-tested) materials cast fully opaque shadows; the shadow pass does not sample textures.
+- Ambient light is uniform; image-based lighting would replace `evaluateAmbient`.
+- MSAA is unavailable with the deferred path; FXAA remains the anti-aliasing solution, and TAA is the natural successor.
+- Light volumes draw one call per light; instancing becomes worthwhile beyond a few hundred lights.
