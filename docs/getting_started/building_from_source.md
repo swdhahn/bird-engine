@@ -26,7 +26,7 @@ Requires the Xcode Command Line Tools (for the system compiler, linker, and fram
 xcode-select --install
 brew install cmake llvm
 ```
-Homebrew's `llvm` is keg-only (not symlinked onto your `PATH`), but `libs/CMakeLists.txt`/`src/build-tools/CMakeLists.txt` locate it automatically via `brew --prefix llvm`. If you have multiple LLVM installs or Homebrew in a non-standard prefix, you can still override it explicitly:
+Homebrew's `llvm` is keg-only (not symlinked onto your `PATH`), but `src/build-tools/CMakeLists.txt` locates it automatically via `brew --prefix llvm`. If you have multiple LLVM installs or Homebrew in a non-standard prefix, you can still override it explicitly:
 ```bash
 cmake -B build -DLLVM_DIR="$(brew --prefix llvm)/lib/cmake/llvm" -DClang_DIR="$(brew --prefix llvm)/lib/cmake/clang"
 ```
