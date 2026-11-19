@@ -37,6 +37,9 @@ void Application::init(Script<Scene>* script) {
 	// The compositor may already have resized the window (e.g. tiling).
 	handleResize();
 
+	// Before the scene: bodies are created as soon as objects are added.
+	m_physicsServer = _own_mk<PhysicsServer>();
+
 	m_scene = new Scene();
 	m_scene->addComponent(std::unique_ptr<Script<Scene>>(script));
 	m_scene->init(nullptr);
@@ -56,6 +59,16 @@ void Application::run() {
 
 		if (m_graphicsPipeline->getCamera()->needsMatrixUpdate()) {
 			m_graphicsPipeline->getCamera()->updateTransformationMatrix();
+		}
+
+		// PHYSICS SECTION: zero or more fixed steps
+		const int physicsSteps = m_physicsClock.advance(delta);
+		const float fixedStep = m_physicsClock.getStep();
+		for (int step = 0; step < physicsSteps; step++) {
+			for (size_t i = 0; i < m_processableScripts.size(); i++) {
+				m_processableScripts[i]->physicsProcess(fixedStep);
+			}
+			m_physicsServer->step(fixedStep);
 		}
 
 		// PROCESS SECTION
@@ -104,6 +117,10 @@ void Application::removeProcessableScript(ProcessScriptComponent* script) {
 
 void Application::deinit() {
 	m_scene->deinit();
+	// Scenes own their physics worlds, which must die before the server.
+	delete m_scene;
+	m_scene = nullptr;
+	m_physicsServer.reset();
 
 	m_uiManager->deinit();
 	delete m_uiManager;
@@ -129,6 +146,14 @@ void Application::handleResize() {
 		window->getFramebufferWidth(), window->getFramebufferHeight(),
 		window->getWidth(), window->getHeight());
 	m_uiManager->setViewportSize(window->getWidth(), window->getHeight());
+}
+
+PhysicsServer* Application::getPhysicsServer() {
+	return m_physicsServer.get();
+}
+
+FixedStepClock& Application::getPhysicsClock() {
+	return m_physicsClock;
 }
 
 UIManager* Application::getUIManager() {

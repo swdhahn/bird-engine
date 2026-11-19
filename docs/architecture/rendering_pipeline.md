@@ -30,7 +30,7 @@ Written once per frame with camera transformations:
 ```cpp
 struct GlobalUBOData {
     Matrix4 perspective; // 4x4 perspective or orthographic matrix
-    Matrix4 view;        // 4x4 view matrix (camera orientation)
+    Matrix4 view;        // Camera::getViewMatrix(): inverse of the camera pose
     Vector4 viewPos;     // Camera eye position in world space
 };
 ```

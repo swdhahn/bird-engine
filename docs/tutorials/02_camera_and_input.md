@@ -82,8 +82,9 @@ public:
         float yawDelta = input()->getActionValue("look_right") - 
                          input()->getActionValue("look_left");
 
-        // Rotate camera locally around the world up axis
-        object()->rotateLocal(bird::Vector3(0.0f, 1.0f, 0.0f), yawDelta * turnSpeed * delta);
+        // Yaw around the up axis. The camera looks down its local -Z, so
+        // turning right is a negative (clockwise) rotation.
+        object()->rotateLocal(bird::Vector3(0.0f, 1.0f, 0.0f), -yawDelta * turnSpeed * delta);
 
         // 2. Calculate movement direction
         float forward = input()->getActionValue("move_forward") - 
@@ -93,12 +94,13 @@ public:
         float vertical = input()->getActionValue("move_up") - 
                          input()->getActionValue("move_down");
 
-        bird::Vector3 moveDir(-strafe, vertical, forward);
+        // Camera-local direction: +X right, +Y up, -Z forward.
+        bird::Vector3 moveDir(strafe, vertical, -forward);
 
-        // 3. Move along camera's current orientation
-        object()->translate(moveDir * moveSpeed * delta * 
-                            object()->getLocalRotation() * 
-                            object()->getWorldRotation());
+        // 3. Rotate into world space and move the eye
+        object()->translate(object()->getWorldRotation() *
+                            object()->getLocalRotation() *
+                            moveDir * moveSpeed * delta);
     }
 };
 ```

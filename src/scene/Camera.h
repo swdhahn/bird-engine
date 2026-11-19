@@ -47,6 +47,13 @@ class Camera : public WorldObject {
 	const Matrix4& getPerspectiveMatrix() const;
 
 	/**
+	 * World-to-view matrix: the inverse of the camera's rigid transform
+	 * (position and rotation; scale is ignored). The camera looks down its
+	 * local -Z axis.
+	 */
+	Matrix4 getViewMatrix() const;
+
+	/**
 	 * Rebuilds the projection matrix for a new viewport aspect ratio.
 	 * @param width Render target width in pixels (must be > 0).
 	 * @param height Render target height in pixels (must be > 0).

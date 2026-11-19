@@ -58,12 +58,15 @@ class WorldObject : public Object {
 	 * Calls _init() and init() on all currently attached components.
 	 * @param parent Scene containing this object (or nullptr if root).
 	 */
-	void init(Scene* parent);
+	virtual void init(Scene* parent);
 
 	/**
 	 * Deinitializes components and breaks association with the parent Scene.
 	 */
-	void deinit();
+	virtual void deinit();
+
+	/** True between init() and deinit(). */
+	bool isInitiated() const;
 
 	const uint64_t& getID() const;
 	bool operator==(const WorldObject& e);
@@ -119,6 +122,13 @@ class WorldObject : public Object {
 	 */
 	bool needsMatrixUpdate() const;
 
+	/**
+	 * Counter incremented by every position, rotation or scale change.
+	 * Systems mirroring the transform (such as physics bodies) compare it
+	 * against the value they last synchronized to detect user edits.
+	 */
+	uint64_t getTransformRevision() const;
+
 	std::vector<_own<Component>>& getComponents();
 
 	/**
@@ -156,6 +166,10 @@ class WorldObject : public Object {
 	 */
 	bool m_needsMatrixUpdate;
 	bool m_isInitiated;
+	uint64_t m_transformRevision = 0;
+
+	/** Marks the matrix dirty and bumps the transform revision. */
+	void markTransformChanged();
 
    private:
 	inline static uint64_t s_uniqueIdentificationIndex = 0;

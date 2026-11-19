@@ -1,0 +1,133 @@
+#ifndef BIRD_PHYSICSWORLD_H
+#define BIRD_PHYSICSWORLD_H
+
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <vector>
+
+#include "../util/Math.h"
+#include "CollisionShape.h"
+#include "PhysicsLayers.h"
+
+namespace bird {
+
+class PhysicsServer;
+class RigidBodyComponent;
+struct PhysicsWorldImpl;
+
+struct PhysicsWorldSettings {
+	uint32_t maxBodies = 65536;
+	uint32_t maxBodyPairs = 65536;
+	uint32_t maxContactConstraints = 10240;
+	Vector3 gravity{0.0f, -9.81f, 0.0f};
+};
+
+struct RaycastHit {
+	RigidBodyComponent* body = nullptr;
+	Vector3 point{0.0f};
+	/** Surface normal at the hit, facing the ray origin. */
+	Vector3 normal{0.0f};
+	float distance = 0.0f;
+};
+
+struct ShapeCastHit {
+	RigidBodyComponent* body = nullptr;
+	/** Contact point on the hit body. */
+	Vector3 point{0.0f};
+	/** Normal pointing from the hit body towards the cast shape. */
+	Vector3 normal{0.0f};
+	/** Fraction of the sweep travelled before contact, in [0, 1]. */
+	float fraction = 0.0f;
+};
+
+/**
+ * One independent rigid-body simulation (a Jolt PhysicsSystem).
+ *
+ * Scenes own worlds (see Scene::getPhysicsWorld); RigidBodyComponents join
+ * the world of their scene. step() runs one fixed step:
+ *   1. pre-sync: objects the game moved are pushed to their bodies
+ *      (teleport for static and dynamic bodies, MoveKinematic for kinematic);
+ *   2. the Jolt update, on the server's worker threads;
+ *   3. post-sync: active dynamic bodies write their pose back to their
+ *      objects (O(active bodies));
+ *   4. contact and trigger events are delivered on the calling thread.
+ *
+ * Every method must be called from the main thread, outside step().
+ */
+class PhysicsWorld {
+   public:
+	/** Registers with the server, which then steps this world. */
+	explicit PhysicsWorld(PhysicsServer& server, const PhysicsWorldSettings& settings = {});
+	/** Destroys remaining bodies' Jolt state; their components detach. */
+	~PhysicsWorld();
+
+	PhysicsWorld(const PhysicsWorld&) = delete;
+	PhysicsWorld& operator=(const PhysicsWorld&) = delete;
+
+	/** @throws std::invalid_argument unless fixedDelta is positive. */
+	void step(float fixedDelta);
+
+	void setGravity(const Vector3& gravity);
+	Vector3 getGravity() const;
+
+	/** Bodies in this world. */
+	size_t getBodyCount() const;
+	/** Bodies currently awake (simulated). */
+	size_t getActiveBodyCount() const;
+
+	/**
+	 * Closest hit along a ray.
+	 * @param direction Ray direction (normalized internally).
+	 * @param maxDistance Ray length.
+	 * @param mask Layers to test against.
+	 * @param ignore Optional body to skip (such as the caster's own).
+	 * @throws std::invalid_argument for a zero direction or non-positive length.
+	 */
+	std::optional<RaycastHit> raycast(const Vector3& origin, const Vector3& direction,
+									  float maxDistance,
+									  PhysicsLayerMask mask = kAllPhysicsLayers,
+									  const RigidBodyComponent* ignore = nullptr) const;
+
+	/** Every hit along a ray (one per body), nearest first. */
+	std::vector<RaycastHit> raycastAll(const Vector3& origin, const Vector3& direction,
+									   float maxDistance,
+									   PhysicsLayerMask mask = kAllPhysicsLayers,
+									   const RigidBodyComponent* ignore = nullptr) const;
+
+	/**
+	 * Sweeps a shape from `from` to `to` (keeping `rotation`) and reports the
+	 * first body it would touch.
+	 * @throws std::invalid_argument for an empty shape.
+	 */
+	std::optional<ShapeCastHit> shapeCast(const CollisionShape& shape, const Vector3& from,
+										  const Quaternion& rotation, const Vector3& to,
+										  PhysicsLayerMask mask = kAllPhysicsLayers,
+										  const RigidBodyComponent* ignore = nullptr) const;
+
+	/**
+	 * Bodies overlapping a shape placed at position/rotation (each once).
+	 * @throws std::invalid_argument for an empty shape.
+	 */
+	std::vector<RigidBodyComponent*> overlap(const CollisionShape& shape,
+											 const Vector3& position,
+											 const Quaternion& rotation,
+											 PhysicsLayerMask mask = kAllPhysicsLayers,
+											 const RigidBodyComponent* ignore = nullptr) const;
+
+	/** Engine-internal. */
+	PhysicsWorldImpl& _impl() { return *m_impl; }
+	void _addBody(RigidBodyComponent* body);
+	void _removeBody(RigidBodyComponent* body);
+
+   private:
+	void dispatchContacts();
+
+	PhysicsServer& m_server;
+	std::unique_ptr<PhysicsWorldImpl> m_impl;
+	bool m_stepping = false;
+};
+
+}  // namespace bird
+
+#endif	// !BIRD_PHYSICSWORLD_H

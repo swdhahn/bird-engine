@@ -132,7 +132,7 @@ void GLPipeline::renderScene(Scene* scene) {
 	MaterialUBOData matData;
 
 	global.perspective = m_camera->getPerspectiveMatrix();
-	global.view = m_camera->getTransformMatrix();
+	global.view = m_camera->getViewMatrix();
 	global.viewPos = Vector4(m_camera->getWorldPosition(), 0.0);
 
 	m_globalUBO->update(&global, 1, 0);

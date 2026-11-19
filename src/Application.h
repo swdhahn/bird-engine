@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <vector>
 
+#include "physics/FixedStepClock.h"
+#include "physics/PhysicsServer.h"
 #include "renders/GraphicsPipeline.h"
 #include "renders/opengl/GLPipeline.h"
 #include "scene/components/ProcessScript.h"
@@ -93,12 +95,19 @@ class Application {
 	GraphicsPipeline* getGraphicsPipeline();
 	UIManager* getUIManager();
 
+	/** Global physics state; every scene's PhysicsWorld is stepped through it. */
+	PhysicsServer* getPhysicsServer();
+	/** The fixed-step clock driving physicsProcess() and physics steps. */
+	FixedStepClock& getPhysicsClock();
+
    private:
 	/** Propagates a window size change to the renderer, camera and UI. */
 	void handleResize();
 
 	GraphicsPipeline* m_graphicsPipeline;
 	UIManager* m_uiManager;
+	_own<PhysicsServer> m_physicsServer;
+	FixedStepClock m_physicsClock;
 	Scene* m_scene;
 
 	std::vector<ProcessScriptComponent*> m_processableScripts;

@@ -10,19 +10,17 @@
 namespace bird {
 
 Matrix4 createTransformMatrix(WorldObject* obj) {
-	Matrix4 mat = glm::scale(glm::mat4(1), obj->getScale());
-	mat = mat * glm::toMat4(obj->getWorldRotation() * obj->getLocalRotation());
-	mat =
-		glm::translate(mat, obj->getWorldPosition() + obj->getLocalPosition());
+	Matrix4 mat;
+	updateTransformMatrix(obj, &mat);
 	return mat;
 }
 
+// Model matrix T * R * S: scale in object space, then rotate, then place.
 void updateTransformMatrix(WorldObject* obj, Matrix4* dst) {
-	*dst = glm::scale(glm::mat4(1), obj->getScale());
-	*dst =
-		*dst * glm::toMat4(obj->getWorldRotation() * obj->getLocalRotation());
-	*dst =
-		glm::translate(*dst, obj->getWorldPosition() + obj->getLocalPosition());
+	*dst = glm::translate(glm::mat4(1),
+						  obj->getWorldPosition() + obj->getLocalPosition());
+	*dst = *dst * glm::toMat4(obj->getWorldRotation() * obj->getLocalRotation());
+	*dst = glm::scale(*dst, obj->getScale());
 }
 
 void updateTransformMatrix(ScreenObject* obj, Matrix3* dst) {
