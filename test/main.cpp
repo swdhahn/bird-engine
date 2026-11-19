@@ -1,5 +1,6 @@
 #include <Application.h>
 #include <scene/2D/UIButton.h>
+#include <scene/2D/UILabel.h>
 #include <scene/2D/UIManager.h>
 #include <scene/Camera.h>
 #include <scene/components/MeshComponent.h>
@@ -87,6 +88,12 @@ class MainScript : public bird::Script<bird::Scene> {
 
 		bird::APPLICATION->getUIManager()->getRoot()->addChild(
 			std::move(button));
+
+		auto title = bird::_own_mk<bird::UILabel>("Bird Engine");
+		title->setFontSize(72.0f);
+		title->setPosition(bird::Vector2(40, 40));
+		bird::APPLICATION->getUIManager()->getRoot()->addChild(
+			std::move(title));
 	}
 
 	void deinit() override {}

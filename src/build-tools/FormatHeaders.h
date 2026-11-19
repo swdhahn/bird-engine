@@ -87,9 +87,13 @@ enum ShaderUniformTypes { UNIFORM, TEXTURE, UBO };
 /*
  * FontHeader
  * FontGlyph[glyphCount]                  // codepoints firstCodepoint..
- * uint8_t atlas[atlasWidth * atlasHeight] // single-channel coverage
+ * uint8_t atlas[atlasWidth * atlasHeight] // single-channel SDF
+ *
+ * The atlas is a signed distance field: 128 lies on the glyph outline,
+ * larger values are inside. Glyph rectangles include the SDF padding, so
+ * the same quads serve every display size.
  */
-constexpr uint32_t FONT_FORMAT_VERSION = 1;
+constexpr uint32_t FONT_FORMAT_VERSION = 2;
 
 struct FontHeader {
 	uint32_t version;
@@ -101,7 +105,7 @@ struct FontHeader {
 	uint32_t atlasHeight;
 	uint32_t firstCodepoint;
 	uint32_t glyphCount;
-	uint16_t whiteTexelX;  // fully covered texel for untextured quads
+	uint16_t whiteTexelX;  // fully inside texel (255) for untextured quads
 	uint16_t whiteTexelY;
 };
 struct FontGlyph {

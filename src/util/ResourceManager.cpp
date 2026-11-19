@@ -86,21 +86,21 @@ std::shared_ptr<Font> ResourceManager::loadFont(std::string path) {
 			  glyphs.size() * sizeof(format::FontGlyph));
 	const size_t texelCount =
 		static_cast<size_t>(header.atlasWidth) * header.atlasHeight;
-	std::vector<uint8_t> coverage(texelCount);
-	file.read(reinterpret_cast<char*>(coverage.data()), coverage.size());
+	std::vector<uint8_t> distance(texelCount);
+	file.read(reinterpret_cast<char*>(distance.data()), distance.size());
 	if (!file) {
 		throw std::runtime_error("Truncated font file: " + path + ".bird");
 	}
 	file.close();
 
-	// Expand coverage to white RGBA so that one UI shader path multiplies
-	// vertex colour by the texel for both glyphs and solid quads.
+	// Expand the distance field into the alpha of white RGBA texels; the UI
+	// shader converts distance to coverage for glyphs and solid quads alike.
 	uint8_t* rgba = new uint8_t[texelCount * 4];
 	for (size_t i = 0; i < texelCount; i++) {
 		rgba[i * 4 + 0] = 0xFF;
 		rgba[i * 4 + 1] = 0xFF;
 		rgba[i * 4 + 2] = 0xFF;
-		rgba[i * 4 + 3] = coverage[i];
+		rgba[i * 4 + 3] = distance[i];
 	}
 	std::shared_ptr<Texture> atlas =
 		TextureBuilder(rgba, header.atlasWidth, header.atlasHeight,

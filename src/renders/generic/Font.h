@@ -22,8 +22,8 @@ struct GlyphQuad {
 };
 
 /**
- * A baked bitmap font: glyph metrics plus an atlas texture produced by
- * AssetLoader::loadFont. Layout is CPU-only, so a Font without an atlas
+ * A font baked into a signed-distance-field atlas by AssetLoader::loadFont.
+ * Glyphs scale to any pixel height without re-baking. Layout is CPU-only, so a Font without an atlas
  * (nullptr) remains valid for measurement and testing.
  */
 class Font : public Resource {

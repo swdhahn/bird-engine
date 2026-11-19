@@ -453,11 +453,30 @@ void AssetLoader::writeImage(uint32_t width, uint32_t height, uint32_t channels,
 }
 
 namespace {
-constexpr float kFontBakedPixelHeight = 32.0f;
-constexpr uint32_t kFontAtlasSize = 512;
+// SDF bake parameters. Distances are encoded so that ONEDGE marks the glyph
+// outline and each texel step of PIXEL_DIST_SCALE is one pixel of distance
+// at the baked size; PADDING texels of falloff surround every glyph.
+constexpr float kFontBakedPixelHeight = 48.0f;
+constexpr int kFontSdfPadding = 6;
+constexpr unsigned char kFontSdfOnEdge = 128;
+constexpr float kFontSdfPixelDistScale =
+	static_cast<float>(kFontSdfOnEdge) / kFontSdfPadding;
+constexpr uint32_t kFontAtlasWidth = 1024;
 constexpr uint32_t kFontFirstCodepoint = 32;  // space
 constexpr uint32_t kFontGlyphCount = 95;	  // through '~'
-constexpr uint32_t kFontWhiteBlockSize = 4;	  // reserved bottom rows
+constexpr uint32_t kFontWhiteBlockSize = 4;	  // fully inside, for solid quads
+constexpr uint32_t kFontGlyphGap = 1;
+
+struct SdfBitmap {
+	unsigned char* pixels = nullptr;
+	int width = 0, height = 0, offsetX = 0, offsetY = 0;
+};
+
+uint32_t nextPowerOfTwo(uint32_t value) {
+	uint32_t result = 1;
+	while (result < value) result <<= 1;
+	return result;
+}
 }  // namespace
 
 void AssetLoader::loadFont(const std::string& path) {
@@ -473,33 +492,76 @@ void AssetLoader::loadFont(const std::string& path) {
 		!stbtt_InitFont(&info, ttfData, stbtt_GetFontOffsetForIndex(ttfData, 0))) {
 		throw std::runtime_error("Unable to parse font: " + path);
 	}
+	const float scale = stbtt_ScaleForPixelHeight(&info, kFontBakedPixelHeight);
 
-	std::vector<uint8_t> atlas(kFontAtlasSize * kFontAtlasSize, 0);
-	std::vector<stbtt_packedchar> packed(kFontGlyphCount);
-
-	// Pack glyphs above the reserved rows so that a white block remains free.
-	stbtt_pack_context pack;
-	if (!stbtt_PackBegin(&pack, atlas.data(), kFontAtlasSize,
-						 kFontAtlasSize - kFontWhiteBlockSize, kFontAtlasSize,
-						 1, nullptr)) {
-		throw std::runtime_error("Unable to begin font packing: " + path);
-	}
-	const int packResult = stbtt_PackFontRange(
-		&pack, ttfData, 0, kFontBakedPixelHeight, kFontFirstCodepoint,
-		kFontGlyphCount, packed.data());
-	stbtt_PackEnd(&pack);
-	if (!packResult) {
-		throw std::runtime_error("Font atlas too small for glyphs: " + path);
+	// Generate every glyph's distance field, then shelf-pack them in order.
+	std::vector<SdfBitmap> bitmaps(kFontGlyphCount);
+	for (uint32_t i = 0; i < kFontGlyphCount; i++) {
+		SdfBitmap& bmp = bitmaps[i];
+		bmp.pixels = stbtt_GetCodepointSDF(
+			&info, scale, kFontFirstCodepoint + i, kFontSdfPadding,
+			kFontSdfOnEdge, kFontSdfPixelDistScale, &bmp.width, &bmp.height,
+			&bmp.offsetX, &bmp.offsetY);
 	}
 
-	const uint32_t whiteRow = kFontAtlasSize - kFontWhiteBlockSize;
-	for (uint32_t y = whiteRow; y < kFontAtlasSize; y++) {
-		std::memset(&atlas[y * kFontAtlasSize], 0xFF, kFontWhiteBlockSize);
+	std::vector<format::FontGlyph> glyphs(kFontGlyphCount);
+	uint32_t penX = 0, penY = 0, shelfHeight = 0;
+	auto place = [&](uint32_t width, uint32_t height) {
+		if (width + 2 * kFontGlyphGap > kFontAtlasWidth) {
+			throw std::runtime_error("Glyph wider than font atlas: " + path);
+		}
+		if (penX + width + kFontGlyphGap > kFontAtlasWidth) {
+			penX = 0;
+			penY += shelfHeight + kFontGlyphGap;
+			shelfHeight = 0;
+		}
+		const uint32_t x = penX + kFontGlyphGap;
+		const uint32_t y = penY + kFontGlyphGap;
+		penX += width + kFontGlyphGap;
+		shelfHeight = std::max(shelfHeight, height);
+		return std::make_pair(x, y);
+	};
+	std::vector<std::pair<uint32_t, uint32_t>> origins(kFontGlyphCount);
+	for (uint32_t i = 0; i < kFontGlyphCount; i++) {
+		if (bitmaps[i].pixels) {
+			origins[i] = place(bitmaps[i].width, bitmaps[i].height);
+		}
+	}
+	const auto whiteOrigin = place(kFontWhiteBlockSize, kFontWhiteBlockSize);
+	const uint32_t atlasHeight =
+		nextPowerOfTwo(penY + shelfHeight + 2 * kFontGlyphGap);
+
+	std::vector<uint8_t> atlas(kFontAtlasWidth * atlasHeight, 0);
+	for (uint32_t i = 0; i < kFontGlyphCount; i++) {
+		int advance = 0, leftBearing = 0;
+		stbtt_GetCodepointHMetrics(&info, kFontFirstCodepoint + i, &advance,
+								   &leftBearing);
+		const SdfBitmap& bmp = bitmaps[i];
+		format::FontGlyph& glyph = glyphs[i];
+		glyph = {0, 0, 0, 0, 0.0f, 0.0f, advance * scale};
+		if (!bmp.pixels) continue;  // whitespace: advance only
+
+		const auto [x, y] = origins[i];
+		for (int row = 0; row < bmp.height; row++) {
+			std::memcpy(&atlas[(y + row) * kFontAtlasWidth + x],
+						&bmp.pixels[row * bmp.width], bmp.width);
+		}
+		glyph.atlasX0 = static_cast<uint16_t>(x);
+		glyph.atlasY0 = static_cast<uint16_t>(y);
+		glyph.atlasX1 = static_cast<uint16_t>(x + bmp.width);
+		glyph.atlasY1 = static_cast<uint16_t>(y + bmp.height);
+		glyph.offsetX = static_cast<float>(bmp.offsetX);
+		glyph.offsetY = static_cast<float>(bmp.offsetY);
+		stbtt_FreeSDF(bmp.pixels, nullptr);
+	}
+	for (uint32_t row = 0; row < kFontWhiteBlockSize; row++) {
+		std::memset(
+			&atlas[(whiteOrigin.second + row) * kFontAtlasWidth + whiteOrigin.first],
+			0xFF, kFontWhiteBlockSize);
 	}
 
 	int ascent = 0, descent = 0, lineGap = 0;
 	stbtt_GetFontVMetrics(&info, &ascent, &descent, &lineGap);
-	const float scale = stbtt_ScaleForPixelHeight(&info, kFontBakedPixelHeight);
 
 	format::FontHeader header{};
 	header.version = format::FONT_FORMAT_VERSION;
@@ -507,18 +569,12 @@ void AssetLoader::loadFont(const std::string& path) {
 	header.ascent = ascent * scale;
 	header.descent = descent * scale;
 	header.lineGap = lineGap * scale;
-	header.atlasWidth = kFontAtlasSize;
-	header.atlasHeight = kFontAtlasSize;
+	header.atlasWidth = kFontAtlasWidth;
+	header.atlasHeight = atlasHeight;
 	header.firstCodepoint = kFontFirstCodepoint;
 	header.glyphCount = kFontGlyphCount;
-	header.whiteTexelX = kFontWhiteBlockSize / 2;
-	header.whiteTexelY = whiteRow + kFontWhiteBlockSize / 2;
-
-	std::vector<format::FontGlyph> glyphs(kFontGlyphCount);
-	for (uint32_t i = 0; i < kFontGlyphCount; i++) {
-		const stbtt_packedchar& pc = packed[i];
-		glyphs[i] = {pc.x0, pc.y0, pc.x1, pc.y1, pc.xoff, pc.yoff, pc.xadvance};
-	}
+	header.whiteTexelX = static_cast<uint16_t>(whiteOrigin.first + 1);
+	header.whiteTexelY = static_cast<uint16_t>(whiteOrigin.second + 1);
 
 	std::fstream file(path + ".bird", std::ios::out | std::ios::binary);
 	file.write(reinterpret_cast<const char*>(&header), sizeof(header));
@@ -527,7 +583,8 @@ void AssetLoader::loadFont(const std::string& path) {
 	file.write(reinterpret_cast<const char*>(atlas.data()), atlas.size());
 	file.close();
 
-	std::cout << "Font saved." << std::endl;
+	std::cout << "Font saved (" << kFontAtlasWidth << "x" << atlasHeight
+			  << " SDF atlas)." << std::endl;
 }
 
 void AssetLoader::loadSound(const std::string& path) {
