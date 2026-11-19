@@ -181,6 +181,11 @@ if(BIRD_ENABLE_DART)
       "$<TARGET_FILE_DIR:Bird>"
     COMMENT "Copying libdart_dll alongside Bird executable"
   )
+  if(WIN32)
+    install(FILES "${BIRD_DART_DLL_PATH}" DESTINATION bin)
+  else()
+    install(FILES "${BIRD_DART_DLL_PATH}" DESTINATION lib)
+  endif()
 endif()
 
 # Unit tests (optional; requires GoogleTest)
@@ -195,10 +200,17 @@ if(BIRD_BUILD_TESTS)
   endif()
 endif()
 
-set_target_properties(Bird PROPERTIES 
+if(APPLE)
+  set_target_properties(Bird PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE
-    INSTALL_RPATH "$ORIGIN"
-)
+    INSTALL_RPATH "@executable_path;@executable_path/../lib"
+  )
+else()
+  set_target_properties(Bird PROPERTIES
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH "$ORIGIN:$ORIGIN/../lib"
+  )
+endif()
 
 install(
   DIRECTORY src/

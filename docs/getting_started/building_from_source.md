@@ -14,14 +14,15 @@ This guide covers everything you need to build Bird Engine and its asset baking 
 ### Platform Dependencies
 
 #### Linux (Ubuntu / Debian / Arch / Fedora)
-On Linux, Bird Engine requires X11 development headers and OpenGL:
+On Linux, Bird Engine requires X11 development headers, OpenGL, and LLVM/Clang (`libclang`) for the Dart FFI binding generator:
 ```bash
 # Ubuntu / Debian
 sudo apt-get install build-essential cmake libx11-dev libxrandr-dev libxinerama-dev \
-    libxcursor-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxxf86vm-dev
+    libxcursor-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxxf86vm-dev \
+    libclang-dev llvm-dev
 
 # Arch Linux
-sudo pacman -S base-devel cmake libx11 libxrandr libxinerama libxcursor libxi mesa
+sudo pacman -S base-devel cmake libx11 libxrandr libxinerama libxcursor libxi mesa clang llvm
 ```
 
 #### macOS
@@ -44,7 +45,11 @@ cd bird-engine
 ```
 
 > [!NOTE]
-> All primary third-party libraries (Assimp, GLFW, GLEW, GLM, Shaderc, SPIRV-Cross, Volk, Jolt) are installed or downloaded through CMake into `libs/install`.
+> All primary third-party libraries (Assimp, GLFW, GLEW, GLM, Shaderc, SPIRV-Cross, Volk, Jolt, Dart SDK 3.8.2, and `libdart_dll`) are installed or downloaded through `libs/CMakeLists.txt` into `libs/install`:
+> ```bash
+> cmake -S libs -B libs && cmake --build libs
+> ```
+> To build without embedded Dart scripting, pass `-DBIRD_ENABLE_DART=OFF` when configuring the main project.
 
 ---
 

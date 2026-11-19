@@ -110,12 +110,53 @@ add_custom_command(
     VERBATIM
 )
 
+# Automatically bootstrap Dart package dependencies (`dart pub get`) if never done before
+find_program(BIRD_DART_EXE
+    NAMES dart
+    HINTS "${INSTALLED_LIB_PATH}/dart-sdk/bin"
+)
+
+set(_BIRD_DART_PKG_DEPS "")
+if(BIRD_DART_EXE)
+    set(_BIRD_ENGINE_PKG_CFG "${CMAKE_SOURCE_DIR}/dart/bird_engine/.dart_tool/package_config.json")
+    add_custom_command(
+        OUTPUT ${_BIRD_ENGINE_PKG_CFG}
+        COMMAND ${BIRD_DART_EXE} pub get
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/dart/bird_engine
+        DEPENDS ${CMAKE_SOURCE_DIR}/dart/bird_engine/pubspec.yaml
+        COMMENT "Running dart pub get for dart/bird_engine..."
+        VERBATIM
+    )
+    list(APPEND _BIRD_DART_PKG_DEPS ${_BIRD_ENGINE_PKG_CFG})
+
+    if(EXISTS "${CMAKE_SOURCE_DIR}/test/pubspec.yaml")
+        set(_BIRD_TEST_PKG_CFG "${CMAKE_SOURCE_DIR}/test/.dart_tool/package_config.json")
+        add_custom_command(
+            OUTPUT ${_BIRD_TEST_PKG_CFG}
+            COMMAND ${BIRD_DART_EXE} pub get
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test
+            DEPENDS
+                ${CMAKE_SOURCE_DIR}/test/pubspec.yaml
+                ${CMAKE_SOURCE_DIR}/dart/bird_engine/pubspec.yaml
+                ${_BIRD_ENGINE_PKG_CFG}
+            COMMENT "Running dart pub get for test/..."
+            VERBATIM
+        )
+        list(APPEND _BIRD_DART_PKG_DEPS ${_BIRD_TEST_PKG_CFG})
+    endif()
+else()
+    message(WARNING
+        "Dart CLI ('dart') not found in PATH or ${INSTALLED_LIB_PATH}/dart-sdk/bin. "
+        "Skipping automatic 'dart pub get'; run 'dart pub get' manually in dart/bird_engine and test.")
+endif()
+
 add_custom_target(GenerateDartBindings
     DEPENDS
         ${BIRD_DART_C_WRAPPER_H}
         ${BIRD_DART_C_WRAPPER_CPP}
         ${BIRD_DART_GEN_DART_DIR}/bindings.dart
         ${BIRD_DART_GEN_DART_DIR}/generated.dart
+        ${_BIRD_DART_PKG_DEPS}
 )
 
 # Locate dart_shared_library (libdart_dll)
@@ -129,7 +170,10 @@ endif()
 if(NOT _DART_DLL_ROOT)
     message(FATAL_ERROR
         "BIRD_ENABLE_DART is ON, but dart_shared_library (dart_dll.h) was not found in "
-        "${INSTALLED_LIB_PATH}/dart_shared_library or ${CMAKE_SOURCE_DIR}/libs/dart_shared_library.")
+        "${INSTALLED_LIB_PATH}/dart_shared_library or ${CMAKE_SOURCE_DIR}/libs/dart_shared_library.\n"
+        "Install dependencies first:\n"
+        "  cmake -S libs -B libs && cmake --build libs --target DART_SHARED_LIB\n"
+        "(or disable Dart with -DBIRD_ENABLE_DART=OFF).")
 endif()
 
 if(WIN32)
