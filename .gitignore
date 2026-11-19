@@ -42,3 +42,7 @@ build/
 *.exe
 *.out
 *.app
+
+# Source assets exceeding GitHub limits
+assets/models/world/GameObject.fbx
+assets/models/world/GameObject.fbx.bird
