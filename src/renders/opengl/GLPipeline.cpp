@@ -107,7 +107,10 @@ void GLPipeline::renderUI() {
 	if (indexCount == 0) return;
 
 	((GLShader*)ui_shader.get())->bind();
-	m_globalUBO->update((GlobalUBOData*)&m_orthoMatrix, sizeof(Matrix4), 0);
+	GlobalUBOData uiGlobals{};
+	uiGlobals.perspective = m_orthoMatrix;
+	uiGlobals.view = Matrix4(1.0f);
+	m_globalUBO->update(&uiGlobals, 1, 0);
 
 	glActiveTexture(GL_TEXTURE0);
 	((GLTexture*)uiManager->getFont()->getAtlas().get())->bind();
@@ -135,6 +138,8 @@ void GLPipeline::renderScene(Scene* scene) {
 	global.view = m_camera->getTransformMatrix();
 	global.viewPos = Vector4(m_camera->getWorldPosition(), 0.0);
 
+	m_globalUBO->update(&global, 1, 0);
+
 	glClearColor(m_camera->getWorldEnvironment().clearColor.x,
 				 m_camera->getWorldEnvironment().clearColor.y,
 				 m_camera->getWorldEnvironment().clearColor.z, 1.0);
@@ -152,9 +157,8 @@ void GLPipeline::renderScene(Scene* scene) {
 			shader->bind();
 			glBindVertexArray(m->getVAO());
 
-			global.model = obj->getTransformMatrix();
-
-			m_globalUBO->update(&global, 1, 0);
+			const ObjectPushConstants object{obj->getTransformMatrix()};
+			shader->setPushConstants(&object, sizeof(object));
 
 			// std::cout << "Material:" << mat.get()->getDiffuseColor() <<
 			// std::endl;
@@ -169,11 +173,6 @@ void GLPipeline::renderScene(Scene* scene) {
 
 			// glGetBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(MaterialUBOData),
 			// &data); std::cout << "Material:" << data.color << std::endl;
-
-			// TODO: Uniform buffer objects and textures
-			// shader->loadPerspectiveMatrix(m_camera->getPerspectiveMatrix());
-			// shader->loadViewMatrix(m_camera->getTransformMatrix());
-			// shader->loadModelMatrix(e->getTransformMatrix());
 
 			if (mat != nullptr) {
 				for (int k = 0; k < mat->getTextures().size(); k++) {

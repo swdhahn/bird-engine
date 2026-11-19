@@ -1,4 +1,4 @@
-#version 430
+#version 450
 
 layout(location = 0) in vec3 position;
 layout(location = 1) in vec3 color;
@@ -10,7 +10,6 @@ layout(location = 1) out vec2 fragTexCoord;
 layout(std140, binding = 0) uniform Global {
     mat4 perspective;
     mat4 view;
-    mat4 model;
     vec4 viewPos;
 };
 

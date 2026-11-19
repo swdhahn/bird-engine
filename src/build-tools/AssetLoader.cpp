@@ -11,6 +11,7 @@
 #include <unordered_map>
 
 #include "FormatHeaders.h"
+#include "ShaderBaker.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../util/stb_image.h"
@@ -42,18 +43,11 @@ std::vector<std::vector<const char*>> supportedFileTypes{
 	{".bird_custom"}										 // Other
 };	//*/
 
-std::unordered_map<std::string, shaderc_shader_kind> shader_map = {
-	{".vert", shaderc_vertex_shader},
-	{".frag", shaderc_fragment_shader},
-	{".comp", shaderc_compute_shader},
-	{".geom", shaderc_geometry_shader},
-	{".tesc", shaderc_tess_control_shader},
-	{".tese", shaderc_tess_evaluation_shader}};
-
 AssetLoader::AssetLoader() {}
 AssetLoader::~AssetLoader() {}
 
-void AssetLoader::init(std::string assetPath) {
+size_t AssetLoader::init(std::string assetPath) {
+	size_t failures = 0;
 	// load assets from file
 
 	for (const auto& entry :
@@ -83,6 +77,7 @@ void AssetLoader::init(std::string assetPath) {
 		}
 
 		// Check if generated asset exists / needs updating
+		try {
 		switch ((AssetType)i) {
 			case TEXTURE:
 				loadTexture(filePath);
@@ -113,7 +108,12 @@ void AssetLoader::init(std::string assetPath) {
 				// .txt, etc.
 				break;
 		}
+		} catch (const std::exception& error) {
+			failures++;
+			std::cerr << "FAILED: " << error.what() << std::endl;
+		}
 	}
+	return failures;
 }
 
 void AssetLoader::loadAsset() {
@@ -592,115 +592,12 @@ void AssetLoader::loadSound(const std::string& path) {
 }
 
 void AssetLoader::loadShader(const std::string& path) {
-	// load shader
-
-	// One .bird per shader program: every stage sharing a stem (ui.vert,
-	// ui.frag) maps to the same output, matching ShaderHeader/ShaderStage[].
-	const std::filesystem::path source(path);
-	const std::string outputPath =
-		(source.parent_path() / source.stem()).string() + ".bird";
-	if (std::filesystem::exists(outputPath)) {
+	const std::string source = readFile(path);
+	if (!bake::needsShaderBake(path, source)) {
 		return;
 	}
-	std::vector<format::ShaderStage> stages;
-	std::vector<format::ShaderGPHeader> gpHeader;
-	std::vector<format::ShaderUniformInfo> uniformInfo;
-	std::vector<std::string> names;
-	std::unordered_map<ShaderGraphicsPipeline, std::vector<uint32_t>>
-		shaderData;
-
-	// The output is opened only where data is written, so an unimplemented
-	// bake leaves no empty file behind.
-	// writeShaderInformation(outputPath, source.extension(), gpHeader, stages,
-	//					   uniformInfo, shaderData, names);
-
-	/*
-	 * ShaderHeader
-	 * ShaderGPHeader[]
-	 * ShaderStage[]
-	 * ShaderUniformInfo[]
-	 * uint8_t* uniformNames;
-	 * uint32_t* shaderData;
-	 */
-}
-
-void AssetLoader::writeShaderInformation(
-	const std::string& path, std::string ext,
-	std::vector<format::ShaderGPHeader>& gpHeader,
-	std::vector<format::ShaderStage>& stages,
-	std::vector<std::pair<std::string, format::ShaderUniformInfo>>& uniformInfo,
-	std::unordered_map<ShaderGraphicsPipeline, std::vector<uint32_t>>&
-		shaderData,
-	std::vector<std::string>& names) {
-	/*shaderc_shader_kind kind =
-		shader_map[std::filesystem::path(path).extension()];
-
-	std::string source = readFile(path);
-
-	shaderc::Compiler compiler;
-	shaderc::CompileOptions options;
-	// We need to keep it at debug or we lose variable names
-	options.SetOptimizationLevel(shaderc_optimization_level_zero);
-
-	auto result =
-		compiler.CompileGlslToSpv(source, kind, path.c_str(), options);
-	if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
-		std::cerr << result.GetErrorMessage();
-		return;
-	}
-	std::vector<uint32_t> spirv_binary(result.cbegin(), result.cend());
-
-	spirv_cross::CompilerGLSL glsl_compiler(spirv_binary);
-
-	spirv_cross::CompilerGLSL::Options gl_options;
-	gl_options.version = 450;  // maybe 330 depending on the target
-	gl_options.es = false;
-	glsl_compiler.set_common_options(gl_options);
-
-	std::string opengl_source = glsl_compiler.compile();
-
-	spirv_cross::ShaderResources resources =
-		glsl_compiler.get_shader_resources();
-
-	// Handle Push Constants (Flattened to Default Uniforms in GL)
-	for (auto& res : resources.push_constant_buffers) {
-		const auto& type = glsl_compiler.get_type(res.base_type_id);
-		for (uint32_t i = 0; i < type.member_types.size(); i++) {
-			format::ShaderUniformInfo info{};
-			std::string name =
-				glsl_compiler.get_member_name(res.base_type_id, i);
-			info.nameSize = (uint8_t)(name.size() + 1);
-			info.type = format::UNIFORM;
-			info.bindingLocation = (uint8_t)glsl_compiler.get_decoration(
-				res.id, spv::DecorationLocation);
-			uniformInfo.push_back({name, info});
-		}
-	}
-
-	// UBOs
-	for (auto& res : resources.uniform_buffers) {
-		format::ShaderUniformInfo info{};
-		info.nameSize = (uint8_t)(res.name.size() + 1);
-		info.type = format::UBO;
-		info.bindingLocation = (uint8_t)glsl_compiler.get_decoration(
-			res.id, spv::DecorationBinding);
-		uniformInfo.push_back({res.name, info});
-	}
-
-	// 3. Handle Textures
-	for (auto& res : resources.sampled_images) {
-		format::ShaderUniformInfo info{};
-		info.nameSize = (uint8_t)(res.name.size() + 1);
-		info.type = format::TEXTURE;
-		info.bindingLocation = (uint8_t)glsl_compiler.get_decoration(
-			res.id, spv::DecorationBinding);
-		uniformInfo.push_back({res.name, info});
-	}
-
-	format::ShaderStage stageHeader;
-	stageHeader.stage = (uint8_t)kind;
-	stageHeader.uniformCount = (uint8_t)finalUniforms.size();
-	stageHeader.dataSize = (uint32_t)source.size();*/
+	std::cout << "Compiling Shader: " << path << std::endl;
+	writeShaderBinaryFile(path + ".bird", bake::bakeShader(path, source));
 }
 
 void AssetLoader::loadMaterial(const std::string& path) {

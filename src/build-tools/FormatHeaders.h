@@ -54,31 +54,82 @@ struct MeshVBOFormat {
 // #####################################
 
 /*
- * ShaderHeader
- * ShaderGPHeader[]
- * ShaderStage[]
- * ShaderUniformInfo[]
- * uint8_t* uniformNames;
- * uint8_t* shaderData;
+ * One file per shader stage (e.g. ui.vert.bird):
+ *
+ * ShaderFileHeader
+ * { ShaderVariantHeader, uint8_t bytes[byteSize] }  x variantCount
+ * { ShaderResourceInfo, char name[nameSize] }       x resourceCount
+ * { PushConstantMemberInfo, char name[nameSize] }   x pushConstantMemberCount
+ *
+ * Names are stored without a terminator and match the identifiers emitted
+ * in the GLSL variants, so the OpenGL runtime can resolve them by name.
  */
-struct ShaderHeader {
-	uint8_t api_count;	// How many apis are compiled in this file
+constexpr char SHADER_FILE_MAGIC[4] = {'B', 'S', 'H', 'D'};
+constexpr uint32_t SHADER_FORMAT_VERSION = 1;
+
+enum ShaderStageKind : uint8_t {
+	SHADER_STAGE_VERTEX,
+	SHADER_STAGE_FRAGMENT,
+	SHADER_STAGE_GEOMETRY,
+	SHADER_STAGE_COMPUTE,
+	SHADER_STAGE_TESS_CONTROL,
+	SHADER_STAGE_TESS_EVALUATION
 };
-struct ShaderGPHeader {
-	uint8_t type;				 // shader pipeline opengl, vulkan...
-	uint8_t shader_stage_count;	 // how many stages are there
+
+enum ShaderTarget : uint8_t {
+	SHADER_TARGET_SPIRV,	 // Vulkan SPIR-V words
+	SHADER_TARGET_GLSL_460,	 // OpenGL 4.6 source, bindings in layout()
+	SHADER_TARGET_GLSL_410,	 // OpenGL 4.1 source, bindings via resources
+	SHADER_TARGET_MSL,		 // reserved
+	SHADER_TARGET_HLSL		 // reserved
 };
-struct ShaderStage {
-	uint8_t stage;	// vert, frag, ...
-	uint8_t uniformCount;
-	uint32_t dataSize;	// blob size.
+
+enum ShaderResourceKind : uint8_t {
+	SHADER_RESOURCE_UNIFORM_BUFFER,
+	SHADER_RESOURCE_SAMPLER
 };
-struct ShaderUniformInfo {
-	uint8_t bindingLocation;
-	uint8_t nameSize;  // size of string with \0
-	uint8_t type;	   // ShaderUniformTypes
+
+enum PushConstantType : uint8_t {
+	PUSH_CONSTANT_FLOAT,
+	PUSH_CONSTANT_VEC2,
+	PUSH_CONSTANT_VEC3,
+	PUSH_CONSTANT_VEC4,
+	PUSH_CONSTANT_INT,
+	PUSH_CONSTANT_IVEC2,
+	PUSH_CONSTANT_IVEC3,
+	PUSH_CONSTANT_IVEC4,
+	PUSH_CONSTANT_UINT,
+	PUSH_CONSTANT_UVEC2,
+	PUSH_CONSTANT_UVEC3,
+	PUSH_CONSTANT_UVEC4,
+	PUSH_CONSTANT_MAT3,	 // std430: three vec3 columns at a 16-byte stride
+	PUSH_CONSTANT_MAT4
 };
-enum ShaderUniformTypes { UNIFORM, TEXTURE, UBO };
+
+struct ShaderFileHeader {
+	char magic[4];
+	uint32_t version;
+	uint8_t stage;		  // ShaderStageKind
+	uint64_t sourceHash;  // FNV-1a of the GLSL source
+	uint8_t variantCount;
+	uint16_t resourceCount;
+	uint16_t pushConstantSize;	// bytes; 0 when the stage has none
+	uint16_t pushConstantMemberCount;
+};
+struct ShaderVariantHeader {
+	uint8_t target;	 // ShaderTarget
+	uint32_t byteSize;
+};
+struct ShaderResourceInfo {
+	uint8_t kind;  // ShaderResourceKind
+	uint8_t binding;
+	uint16_t nameSize;
+};
+struct PushConstantMemberInfo {
+	uint16_t offset;
+	uint8_t type;  // PushConstantType
+	uint16_t nameSize;
+};
 
 // #####################################
 // ############### FONTS ###############

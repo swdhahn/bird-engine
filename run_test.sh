@@ -20,7 +20,7 @@ done
 echo "Configuration: [Type: $BUILD_TYPE] [Run: $RUN_PROGRAM]"
 
 
-cmake -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE && cmake --build build -j8 && cmake --install build --prefix build && cd test/ && cmake -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE && cmake --build build -j8 && cd .. || exit 1
+cmake -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE && cmake --build build -j8 && cmake --install build --prefix build && ./build/BuildTools && cd test/ && cmake -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE && cmake --build build -j8 && cd .. || exit 1
 
 if [ "$RUN_PROGRAM" = true ]; then
     echo "Executing..."

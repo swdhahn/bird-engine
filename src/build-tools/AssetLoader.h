@@ -12,27 +12,25 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <shaderc/shaderc.hpp>
-#include <spirv_cross/spirv_common.hpp>
-#include <spirv_cross/spirv_glsl.hpp>
 #include <vector>
 
 #include "FormatHeaders.h"
 
 namespace bird {
 
-enum ShaderGraphicsPipeline { SHADER_OPENGL, SHADER_VULKAN, SHADER_METAL };
-
 extern std::vector<std::vector<const char*>> supportedFileTypes;
-
-extern std::unordered_map<std::string, shaderc_shader_kind> shader_map;
 
 class AssetLoader {
    public:
 	AssetLoader();
 	~AssetLoader();
 
-	void init(std::string assetPath);
+	/**
+	 * Compiles every supported asset under assetPath into .bird files,
+	 * continuing past failures so that one run reports all of them.
+	 * @return the number of assets that failed to compile.
+	 */
+	size_t init(std::string assetPath);
 
 	void loadAsset();
 
@@ -40,6 +38,10 @@ class AssetLoader {
 	void loadModel(const std::string& path);
 	void loadTexture(const std::string& path);
 	void loadSound(const std::string& path);
+	/**
+	 * Bakes a shader stage via bake::bakeShader when its .bird is stale.
+	 * @throws bake::ShaderBakeError on any compile or rule violation.
+	 */
 	void loadShader(const std::string& path);
 	void loadMaterial(const std::string& path);
 	/**
@@ -52,15 +54,6 @@ class AssetLoader {
 
 	void writeImage(uint32_t width, uint32_t height, uint32_t channels,
 					uint8_t* imageData, const std::string& path);
-	void writeShaderInformation(
-		const std::string& path, std::string ext,
-		std::vector<format::ShaderGPHeader>& gpHeader,
-		std::vector<format::ShaderStage>& stages,
-		std::vector<std::pair<std::string, format::ShaderUniformInfo>>&
-			uniformInfo,
-		std::unordered_map<ShaderGraphicsPipeline, std::vector<uint32_t>>&
-			shaderData,
-		std::vector<std::string>& names);
 
 	// void writeMaterial(std::string& path, const aiMaterial* material);
 

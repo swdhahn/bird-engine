@@ -10,15 +10,25 @@ find_package(spirv_cross_glsl CONFIG REQUIRED)
 find_package(spirv_cross_cpp CONFIG REQUIRED)
 find_package(SPIRV-Tools CONFIG REQUIRED)
 
-# --- Existing BuildTools Target ---
-add_executable(BuildTools build-tools.cpp AssetLoader.cpp AssetLoader.h
-                         ../util/stb_image.h ../util/stb_truetype.h)
-target_link_libraries(BuildTools ${ASSIMP_LIBRARIES}
+# --- Bake library: everything that compiles .bird resources ---
+# Linked by the BuildTools executable, and by any app that must re-bake at
+# runtime (e.g. an editor). The engine runtime itself never links it.
+add_library(BirdBake STATIC
+      AssetLoader.cpp AssetLoader.h
+      ShaderBaker.cpp ShaderBaker.h
+      FormatHeaders.h
+      ../renders/generic/ShaderBinary.cpp ../renders/generic/ShaderBinary.h
+      ../util/stb_image.h ../util/stb_truetype.h)
+target_include_directories(BirdBake PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(BirdBake PUBLIC ${ASSIMP_LIBRARIES}
       shaderc::shaderc_combined
       ${SPIRV_LIBRARIES}
       spirv-cross-core
       spirv-cross-glsl
       spirv-cross-cpp)
+
+add_executable(BuildTools build-tools.cpp)
+target_link_libraries(BuildTools PRIVATE BirdBake)
 
 # --- NEW: Dart API Generator Target ---
 

@@ -143,12 +143,9 @@ target_link_libraries(
           libglew_static
           assimp::assimp
           VOLK::volk
-          Jolt::Jolt
-          shaderc::shaderc_combined
-          ${SPIRV_LIBRARIES}
-          spirv-cross-core
-          spirv-cross-glsl
-          spirv-cross-cpp)
+          Jolt::Jolt)
+# Shader compilation (shaderc, SPIRV-Cross) lives in BirdBake/BuildTools;
+# the runtime only loads baked .bird shaders.
 
 target_compile_definitions(Bird_core PRIVATE BIRD_CORE_EXPORTS)
 if(NOT MSVC)
@@ -188,6 +185,7 @@ install(
 	FILES_MATCHING
 	PATTERN "*.vert"
 	PATTERN "*.frag"
+	PATTERN "*.bird"
 )
 install(
   TARGETS Bird_core Bird BuildTools glm

@@ -17,11 +17,16 @@
 
 namespace bird {
 
+/** Mirrors the std140 `Global` block (binding 0); written once per frame. */
 struct GlobalUBOData {
 	Matrix4 perspective;
 	Matrix4 view;
-	Matrix4 model;
 	Vector4 viewPos;
+};
+
+/** Mirrors the `ObjectConstants` push_constant block; written per draw. */
+struct ObjectPushConstants {
+	Matrix4 model;
 };
 
 struct MaterialUBOData {

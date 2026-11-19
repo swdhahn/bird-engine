@@ -9,6 +9,8 @@ add_library(
   generic/Texture.h
   generic/Font.cpp
   generic/Font.h
+  generic/ShaderBinary.cpp
+  generic/ShaderBinary.h
   generic/Buffer.h
   generic/RawBuffer.h
   generic/RawBuffer.cpp
@@ -30,11 +32,7 @@ target_link_libraries(opengl-renderer PRIVATE glm libglew_static)
 target_link_libraries(
   renders
   PRIVATE 
-      glm shaderc::shaderc_combined
-      libglew_static 
-      ${SPIRV_LIBRARIES} spirv-cross-core
-      spirv-cross-glsl spirv-cross-cpp 
-      glfw opengl-renderer
+      glm libglew_static glfw opengl-renderer
 )
 
     
