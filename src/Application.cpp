@@ -32,7 +32,8 @@ void Application::init(Script<Scene>* script) {
 
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	m_uiManager = new UIManager();
-	m_uiManager->init(RESOURCE_MANAGER->loadFont(UIManager::kDefaultFontPath));
+	m_uiManager->init(RESOURCE_MANAGER->loadFont(UIManager::kDefaultFontPath),
+					  m_graphicsPipeline->getWindow().get());
 	// The compositor may already have resized the window (e.g. tiling).
 	handleResize();
 

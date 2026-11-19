@@ -1,1 +1,20 @@
-target_sources(scene PRIVATE ScreenObject.h ScreenObject.cpp UIObject.h UIObject.cpp UITheme.h UIGeometry.h UIButton.h UIButton.cpp UILabel.h UILabel.cpp UIManager.h UIManager.cpp)
+target_sources(scene PRIVATE
+  ScreenObject.h ScreenObject.cpp
+  UIGeometry.h UILayout.h UIEvents.h UIPlatform.h UITheme.h UITextUtil.h
+  UIObject.h UIObject.cpp
+  UIManager.h UIManager.cpp
+  UIDrawList.h UIDrawList.cpp
+  UITextEditState.h UITextEditState.cpp
+  UILabel.h UILabel.cpp
+  UIButton.h UIButton.cpp
+  UITooltip.h UITooltip.cpp
+  UIPanel.h UIPanel.cpp
+  UIStack.h UIStack.cpp
+  UITextBox.h UITextBox.cpp
+  UICheckBox.h UICheckBox.cpp
+  UISlider.h UISlider.cpp
+  UIProgressBar.h UIProgressBar.cpp
+  UIScrollView.h UIScrollView.cpp
+  UITabView.h UITabView.cpp
+  UIWindow.h UIWindow.cpp
+  UIDialog.h UIDialog.cpp)

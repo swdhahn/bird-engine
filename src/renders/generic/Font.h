@@ -59,6 +59,13 @@ class Font : public Resource {
 									  float pixelHeight) const;
 	/** @return the line box size (total advance, line height) in pixels. */
 	Vector2 measureLine(const std::string& text, float pixelHeight) const;
+	/**
+	 * Caret x positions for every boundary of a line: element i is the pen
+	 * position before character i, so the result has text.size() + 1
+	 * entries. O(n).
+	 */
+	std::vector<float> caretOffsets(const std::string& text,
+									float pixelHeight) const;
 
    private:
 	const format::FontGlyph& glyphFor(char character) const;

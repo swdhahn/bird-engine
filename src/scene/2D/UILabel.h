@@ -1,50 +1,43 @@
 #ifndef BIRD_UILABEL_H
 #define BIRD_UILABEL_H
 
-#include <memory>
+#include <optional>
 #include <string>
 
 #include "UIObject.h"
 
 namespace bird {
 
-class Font;
-
 /**
- * A single line of text. The label sizes itself: its scale always equals
- * the measured text box, so setScale on a label is overwritten on layout.
- * Labels are not interactive and never intercept mouse events.
+ * A single line of text. Sizes itself to the text (Fit) unless a size rule
+ * says otherwise. Not interactive: pointer events pass through to whatever
+ * lies beneath.
  */
 class UILabel : public UIObject {
    public:
-	/** @param text - initial text; ASCII only. */
+	/** @param text - ASCII text; other characters render as '?'. */
 	explicit UILabel(std::string text = "");
-	~UILabel();
 
-	void setText(std::string text);
-	const std::string& getText() const;
-	/** @param pixelHeight - must be positive. */
-	void setFontSize(float pixelHeight);
-	void setColor(const Vector3& color);
-	/** Overrides the UIManager's default font; nullptr restores it. */
-	void setFont(std::shared_ptr<Font> font);
-
-	/** Rebuilds glyph quads when text, size, colour or font changed. */
-	void layout() override;
+	UILabel& setText(std::string text);
+	const std::string& getText() const { return m_text; }
 	/**
-	 * Rebuilds glyph quads from an explicit font. Exposed for testing.
-	 * @throws std::invalid_argument when font is nullptr.
+	 * @param pixelHeight - must be positive.
+	 * @throws std::invalid_argument otherwise.
 	 */
-	void rebuildGlyphs(const std::shared_ptr<Font>& font);
+	UILabel& setFontSize(float pixelHeight);
+	float getFontSize() const;
+	/** Overrides the theme's text colour. */
+	UILabel& setColor(const Vector4& color);
+
+	void draw(UIDrawList& list) override;
+
+   protected:
+	Vector2 measureContent(Vector2 available) override;
 
    private:
-	void markDirty();
-
 	std::string m_text;
-	std::shared_ptr<Font> m_font;
-	Vector3 m_color;
-	float m_fontSize;
-	bool m_dirty = true;
+	std::optional<float> m_fontSize;
+	std::optional<Vector4> m_color;
 };
 
 }  // namespace bird

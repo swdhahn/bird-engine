@@ -9,6 +9,53 @@
 #include "../Application.h"
 #include "../scene/2D/UIManager.h"
 
+namespace {
+
+bird::UIManager* uiManager() {
+	return bird::APPLICATION ? bird::APPLICATION->getUIManager() : nullptr;
+}
+
+/** GLFW and UI modifier bits share values (shift 1, ctrl 2, alt 4, super 8). */
+uint8_t uiModifiers(int mods) {
+	return static_cast<uint8_t>(mods & 0x0F);
+}
+
+bird::UIKey uiKey(int key) {
+	using bird::UIKey;
+	switch (key) {
+		case GLFW_KEY_BACKSPACE: return UIKey::Backspace;
+		case GLFW_KEY_DELETE: return UIKey::Delete;
+		case GLFW_KEY_LEFT: return UIKey::Left;
+		case GLFW_KEY_RIGHT: return UIKey::Right;
+		case GLFW_KEY_UP: return UIKey::Up;
+		case GLFW_KEY_DOWN: return UIKey::Down;
+		case GLFW_KEY_HOME: return UIKey::Home;
+		case GLFW_KEY_END: return UIKey::End;
+		case GLFW_KEY_PAGE_UP: return UIKey::PageUp;
+		case GLFW_KEY_PAGE_DOWN: return UIKey::PageDown;
+		case GLFW_KEY_ENTER:
+		case GLFW_KEY_KP_ENTER: return UIKey::Enter;
+		case GLFW_KEY_ESCAPE: return UIKey::Escape;
+		case GLFW_KEY_TAB: return UIKey::Tab;
+		case GLFW_KEY_SPACE: return UIKey::Space;
+		case GLFW_KEY_A: return UIKey::A;
+		case GLFW_KEY_C: return UIKey::C;
+		case GLFW_KEY_V: return UIKey::V;
+		case GLFW_KEY_X: return UIKey::X;
+		default: return UIKey::Unknown;
+	}
+}
+
+bird::UIMouseButton uiButton(int button) {
+	switch (button) {
+		case GLFW_MOUSE_BUTTON_RIGHT: return bird::UIMouseButton::Right;
+		case GLFW_MOUSE_BUTTON_MIDDLE: return bird::UIMouseButton::Middle;
+		default: return bird::UIMouseButton::Left;
+	}
+}
+
+}  // namespace
+
 namespace bird {
 
 Action::Action(std::string name) : m_name(name) {}
@@ -72,10 +119,16 @@ float Input::getActionValue(std::string name) {
 void Input::tick() {
 	glfwGetCursorPos(m_window->getGLFWWindow(), &m_mx, &m_my);
 
+	// While the UI owns the keyboard (a focused text box) or the pointer
+	// (hovering, dragging, modal), the game does not see that input.
+	const bird::UIManager* ui = uiManager();
+	const bool keysBlocked = ui && ui->wantsKeyboard();
+	const bool mouseBlocked = ui && ui->wantsMouse();
+
 	for (int i = 0; i < m_actions.size(); i++) {
 		Action& a = m_actions[i];
 		bool flag = true;
-		for (int j = 0; j < a.getKeys().size(); j++) {
+		for (int j = 0; j < a.getKeys().size() && !keysBlocked; j++) {
 			int key = glfwGetKey(m_window->getGLFWWindow(), a.getKeys()[j]);
 			if (key == GLFW_PRESS) {
 				a.setValue(1.0f);
@@ -83,7 +136,7 @@ void Input::tick() {
 				break;
 			}
 		}
-		for (int j = 0; j < a.getMouseButtons().size(); j++) {
+		for (int j = 0; j < a.getMouseButtons().size() && !mouseBlocked; j++) {
 			int mb = glfwGetMouseButton(m_window->getGLFWWindow(),
 										a.getMouseButtons()[j]);
 			if (mb == GLFW_PRESS) {
@@ -116,10 +169,13 @@ void mouse_button_callback(GLFWwindow* window, int button, int action,
 						   int mods) {
 	double xpos, ypos;
 	glfwGetCursorPos(window, &xpos, &ypos);
-	APPLICATION->getUIManager()->processMouseUI(xpos, ypos, action);
+	if (UIManager* ui = uiManager()) {
+		ui->mouseButton(uiButton(button), action == GLFW_PRESS,
+						Vector2(xpos, ypos), uiModifiers(mods));
+	}
 }
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
-	APPLICATION->getUIManager()->processMouseUI(xpos, ypos, ACTION_NONE);
+	if (UIManager* ui = uiManager()) ui->mouseMove(Vector2(xpos, ypos));
 }
 void cursor_enter_callback(GLFWwindow* window, int entered) {
 	if (entered) {
@@ -128,16 +184,26 @@ void cursor_enter_callback(GLFWwindow* window, int entered) {
 		// The cursor left the content area of the window
 	}
 }
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {}
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+	double xpos, ypos;
+	glfwGetCursorPos(window, &xpos, &ypos);
+	if (UIManager* ui = uiManager()) {
+		ui->scroll(Vector2(xpos, ypos), Vector2(xoffset, yoffset));
+	}
+}
 void joystick_callback(int jid, int event) {
 	if (event == GLFW_CONNECTED) {
 	} else if (event == GLFW_DISCONNECTED) {
 	}
 }
-void character_callback(GLFWwindow* window, unsigned int codepoint) {}
+void character_callback(GLFWwindow* window, unsigned int codepoint) {
+	if (UIManager* ui = uiManager()) ui->character(codepoint);
+}
 void key_callback(GLFWwindow* window, int key, int scancode, int action,
 				  int mods) {
-	if (key == GLFW_KEY_E && action == GLFW_PRESS) {
+	if (UIManager* ui = uiManager()) {
+		ui->key(uiKey(key), action != GLFW_RELEASE, action == GLFW_REPEAT,
+				uiModifiers(mods));
 	}
 }
 

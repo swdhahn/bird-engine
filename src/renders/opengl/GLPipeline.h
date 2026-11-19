@@ -12,6 +12,7 @@
 #include "GLMesh.h"
 #include "GLShader.h"
 #include "GLTexture.h"
+#include "GLUIRenderer.h"
 
 namespace bird::gl {
 
@@ -37,6 +38,7 @@ class GLPipeline : public GraphicsPipeline {
 
 	std::shared_ptr<Shader> ui_shader;
 	std::shared_ptr<Shader> m_postProcessShader;
+	std::unique_ptr<GLUIRenderer> m_uiRenderer;
 };
 
 }  // namespace bird::gl

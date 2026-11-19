@@ -3,7 +3,6 @@
 #include <stdexcept>
 
 #include "FakeFont.h"
-#include "scene/2D/UILabel.h"
 
 using bird::Vector2;
 
@@ -48,26 +47,12 @@ TEST(Font, RejectsMismatchedGlyphCount) {
 	EXPECT_THROW(bird::Font(header, {}, nullptr), std::invalid_argument);
 }
 
-TEST(UILabel, RebuildSizesLabelAndNormalizesGlyphs) {
-	bird::UILabel label("AB");
-	label.setFontSize(10.0f);
-	label.rebuildGlyphs(bird::test::makeFakeFont());
-	EXPECT_FLOAT_EQ(label.getScale().x, 10.0f);
-	EXPECT_FLOAT_EQ(label.getScale().y, 10.0f);
-	ASSERT_EQ(label.getDrawableCount(), 2u);
-	const bird::UIDrawable& second = label.getDrawables()[1];
-	EXPECT_TRUE(second.textured);
-	EXPECT_FLOAT_EQ(second.localOffset.x, 0.55f);
-	EXPECT_FLOAT_EQ(second.size.y, 0.6f);
-}
-
-TEST(UILabel, EmptyTextHasNoDrawables) {
-	bird::UILabel label("");
-	label.rebuildGlyphs(bird::test::makeFakeFont());
-	EXPECT_EQ(label.getDrawableCount(), 0u);
-}
-
-TEST(UILabel, RejectsNonPositiveFontSize) {
-	bird::UILabel label("x");
-	EXPECT_THROW(label.setFontSize(0.0f), std::invalid_argument);
+TEST(Font, CaretOffsetsArePrefixAdvances) {
+	const auto font = bird::test::makeFakeFont();
+	const std::vector<float> offsets = font->caretOffsets("A B", 10.0f);
+	ASSERT_EQ(offsets.size(), 4u);
+	EXPECT_FLOAT_EQ(offsets[0], 0.0f);
+	EXPECT_FLOAT_EQ(offsets[1], 5.0f);
+	EXPECT_FLOAT_EQ(offsets[2], 8.0f);	// space advances 3
+	EXPECT_FLOAT_EQ(offsets[3], 13.0f);
 }

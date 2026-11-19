@@ -87,6 +87,20 @@ std::vector<GlyphQuad> Font::layoutLine(const std::string& text,
 	return quads;
 }
 
+std::vector<float> Font::caretOffsets(const std::string& text,
+									  float pixelHeight) const {
+	const float scale = scaleFor(pixelHeight);
+	std::vector<float> offsets;
+	offsets.reserve(text.size() + 1);
+	float pen = 0.0f;
+	offsets.push_back(pen);
+	for (char character : text) {
+		pen += glyphFor(character).advance * scale;
+		offsets.push_back(pen);
+	}
+	return offsets;
+}
+
 Vector2 Font::measureLine(const std::string& text, float pixelHeight) const {
 	float width = 0.0f;
 	for (char character : text) {

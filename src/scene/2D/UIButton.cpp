@@ -1,70 +1,73 @@
 #include "UIButton.h"
 
-#include "../Application.h"
-#include "UILabel.h"
-#include "UIManager.h"
-#include "UIObject.h"
+#include "UITextUtil.h"
 
 namespace bird {
 
-namespace {
-constexpr int kBorderDrawable = 0;
-constexpr int kFillDrawable = 1;
-constexpr float kBorderInset = 0.05f;
-}  // namespace
-
-UIButton::UIButton() : UIObject(2) {
-	m_drawables[kBorderDrawable] = {{0.0f, 0.0f}, {1.0f, 1.0f},
-									m_theme->borderColor};
-	m_drawables[kFillDrawable] = {{kBorderInset, kBorderInset},
-								  {1.0f - 2 * kBorderInset,
-								   1.0f - 2 * kBorderInset},
-								  m_theme->surfaceColor};
-}
-UIButton::~UIButton() {}
-
-void UIButton::onPress(float mx, float my) {
-	m_pressed = true;
-	refreshFillColor();
+UIButton::UIButton(std::string text) : m_text(std::move(text)) {
+	m_interactive = true;
+	setPadding(UIInsets::symmetric(theme().padding * 1.5f, theme().padding * 0.5f));
+	UISizeRule height = UISizeRule::fit();
+	height.min = theme().controlHeight;
+	setHeight(height);
 }
 
-void UIButton::onRelease(float mx, float my) {
-	m_pressed = false;
-	refreshFillColor();
-	if (m_onClick && containsPoint(Vector2(mx, my))) {
-		m_onClick();
+UIButton& UIButton::setText(std::string text) {
+	if (text != m_text) {
+		m_text = std::move(text);
+		markLayoutDirty();
 	}
+	return *this;
 }
 
-void UIButton::onHover(bool hovered) {
-	m_hovered = hovered;
-	refreshFillColor();
-}
-
-void UIButton::setText(const std::string& text) {
-	if (!m_label) {
-		auto label = std::make_unique<UILabel>(text);
-		label->setAnchor(UIAlignment::Center);
-		label->setPivot(UIAlignment::Center);
-		m_label = label.get();
-		addChild(std::move(label));
-		return;
-	}
-	m_label->setText(text);
-}
-
-void UIButton::setOnClick(std::function<void()> onClick) {
+UIButton& UIButton::setOnClick(std::function<void()> onClick) {
 	m_onClick = std::move(onClick);
+	return *this;
 }
 
-void UIButton::refreshFillColor() {
-	const Vector3 color = m_pressed   ? m_theme->accentColor
-						  : m_hovered ? m_theme->hoverColor
-									  : m_theme->surfaceColor;
-	if (m_drawables[kFillDrawable].color != color) {
-		m_drawables[kFillDrawable].color = color;
-		APPLICATION->getUIManager()->setUpdateUIFlag();
+void UIButton::click() {
+	if (isEffectivelyEnabled() && m_onClick) m_onClick();
+}
+
+bool UIButton::onMouseDown(const UIMouseEvent& event) {
+	return event.button == UIMouseButton::Left;
+}
+
+bool UIButton::onMouseUp(const UIMouseEvent& event) {
+	if (event.button == UIMouseButton::Left && containsPoint(event.position)) {
+		click();
 	}
+	return true;
+}
+
+bool UIButton::onKey(const UIKeyEvent& event) {
+	if (event.key == UIKey::Enter || event.key == UIKey::Space) {
+		click();
+		return true;
+	}
+	return false;
+}
+
+Vector2 UIButton::measureContent(Vector2 /*available*/) {
+	return ui::measureText(font(), m_text, theme().fontSize);
+}
+
+Vector4 UIButton::backgroundColor() const {
+	const UITheme& t = theme();
+	if (!isEffectivelyEnabled()) return t.disabledColor;
+	if (isPressed()) return t.activeColor;
+	if (isHovered()) return t.hoverColor;
+	return t.surfaceColor;
+}
+
+void UIButton::draw(UIDrawList& list) {
+	const UITheme& t = theme();
+	const UIRect bounds{Vector2(0.0f), getSize()};
+	list.rect(bounds, backgroundColor());
+	list.border(bounds, t.borderWidth,
+				isFocused() ? t.focusBorderColor : t.borderColor);
+	ui::drawTextCentered(list, font(), m_text, t.fontSize, bounds,
+						 isEffectivelyEnabled() ? t.textColor : t.disabledText);
 }
 
 }  // namespace bird

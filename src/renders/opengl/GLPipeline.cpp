@@ -15,6 +15,7 @@
 #include "GLFrameBuffer.h"
 #include "GLMesh.h"
 #include "GLShader.h"
+#include "GLUIRenderer.h"
 
 namespace bird::gl {
 
@@ -45,6 +46,7 @@ void GLPipeline::init() {
 					.attachShaderFile("assets/shaders/ui.frag", FRAGMENT)
 					.create();
 
+	m_uiRenderer = std::make_unique<GLUIRenderer>();
 	m_postProcessShader =
 		ShaderBuilder()
 			.attachShaderFile("assets/shaders/passthrough.vert", VERTEX)
@@ -103,8 +105,8 @@ void GLPipeline::renderRootScene(Scene* scene) {
 
 void GLPipeline::renderUI() {
 	UIManager* uiManager = APPLICATION->getUIManager();
-	const uint32_t indexCount = uiManager->getIndexCount();
-	if (indexCount == 0) return;
+	const UIDrawList& drawList = uiManager->getDrawList();
+	if (drawList.indices().empty()) return;
 
 	((GLShader*)ui_shader.get())->bind();
 	GlobalUBOData uiGlobals{};
@@ -117,10 +119,7 @@ void GLPipeline::renderUI() {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	GLMesh* uiMesh = (GLMesh*)uiManager->getUIMesh().get();
-	glBindVertexArray(uiMesh->getVAO());
-	glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
-	glBindVertexArray(0);
+	m_uiRenderer->draw(drawList);
 
 	glDisable(GL_BLEND);
 	glBindTexture(GL_TEXTURE_2D, 0);

@@ -5,14 +5,19 @@
 #ifndef BIRD_WINDOW_H
 #define BIRD_WINDOW_H
 
+#include <array>
+
+#include "../scene/2D/UIPlatform.h"
 #include "GraphicsConstants.h"
 
 
 struct GLFWwindow;
+struct GLFWcursor;
 
 namespace bird {
 
-    class Window {
+    /** The application window; also the UI's clipboard and cursor service. */
+    class Window : public UIPlatform {
     public:
         Window(uint32_t width, uint32_t height, std::string title);
         ~Window();
@@ -36,8 +41,14 @@ namespace bird {
         uint32_t getWidth() const;
         uint32_t getHeight() const;
 
+        std::string getClipboardText() override;
+        void setClipboardText(const std::string& text) override;
+        void setCursor(UICursor cursor) override;
+
     private:
         GLFWwindow* m_pWindow;
+        // Standard cursors, created on first use and owned by the window.
+        std::array<GLFWcursor*, 6> m_cursors{};
         // Zero until the first pollResize, which therefore always reports.
         uint32_t m_framebufferWidth = 0;
         uint32_t m_framebufferHeight = 0;

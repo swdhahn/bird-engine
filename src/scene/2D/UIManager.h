@@ -2,82 +2,154 @@
 #define BIRD_UIMANAGER_H
 
 #include <memory>
+#include <vector>
 
-#include "../../util/Input.h"
+#include "UIDrawList.h"
+#include "UIEvents.h"
 #include "UIObject.h"
+#include "UIPlatform.h"
 
 namespace bird {
-class Mesh;
+
 class Font;
 
-extern Input* INPUT;
-
+/**
+ * Owns the UI tree and every piece of interaction state: hover, pointer
+ * capture, keyboard focus, modal stack, tooltip and pending removals.
+ *
+ * Per frame: process() re-runs layout when invalidated (two O(n) passes),
+ * advances timers, and rebuilds the draw list when invalidated. Input
+ * arrives in window coordinates through mouseMove/mouseButton/scroll/key/
+ * character; events go to the hit (or focused) node and bubble up through
+ * its parents until a handler consumes them.
+ *
+ * Headless: no graphics API is touched, so the whole UI is unit-testable.
+ */
 class UIManager {
    public:
-	UIManager();
-	~UIManager();
-
 	/** Font baked by BuildTools and passed to init() by Application. */
 	static constexpr const char* kDefaultFontPath =
 		"assets/fonts/DejaVuSans.ttf";
+	/** Seconds and pixels within which two presses form a double click. */
+	static constexpr float kDoubleClickSeconds = 0.35f;
+	static constexpr float kDoubleClickPixels = 4.0f;
+
+	UIManager();
+	~UIManager();
 
 	/**
-	 * Creates GPU buffers and adopts the UI font, whose atlas also supplies
-	 * the white texel for solid quads.
-	 * @param font - required; see kDefaultFontPath.
+	 * @param font - UI font; its atlas also supplies the white texel.
+	 * @param platform - clipboard and cursor services; may be nullptr.
 	 * @throws std::invalid_argument when font is nullptr.
 	 */
-	void init(std::shared_ptr<Font> font);
+	void init(std::shared_ptr<Font> font, UIPlatform* platform);
 	void deinit();
 
-	/** Rebuilds the batched UI mesh when the tree has been marked dirty. */
+	/** Re-layouts, advances timers and rebuilds the draw list if needed. */
 	void process(float delta);
-	/**
-	 * Routes a mouse event to the UI tree.
-	 * @param mx, my - cursor position in window pixels.
-	 * @param action - ACTION_NONE (motion), ACTION_PRESS or ACTION_RELEASE.
-	 */
-	void processMouseUI(double mx, double my, int action);
-	void setUpdateUIFlag();
-	/**
-	 * Resizes the root to the window so that anchored widgets re-layout.
-	 * @param width, height - window size in screen coordinates.
-	 */
+	/** Runs any pending layout immediately (process() does this too). */
+	void layoutNow();
+	/** Resizes the root to the window so anchored widgets re-layout. */
 	void setViewportSize(uint32_t width, uint32_t height);
+	Vector2 getViewportSize() const { return m_viewport; }
 
-	std::shared_ptr<Mesh> getUIMesh();
-	const std::shared_ptr<Font>& getFont() const;
-	/** @return the number of indices currently valid in the UI mesh. */
-	uint32_t getIndexCount() const;
+	// ----------------------------------------------------------- input
+	void mouseMove(Vector2 position, uint8_t modifiers = UI_MOD_NONE);
+	void mouseButton(UIMouseButton button, bool pressed, Vector2 position,
+					 uint8_t modifiers = UI_MOD_NONE);
+	void scroll(Vector2 position, Vector2 delta);
+	/** @param pressed - true for press and repeat, false for release. */
+	void key(UIKey key, bool pressed, bool repeat,
+			 uint8_t modifiers = UI_MOD_NONE);
+	void character(uint32_t codepoint);
+
+	/** True while focused UI (e.g. a text box) should own the keyboard. */
+	bool wantsKeyboard() const;
+	/** True while the pointer is over interactive UI or captured by it. */
+	bool wantsMouse() const;
+
+	// ----------------------------------------------------------- focus
+	void setFocus(UIObject* node);
+	UIObject* getFocus() const { return m_focused; }
+	/** Moves focus to the next (or previous) focusable node in tree order. */
+	void focusNext(bool backwards = false);
+	UIObject* getHovered() const { return m_hovered; }
+	UIObject* getCaptured() const { return m_captured; }
+
+	// --------------------------------------------------------- layers
 	UIObject* getRoot();
-
+	/** Layer drawn above the root: dialogs and tooltips. */
+	UIObject* getOverlay();
 	/**
-	 * Finds the top-most enabled, interactive, drawable object under a point. Later
-	 * siblings and children render above earlier ones, so the search runs
-	 * in reverse draw order.
-	 * @return the hit object, or nullptr.
+	 * Shows a modal node on the overlay, stretched over the viewport. While
+	 * any modal is open, input below the top modal is blocked.
+	 * @return the modal, for further configuration.
 	 */
-	static UIObject* findTopmostAt(UIObject* root, const Vector2& screenPoint);
+	UIObject* pushModal(std::unique_ptr<UIObject> modal);
+	/** Closes a modal opened with pushModal (deferred like removeChild). */
+	void closeModal(UIObject* modal);
+	UIObject* getTopModal() const;
+
+	/** Topmost interactive node under a point, honouring the modal. */
+	UIObject* hitTest(Vector2 position) const;
+	/** Topmost interactive, enabled, visible node of a subtree. */
+	static UIObject* findTopmostAt(UIObject* root, const Vector2& point);
+
+	// ---------------------------------------------- node notifications
+	void invalidateLayout();
+	void invalidateDraw();
+	/** Legacy name for invalidateLayout(). */
+	void setUpdateUIFlag() { invalidateLayout(); }
+	/** Queues a node for destruction at the next safe point. */
+	void scheduleRemoval(UIObject* node);
+	/** Clears every interaction pointer into a subtree about to die. */
+	void onSubtreeRemoved(UIObject* subtree);
+
+	// ------------------------------------------------------- accessors
+	const UIDrawList& getDrawList() const { return m_drawList; }
+	const std::shared_ptr<Font>& getFont() const { return m_font; }
+	UIPlatform* getPlatform() const { return m_platform; }
+	float getTime() const { return m_time; }
+	bool isLayoutDirty() const { return m_layoutDirty; }
 
    private:
-	void updateUI();
-	void processTreeUI(UIObject* object, const Matrix3& parentBasis,
-					   const Vector2& parentSize);
+	void flushRemovals();
+	void rebuildDrawList();
+	void drawTree(UIObject& node);
+	void setHovered(UIObject* node);
+	void updateCursor();
+	void updateTooltip(float delta);
+	void hideTooltip();
+	/** Sends an event to node, then each ancestor, until one consumes it. */
+	template <typename Handler>
+	UIObject* bubble(UIObject* node, Handler handler);
+	UIObject* focusScope();
+
 	std::unique_ptr<UIObject> m_root;
-
-	std::shared_ptr<Mesh> m_mesh;
+	std::unique_ptr<UIObject> m_overlay;
 	std::shared_ptr<Font> m_font;
-	std::vector<float> m_vertices;
-	std::vector<float> m_textureCoords;
-	std::vector<float> m_colors;
-	std::vector<uint32_t> m_indices;
+	UIPlatform* m_platform = nullptr;
+	UIDrawList m_drawList;
 
-	UIObject* m_hovered;
-	UIObject* m_pressed;
+	UIObject* m_hovered = nullptr;
+	UIObject* m_captured = nullptr;
+	UIObject* m_focused = nullptr;
+	UIObject* m_tooltip = nullptr;
+	UIObject* m_tooltipSource = nullptr;
+	std::vector<UIObject*> m_modals;
+	std::vector<UIObject*> m_pendingRemovals;
 
-	uint32_t m_vertexCount;
-	uint32_t m_indexCount;
-	bool m_shouldUpdateUI;
+	Vector2 m_viewport{0.0f};
+	Vector2 m_mouse{0.0f};
+	Vector2 m_lastClickPosition{-1e9f};
+	float m_lastClickTime = -1e9f;
+	int m_lastClickCount = 0;
+	float m_time = 0.0f;
+	float m_hoverTime = 0.0f;
+	UICursor m_cursor = UICursor::Arrow;
+	bool m_layoutDirty = true;
+	bool m_drawDirty = true;
+	bool m_shuttingDown = false;
 };
 
 }  // namespace bird

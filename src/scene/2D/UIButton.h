@@ -5,36 +5,39 @@
 #include <string>
 
 #include "UIObject.h"
+
 namespace bird {
 
-class UILabel;
-
 /**
- * A rectangular button made of a border quad and a fill quad. The fill
- * colour follows the theme's surface, hover and accent colours.
+ * A push button with a centred caption. Activates on a click that is
+ * released inside it, or on Enter/Space while focused.
  */
 class UIButton : public UIObject {
    public:
-	UIButton();
-	~UIButton();
+	explicit UIButton(std::string text = "");
 
-	void onPress(float mx, float my) override;
-	void onRelease(float mx, float my) override;
-	void onHover(bool hovered) override;
+	UIButton& setText(std::string text);
+	const std::string& getText() const { return m_text; }
+	/** Sets the callback fired when the button activates. */
+	UIButton& setOnClick(std::function<void()> onClick);
+	/** Activates the button as if clicked (no effect when disabled). */
+	void click();
 
-	/** Sets the centred caption, creating its label on first use. */
-	void setText(const std::string& text);
+	bool isFocusable() const override { return true; }
+	UICursor cursor() const override { return UICursor::Hand; }
+	bool onMouseDown(const UIMouseEvent& event) override;
+	bool onMouseUp(const UIMouseEvent& event) override;
+	bool onKey(const UIKeyEvent& event) override;
+	void draw(UIDrawList& list) override;
 
-	/** Sets the callback fired when a press is released inside the button. */
-	void setOnClick(std::function<void()> onClick);
+   protected:
+	Vector2 measureContent(Vector2 available) override;
+	/** Fill colour for the current state; tab buttons override it. */
+	virtual Vector4 backgroundColor() const;
 
    private:
-	void refreshFillColor();
-
+	std::string m_text;
 	std::function<void()> m_onClick;
-	UILabel* m_label = nullptr;	 // owned by m_children
-	bool m_hovered = false;
-	bool m_pressed = false;
 };
 
 }  // namespace bird

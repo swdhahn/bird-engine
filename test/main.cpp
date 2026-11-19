@@ -1,6 +1,16 @@
 #include <Application.h>
 #include <scene/2D/UIButton.h>
+#include <scene/2D/UICheckBox.h>
+#include <scene/2D/UIDialog.h>
 #include <scene/2D/UILabel.h>
+#include <scene/2D/UIPanel.h>
+#include <scene/2D/UIProgressBar.h>
+#include <scene/2D/UIScrollView.h>
+#include <scene/2D/UISlider.h>
+#include <scene/2D/UIStack.h>
+#include <scene/2D/UITabView.h>
+#include <scene/2D/UITextBox.h>
+#include <scene/2D/UIWindow.h>
 #include <scene/2D/UIManager.h>
 #include <scene/Camera.h>
 #include <scene/components/MeshComponent.h>
@@ -12,6 +22,7 @@
 #include <glm/gtx/rotate_vector.hpp>
 #include <iostream>
 #include <memory>
+#include <string>
 #include <vector>
 
 class POVCamera : public bird::ProcessScript<bird::Camera> {
@@ -49,6 +60,136 @@ class POVCamera : public bird::ProcessScript<bird::Camera> {
 	}
 };
 
+
+namespace gallery {
+
+using namespace bird;
+
+/** A labelled row: fixed-width caption, then a control that fills. */
+UIStack* row(UIObject* parent, const std::string& caption) {
+	auto* line = parent->add<UIStack>(UIAxis::Horizontal);
+	line->setAlign(UIAlign::Center);
+	line->add<UILabel>(caption)->setWidth(UISizeRule::fixed(70.0f));
+	return line;
+}
+
+void buildControlsTab(UIManager* ui, UIObject* page) {
+	auto* column = page->add<UIStack>(UIAxis::Vertical);
+	column->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
+	column->setAlign(UIAlign::Stretch);
+	column->setGap(10.0f);
+
+	auto* status = column->add<UILabel>("Interact with the controls below");
+	status->setColor(Vector4(0.55f, 0.75f, 1.0f, 1.0f));
+
+	auto* name = row(column, "Name")->add<UITextBox>();
+	name->setPlaceholder("Type a name, press Enter");
+	name->setWidth(UISizeRule::fill());
+	name->setOnSubmit([status](const std::string& text) {
+		status->setText("Submitted: " + text);
+	});
+
+	column->add<UICheckBox>("Enable shadows", true)
+		->setOnChanged([status](bool on) {
+			status->setText(on ? "Shadows on" : "Shadows off");
+		});
+
+	auto* progress = column->add<UIProgressBar>(0.35f);
+	auto* volume = row(column, "Volume")->add<UISlider>(0.0f, 1.0f, 0.35f);
+	volume->setWidth(UISizeRule::fill());
+	volume->setStep(0.05f);
+	volume->setOnChanged([progress](float value) { progress->setValue(value); });
+	volume->setTooltip("Drag, click, or use arrow keys");
+
+	auto* buttons = column->add<UIStack>(UIAxis::Horizontal);
+	buttons->add<UIButton>("Save")
+		->setOnClick([status] { status->setText("Saved (not really)"); })
+		.setTooltip("Writes settings to disk");
+	buttons->add<UIButton>("Open dialog")->setOnClick([ui, status] {
+		auto dialog = std::make_unique<UIDialog>(
+			"Discard changes?", "Unsaved settings will be lost.");
+		dialog->addButton("Cancel", [status] { status->setText("Kept changes"); });
+		dialog->addButton("Discard", [status] { status->setText("Discarded"); });
+		ui->pushModal(std::move(dialog));
+	});
+	buttons->add<UIButton>("Disabled")->setEnabled(false);
+}
+
+void buildLayoutTab(UIObject* page) {
+	auto* column = page->add<UIStack>(UIAxis::Vertical);
+	column->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
+	column->setAlign(UIAlign::Stretch);
+	column->setGap(8.0f);
+
+	const std::pair<const char*, UIJustify> modes[] = {
+		{"Start", UIJustify::Start},
+		{"Center", UIJustify::Center},
+		{"End", UIJustify::End},
+		{"SpaceBetween", UIJustify::SpaceBetween}};
+	for (const auto& [name, justify] : modes) {
+		column->add<UILabel>(std::string("justify ") + name)
+			->setColor(Vector4(0.6f, 0.62f, 0.66f, 1.0f));
+		auto* line = column->add<UIStack>(UIAxis::Horizontal);
+		line->setJustify(justify);
+		for (int i = 0; i < 3; i++) {
+			auto* box = line->add<UIPanel>();
+			box->setSize(Vector2(48.0f, 20.0f));
+			box->setBackground(Vector4(0.0f, 0.48f, 0.8f, 0.35f + 0.2f * i));
+		}
+	}
+	column->add<UILabel>("fill weights 1 : 2 : 1")
+		->setColor(Vector4(0.6f, 0.62f, 0.66f, 1.0f));
+	auto* weights = column->add<UIStack>(UIAxis::Horizontal);
+	for (float weight : {1.0f, 2.0f, 1.0f}) {
+		auto* box = weights->add<UIPanel>();
+		box->setWidth(UISizeRule::fill(weight));
+		box->setHeight(UISizeRule::fixed(20.0f));
+		box->setBackground(Vector4(0.2f, 0.7f, 0.45f, 0.6f));
+	}
+}
+
+void buildScrollTab(UIObject* page) {
+	auto* scroll = page->add<UIScrollView>();
+	scroll->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
+	auto* list = scroll->setContent<UIStack>(UIAxis::Vertical);
+	list->setPadding(UIInsets::all(6.0f));
+	list->setAlign(UIAlign::Stretch);
+	for (int i = 1; i <= 40; i++) {
+		auto* line = list->add<UIStack>(UIAxis::Horizontal);
+		line->setAlign(UIAlign::Center);
+		line->add<UILabel>("Row " + std::to_string(i))->setWidth(UISizeRule::fill());
+		line->add<UICheckBox>("", i % 3 == 0);
+	}
+}
+
+void openGalleryWindow(UIManager* ui) {
+	auto* window = ui->getRoot()->add<UIWindow>("UI Gallery", Vector2(440, 420));
+	window->setOffset(Vector2(40.0f, 130.0f));
+	auto* tabs = window->getContent()->add<UITabView>();
+	tabs->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
+	buildControlsTab(ui, tabs->addTab<UIObject>("Controls"));
+	buildLayoutTab(tabs->addTab<UIObject>("Layout"));
+	buildScrollTab(tabs->addTab<UIObject>("Scroll"));
+}
+
+}  // namespace gallery
+
+void buildGallery(bird::UIManager* ui) {
+	using namespace bird;
+	auto* title = ui->getRoot()->add<UILabel>("Bird Engine");
+	title->setFontSize(56.0f);
+	title->setOffset(Vector2(40.0f, 40.0f));
+
+	// Anchored to the bottom-right corner; follows window resizes.
+	auto* reopen = ui->getRoot()->add<UIButton>("Open UI Gallery");
+	reopen->setAnchor(UIAlignment::BottomRight);
+	reopen->setPivot(UIAlignment::BottomRight);
+	reopen->setOffset(Vector2(-16.0f, -16.0f));
+	reopen->setOnClick([ui] { gallery::openGalleryWindow(ui); });
+
+	gallery::openGalleryWindow(ui);
+}
+
 class MainScript : public bird::Script<bird::Scene> {
    public:
 	void init() override {
@@ -80,23 +221,7 @@ class MainScript : public bird::Script<bird::Scene> {
 		cam->addComponent(bird::_own_mk<POVCamera>());
 		cam->enable();
 		object()->addChild(std::move(cam));
-		auto button = bird::_own_mk<bird::UIButton>();
-		button->setScale(bird::Vector2(200, 100));
-		// Stays centred, 100px below the middle, as the window resizes.
-		button->setAnchor(bird::UIAlignment::Center);
-		button->setPivot(bird::UIAlignment::Center);
-		button->setPosition(bird::Vector2(0, 100));
-		button->setText("Click me");
-		button->setOnClick([] { std::cout << "Button clicked" << std::endl; });
-
-		bird::APPLICATION->getUIManager()->getRoot()->addChild(
-			std::move(button));
-
-		auto title = bird::_own_mk<bird::UILabel>("Bird Engine");
-		title->setFontSize(72.0f);
-		title->setPosition(bird::Vector2(40, 40));
-		bird::APPLICATION->getUIManager()->getRoot()->addChild(
-			std::move(title));
+		buildGallery(bird::APPLICATION->getUIManager());
 	}
 
 	void deinit() override {}

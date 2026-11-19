@@ -98,7 +98,32 @@ uint32_t Window::getHeight() const {
 	return m_height;
 }
 
+std::string Window::getClipboardText() {
+	const char* text = glfwGetClipboardString(m_pWindow);
+	return text ? std::string(text) : std::string();
+}
+
+void Window::setClipboardText(const std::string& text) {
+	glfwSetClipboardString(m_pWindow, text.c_str());
+}
+
+void Window::setCursor(UICursor cursor) {
+	// GLFW 3.3 has no diagonal resize cursor; the crosshair stands in.
+	static constexpr int kShapes[] = {GLFW_ARROW_CURSOR,	 GLFW_IBEAM_CURSOR,
+									  GLFW_HAND_CURSOR,		 GLFW_HRESIZE_CURSOR,
+									  GLFW_VRESIZE_CURSOR, GLFW_CROSSHAIR_CURSOR};
+	const size_t index = static_cast<size_t>(cursor);
+	if (index >= m_cursors.size()) return;
+	if (!m_cursors[index]) {
+		m_cursors[index] = glfwCreateStandardCursor(kShapes[index]);
+	}
+	glfwSetCursor(m_pWindow, m_cursors[index]);
+}
+
 Window::~Window() {
+	for (GLFWcursor* cursor : m_cursors) {
+		if (cursor) glfwDestroyCursor(cursor);
+	}
 	glfwDestroyWindow(m_pWindow);
 	glfwTerminate();
 }
