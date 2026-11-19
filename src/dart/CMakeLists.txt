@@ -17,6 +17,15 @@ set(BIRD_SCRIPT_HEADERS
     ${CMAKE_SOURCE_DIR}/src/scene/components/Script.h
     ${CMAKE_SOURCE_DIR}/src/scene/components/ProcessScript.h
     ${CMAKE_SOURCE_DIR}/src/scene/components/MeshComponent.h
+    ${CMAKE_SOURCE_DIR}/src/physics/PhysicsLayers.h
+    ${CMAKE_SOURCE_DIR}/src/physics/ContactEvent.h
+    ${CMAKE_SOURCE_DIR}/src/physics/FixedStepClock.h
+    ${CMAKE_SOURCE_DIR}/src/physics/CollisionShape.h
+    ${CMAKE_SOURCE_DIR}/src/physics/Joint.h
+    ${CMAKE_SOURCE_DIR}/src/physics/PhysicsWorld.h
+    ${CMAKE_SOURCE_DIR}/src/physics/PhysicsServer.h
+    ${CMAKE_SOURCE_DIR}/src/physics/RigidBodyComponent.h
+    ${CMAKE_SOURCE_DIR}/src/physics/CharacterControllerComponent.h
     ${CMAKE_SOURCE_DIR}/src/scene/2D/ScreenObject.h
     ${CMAKE_SOURCE_DIR}/src/scene/2D/UILayout.h
     ${CMAKE_SOURCE_DIR}/src/scene/2D/UIEvents.h

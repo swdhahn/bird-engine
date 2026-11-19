@@ -209,3 +209,74 @@ void runUiIntegrationChecks() {
 
   root.dispose();
 }
+
+/// Tests Jolt Physics from Dart: PhysicsServer, PhysicsWorld, CollisionShape,
+/// RigidBodyComponent, gravity simulation, raycast(), and onContactBegin callbacks.
+@pragma('vm:entry-point')
+void runPhysicsIntegrationChecks() {
+  final server = PhysicsServer(PhysicsServerSettings());
+  final scene = Scene();
+  final world = scene.createPhysicsWorld(PhysicsWorldSettings())!;
+  scene.init(null);
+
+  // Static floor at y = -0.5 (top surface at y = 0.0)
+  final floorObj = WorldObject();
+  floorObj.setWorldPosition(Vector3(0.0, -0.5, 0.0));
+  final floorSettings = RigidBodySettings()..motionType = MotionType.Static;
+  final floorBody = RigidBodyComponent(
+    CollisionShape.box(Vector3(10.0, 0.5, 10.0)),
+    floorSettings,
+  );
+  floorObj.addComponent(floorBody);
+  scene.addChild(floorObj);
+
+  // Dynamic box dropped from y = 2.0
+  var contactCount = 0;
+  final boxObj = WorldObject();
+  boxObj.setWorldPosition(Vector3(0.0, 2.0, 0.0));
+  final boxSettings = RigidBodySettings()..motionType = MotionType.Dynamic;
+  final boxBody = RigidBodyComponent(
+    CollisionShape.box(Vector3(0.5, 0.5, 0.5)),
+    boxSettings,
+  );
+  boxBody.setOnContactBegin((ContactEvent ev) {
+    contactCount++;
+  });
+  boxObj.addComponent(boxBody);
+  scene.addChild(boxObj);
+
+  if (world.getBodyCount() != 2) {
+    throw StateError('Expected 2 rigid bodies, got ${world.getBodyCount()}');
+  }
+
+  // Simulate 1 second at 60 Hz
+  for (var i = 0; i < 60; i++) {
+    world.step(1.0 / 60.0);
+  }
+
+  final finalPos = boxObj.getWorldPosition();
+  if (finalPos.y >= 1.5 || finalPos.y < 0.0) {
+    throw StateError('Box should have landed near y=0.5, got y=${finalPos.y}');
+  }
+  if (contactCount < 1) {
+    throw StateError('Expected onContactBegin callback to fire at least once');
+  }
+
+  // Raycast straight down from y = 5.0 (omitting optional ignore parameter)
+  final hit = world.raycast(
+    Vector3(0.0, 5.0, 0.0),
+    Vector3(0.0, -1.0, 0.0),
+    20.0,
+    0xFFFF,
+  );
+  if (hit == null) {
+    throw StateError('Expected raycast to hit the fallen box');
+  }
+  hit.dispose();
+
+  scene.deinit();
+  scene.dispose();
+  floorSettings.dispose();
+  boxSettings.dispose();
+  server.dispose();
+}
