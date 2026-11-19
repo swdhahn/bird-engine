@@ -114,13 +114,24 @@ ExternalProject_Add(
 		PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/GLEW
 		CMAKE_ARGS -DONLY_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -Dglew-cmake_BUILD_SHARED=OFF "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}")
 
+# Assimp bundles an old zlib snapshot (contrib/zlib). Its zutil.h legacy
+# fallback code #defines fdopen() to NULL, which collides with the real
+# fdopen() declaration in the macOS SDK's <stdio.h> under the newer
+# clang/SDK that ships for Apple Silicon, breaking the build. On M-series
+# Macs and beyond, use the system zlib instead; everyone else keeps
+# building it from source as before.
+set(ASSIMP_ZLIB_FLAG "-DASSIMP_BUILD_ZLIB=ON")
+if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+	set(ASSIMP_ZLIB_FLAG "-DASSIMP_BUILD_ZLIB=OFF")
+endif()
+
 ExternalProject_Add(
 		ASSIMP
 		URL "https://github.com/assimp/assimp/archive/refs/tags/v5.3.1.tar.gz"
 		PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/ASSIMP
 		CMAKE_ARGS -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DASSIMP_BUILD_TESTS=OFF
 													-DBUILD_SHARED_LIBS=OFF
-													-DASSIMP_BUILD_ZLIB=ON
+													${ASSIMP_ZLIB_FLAG}
 													-DASSIMP_WARNINGS_AS_ERRORS=OFF
 													-DASSIMP_INSTALL_PDB=OFF
 													"-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}"
