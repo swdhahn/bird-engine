@@ -23,6 +23,7 @@ flowchart TD
     Tut --> T3["Tutorial 3: UI Layouts & Widgets"]
     Tut --> T4["Tutorial 4: Shaders & Asset Baking"]
     Tut --> T5["Tutorial 5: Rigid-Body Physics"]
+    Tut --> T6["Tutorial 6: Scripting Games in Dart"]
 
     Arch --> A1["Application Lifecycle & Main Loop"]
     Arch --> A2["Memory & Ownership Model"]
@@ -31,6 +32,7 @@ flowchart TD
     Arch --> A5["2D Retained-Mode UI Framework"]
     Arch --> A6["Resource & Asset Management"]
     Arch --> A7["Physics (Jolt Integration)"]
+    Arch --> A8["Dart Scripting & FFI Codegen"]
 ```
 
 ---
@@ -50,6 +52,7 @@ Hands-on walkthroughs introducing engine systems progressively with complete, ru
 - **[Tutorial 3: Building UI Layouts](tutorials/03_building_ui_layouts.md)**: Crafting responsive 2D interfaces with `UIManager`, `UIStack`, buttons, sliders, text inputs, modal dialogs, lists and trees, the colour picker, and rich inputs.
 - **[Tutorial 4: Shaders & Asset Baking](tutorials/04_shaders_and_baking.md)**: Writing Vulkan-compatible GLSL shaders, configuring push constants, baking with `BuildTools`, and material assignment.
 - **[Tutorial 5: Rigid-Body Physics](tutorials/05_rigid_body_physics.md)**: Static floors and falling boxes with `RigidBodyComponent`, forces in `physicsProcess`, contact and trigger events, raycast picking, collision layers, and a walking character controller.
+- **[Tutorial 6: Scripting Games in Dart](tutorials/06_dart_scripting.md)**: Writing and running full 3D, UI, and physics games in Dart with the embedded Dart VM and auto-generated FFI bindings.
 
 ### 3. [Architecture Deep Dives](architecture/lifecycle_and_main_loop.md)
 Under-the-hood technical references detailing internal mechanics and design decisions.
@@ -60,3 +63,4 @@ Under-the-hood technical references detailing internal mechanics and design deci
 - **[2D UI Framework](architecture/ui_framework.md)**: The two-pass layout system (measure & arrange), event bubbling, popups and focus, `UIDrawList` batching, and the widget library including virtualized lists and trees, the colour picker, and rich inputs.
 - **[Resource Management](architecture/resource_management.md)**: Asset caching in `ResourceManager`, binary `.bird` formats, and `BuildTools` compilation.
 - **[Physics](architecture/physics.md)**: Jolt integration: per-scene worlds, the fixed-step loop, transform synchronization, character controllers, main-thread contact and trigger events (characters included), collision layers, queries, joints, render interpolation, chunked level collision, and cached debug wireframes.
+- **[Dart Scripting & FFI Codegen](architecture/dart_scripting_and_codegen.md)**: `libclang`-based `DartApiGenerator`, 3-tier C++/C/Dart FFI architecture, Doxygen-to-Dartdoc extraction, ownership rules, embedded `libdart_dll` VM runtime, and troubleshooting.
