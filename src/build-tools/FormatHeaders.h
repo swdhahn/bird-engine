@@ -60,12 +60,16 @@ struct MeshVBOFormat {
  * { ShaderVariantHeader, uint8_t bytes[byteSize] }  x variantCount
  * { ShaderResourceInfo, char name[nameSize] }       x resourceCount
  * { PushConstantMemberInfo, char name[nameSize] }   x pushConstantMemberCount
+ * { ShaderDependencyInfo, char path[pathSize] }     x dependencyCount
  *
+ * Dependencies are every file pulled in through #include (transitively),
+ * each with the content hash it had at bake time. BuildTools re-bakes when
+ * the source or any dependency hash changes.
  * Names are stored without a terminator and match the identifiers emitted
  * in the GLSL variants, so the OpenGL runtime can resolve them by name.
  */
 constexpr char SHADER_FILE_MAGIC[4] = {'B', 'S', 'H', 'D'};
-constexpr uint32_t SHADER_FORMAT_VERSION = 1;
+constexpr uint32_t SHADER_FORMAT_VERSION = 2;
 
 enum ShaderStageKind : uint8_t {
 	SHADER_STAGE_VERTEX,
@@ -115,6 +119,7 @@ struct ShaderFileHeader {
 	uint16_t resourceCount;
 	uint16_t pushConstantSize;	// bytes; 0 when the stage has none
 	uint16_t pushConstantMemberCount;
+	uint16_t dependencyCount;
 };
 struct ShaderVariantHeader {
 	uint8_t target;	 // ShaderTarget
@@ -129,6 +134,10 @@ struct PushConstantMemberInfo {
 	uint16_t offset;
 	uint8_t type;  // PushConstantType
 	uint16_t nameSize;
+};
+struct ShaderDependencyInfo {
+	uint64_t contentHash;  // FNV-1a of the included file
+	uint16_t pathSize;
 };
 
 // #####################################

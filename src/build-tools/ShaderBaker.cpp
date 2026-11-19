@@ -1,6 +1,9 @@
 #include "ShaderBaker.h"
 
 #include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <memory>
 #include <shaderc/shaderc.hpp>
 #include <spirv-tools/libspirv.hpp>
 #include <spirv_cross/spirv_glsl.hpp>
@@ -46,10 +49,89 @@ const StageInfo& stageInfoFor(const std::string& path) {
 	throw ShaderBakeError(path + ": " + message);
 }
 
+bool readTextFile(const std::string& path, std::string& contents) {
+	std::ifstream file(path, std::ios::binary);
+	if (!file) return false;
+	contents.assign(std::istreambuf_iterator<char>(file),
+					std::istreambuf_iterator<char>());
+	return true;
+}
+
+/**
+ * Resolves `#include "file"` relative to the including file and records
+ * every file it serves (transitively), so the bake can hash them.
+ * Angle-bracket includes are rejected: there is no system include path.
+ */
+class TrackingIncluder : public shaderc::CompileOptions::IncluderInterface {
+   public:
+	explicit TrackingIncluder(std::vector<ShaderDependency>& dependencies)
+		: m_dependencies(dependencies) {}
+
+	shaderc_include_result* GetInclude(const char* requested,
+									   shaderc_include_type type,
+									   const char* requesting,
+									   size_t /*depth*/) override {
+		auto* result = new Result();
+		const std::string resolved =
+			(std::filesystem::path(requesting).parent_path() / requested)
+				.lexically_normal()
+				.generic_string();
+		// glslang retries a failed "..." include as <...>, so a standard
+		// request is either a genuine <...> or a missing quoted include.
+		if (type == shaderc_include_type_standard) {
+			return result->failure(
+				std::filesystem::exists(resolved)
+					? "#include <" + std::string(requested) +
+						  "> is not supported; use quotes"
+					: "cannot open include '" + resolved + "'");
+		}
+		result->name = resolved;
+		if (!readTextFile(result->name, result->content)) {
+			return result->failure("cannot open include '" + resolved + "'");
+		}
+		record(result->name, result->content);
+		return result->success();
+	}
+
+	void ReleaseInclude(shaderc_include_result* data) override {
+		delete static_cast<Result*>(data->user_data);
+	}
+
+   private:
+	/** Owns the strings shaderc reads until ReleaseInclude. */
+	struct Result {
+		shaderc_include_result view{};
+		std::string name;
+		std::string content;
+
+		shaderc_include_result* success() {
+			view = {name.c_str(), name.size(), content.c_str(),
+					content.size(), this};
+			return &view;
+		}
+		shaderc_include_result* failure(std::string message) {
+			name.clear();  // an empty name signals failure to shaderc
+			content = std::move(message);
+			return success();
+		}
+	};
+
+	void record(const std::string& path, const std::string& content) {
+		for (const ShaderDependency& existing : m_dependencies) {
+			if (existing.path == path) return;	// included more than once
+		}
+		m_dependencies.push_back({path, hashShaderSource(content)});
+	}
+
+	std::vector<ShaderDependency>& m_dependencies;
+};
+
 Words compileToSpirv(const std::string& path, const std::string& source,
-					 shaderc_shader_kind kind) {
+					 shaderc_shader_kind kind,
+					 std::vector<ShaderDependency>& dependencies) {
 	shaderc::Compiler compiler;
 	shaderc::CompileOptions options;
+	options.SetIncluder(std::make_unique<TrackingIncluder>(dependencies));
 	options.SetTargetEnvironment(shaderc_target_env_vulkan,
 								 shaderc_env_version_vulkan_1_0);
 	// No optimization: names must survive for reflection, and drivers
@@ -281,7 +363,8 @@ format::ShaderStageKind stageFromPath(const std::string& path) {
 
 ShaderBinary bakeShader(const std::string& path, const std::string& source) {
 	const StageInfo& info = stageInfoFor(path);
-	const Words spirv = compileToSpirv(path, source, info.kind);
+	std::vector<ShaderDependency> dependencies;
+	const Words spirv = compileToSpirv(path, source, info.kind, dependencies);
 	validateSpirv(path, spirv);
 	const Reflection reflection = reflect(path, spirv, info.stage);
 
@@ -295,6 +378,7 @@ ShaderBinary bakeShader(const std::string& path, const std::string& source) {
 	ShaderBinary binary;
 	binary.stage = info.stage;
 	binary.sourceHash = hashShaderSource(source);
+	binary.dependencies = std::move(dependencies);
 	binary.variants[format::SHADER_TARGET_SPIRV] = toBytes(spirv);
 	binary.variants[format::SHADER_TARGET_GLSL_460] = toBytes(source460);
 	binary.variants[format::SHADER_TARGET_GLSL_410] = toBytes(source410);
@@ -321,7 +405,24 @@ ShaderBinary bakeShader(const std::string& path, const std::string& source) {
 }
 
 bool needsShaderBake(const std::string& path, const std::string& source) {
-	return !isShaderBinaryCurrent(path + ".bird", hashShaderSource(source));
+	ShaderBinary baked;
+	try {
+		baked = readShaderBinaryFile(path + ".bird");
+	} catch (const ShaderBinaryError&) {
+		return true;  // missing, truncated or from an older format version
+	}
+	if (baked.sourceHash != hashShaderSource(source)) {
+		return true;
+	}
+	// Any included file that changed or disappeared invalidates the bake.
+	for (const ShaderDependency& dependency : baked.dependencies) {
+		std::string contents;
+		if (!readTextFile(dependency.path, contents) ||
+			hashShaderSource(contents) != dependency.contentHash) {
+			return true;
+		}
+	}
+	return false;
 }
 
 }  // namespace bird::bake

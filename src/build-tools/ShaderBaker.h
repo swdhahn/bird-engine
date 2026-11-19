@@ -27,6 +27,10 @@ format::ShaderStageKind stageFromPath(const std::string& path);
  * Bakes one Vulkan-style GLSL stage: GLSL -> SPIR-V (shaderc), validated,
  * reflected, then SPIR-V -> GLSL 460 and GLSL 410 (SPIRV-Cross).
  *
+ * `#include "file"` resolves relative to the including file; every included
+ * file is recorded with its content hash for staleness checks. Include
+ * files should use an extension BuildTools does not bake (e.g. .glsl).
+ *
  * Authoring rules: explicit location on every in/out, explicit binding on
  * every uniform block and sampler, descriptor set 0, at most one
  * push_constant block of at most kMaxPushConstantBytes holding scalars,
@@ -39,7 +43,10 @@ format::ShaderStageKind stageFromPath(const std::string& path);
  */
 ShaderBinary bakeShader(const std::string& path, const std::string& source);
 
-/** @return true when path + ".bird" is missing or stale for source. */
+/**
+ * @return true when path + ".bird" is missing, from an older format, or was
+ *         baked from a different source or different included files.
+ */
 bool needsShaderBake(const std::string& path, const std::string& source);
 
 }  // namespace bird::bake

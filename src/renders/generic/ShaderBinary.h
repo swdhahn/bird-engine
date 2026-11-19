@@ -31,6 +31,12 @@ struct PushConstantMember {
 	format::PushConstantType type;
 };
 
+/** A file pulled in through #include, as it was when baked. */
+struct ShaderDependency {
+	std::string path;  // normalized, relative to the working directory
+	uint64_t contentHash;
+};
+
 /**
  * In-memory form of a baked shader stage. Produced by BuildTools, consumed
  * by the graphics backends; independent of any graphics API.
@@ -42,6 +48,7 @@ struct ShaderBinary {
 	std::vector<ShaderResource> resources;
 	uint32_t pushConstantSize = 0;
 	std::vector<PushConstantMember> pushConstants;
+	std::vector<ShaderDependency> dependencies;
 
 	/**
 	 * @return the raw bytes of a variant.
@@ -69,13 +76,6 @@ ShaderBinary parseShaderBinary(const std::vector<uint8_t>& bytes);
 ShaderBinary readShaderBinaryFile(const std::string& path);
 /** @throws ShaderBinaryError when the file cannot be written. */
 void writeShaderBinaryFile(const std::string& path, const ShaderBinary& binary);
-
-/**
- * Reads only the header of a .bird shader.
- * @return true when the file exists, matches SHADER_FORMAT_VERSION and was
- *         baked from source with the given hash.
- */
-bool isShaderBinaryCurrent(const std::string& path, uint64_t sourceHash);
 
 }  // namespace bird
 

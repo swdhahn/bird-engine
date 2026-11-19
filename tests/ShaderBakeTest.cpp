@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 
 #include "ShaderBaker.h"
@@ -170,6 +171,7 @@ TEST(ShaderBinaryFormat, RoundTripsThroughSerialization) {
 	EXPECT_EQ(parsed.pushConstants[1].name, original.pushConstants[1].name);
 	ASSERT_EQ(parsed.resources.size(), 1u);
 	EXPECT_EQ(parsed.resources[0].name, "Global");
+	EXPECT_EQ(parsed.dependencies.size(), original.dependencies.size());
 }
 
 TEST(ShaderBinaryFormat, TruncatedDataThrows) {
@@ -188,4 +190,85 @@ TEST(ShaderBinaryFormat, StaleDetectionFollowsSourceHash) {
 	EXPECT_TRUE(bird::bake::needsShaderBake(path, std::string(kTwoSamplers) + "\n"));
 	std::filesystem::remove_all(dir);
 	EXPECT_TRUE(bird::bake::needsShaderBake(path, kTwoSamplers));
+}
+
+namespace {
+
+/** Temporary shader tree: main.frag -> lib/tint.glsl -> lib/palette.glsl. */
+class IncludeTree : public ::testing::Test {
+   protected:
+	void SetUp() override {
+		m_root = std::filesystem::temp_directory_path() / "bird_include_test";
+		std::filesystem::remove_all(m_root);
+		std::filesystem::create_directories(m_root / "lib");
+		write("lib/palette.glsl", "const vec3 PALETTE_RED = vec3(1, 0, 0);\n");
+		write("lib/tint.glsl",
+			  "#include \"palette.glsl\"\n"
+			  "vec4 tint(vec4 c) { return c * vec4(PALETTE_RED, 1.0); }\n");
+		write("main.frag",
+			  "#version 450\n"
+			  "#include \"lib/tint.glsl\"\n"
+			  "layout(location = 0) out vec4 color;\n"
+			  "void main() { color = tint(vec4(1.0)); }\n");
+	}
+	void TearDown() override { std::filesystem::remove_all(m_root); }
+
+	void write(const std::string& relative, const std::string& text) {
+		std::ofstream(m_root / relative, std::ios::trunc) << text;
+	}
+	std::string path(const std::string& relative) const {
+		return (m_root / relative).lexically_normal().generic_string();
+	}
+	std::string mainSource() const {
+		std::ifstream file(m_root / "main.frag");
+		return std::string(std::istreambuf_iterator<char>(file), {});
+	}
+	void bakeMain() {
+		bird::writeShaderBinaryFile(path("main.frag") + ".bird",
+									bakeShader(path("main.frag"), mainSource()));
+	}
+
+	std::filesystem::path m_root;
+};
+
+}  // namespace
+
+TEST_F(IncludeTree, RecordsTransitiveIncludes) {
+	const ShaderBinary binary = bakeShader(path("main.frag"), mainSource());
+	ASSERT_EQ(binary.dependencies.size(), 2u);
+	EXPECT_EQ(binary.dependencies[0].path, path("lib/tint.glsl"));
+	EXPECT_EQ(binary.dependencies[1].path, path("lib/palette.glsl"));
+	// The included function really reached the generated GLSL.
+	EXPECT_NE(text(binary, format::SHADER_TARGET_GLSL_410).find("tint("),
+			  std::string::npos);
+}
+
+TEST_F(IncludeTree, UpToDateWhenNothingChanged) {
+	bakeMain();
+	EXPECT_FALSE(bird::bake::needsShaderBake(path("main.frag"), mainSource()));
+}
+
+TEST_F(IncludeTree, NestedIncludeEditTriggersRebake) {
+	bakeMain();
+	write("lib/palette.glsl", "const vec3 PALETTE_RED = vec3(0.5, 0, 0);\n");
+	EXPECT_TRUE(bird::bake::needsShaderBake(path("main.frag"), mainSource()));
+}
+
+TEST_F(IncludeTree, DeletedIncludeTriggersRebake) {
+	bakeMain();
+	std::filesystem::remove(m_root / "lib/palette.glsl");
+	EXPECT_TRUE(bird::bake::needsShaderBake(path("main.frag"), mainSource()));
+}
+
+TEST_F(IncludeTree, MissingIncludeFailsBake) {
+	std::filesystem::remove(m_root / "lib/palette.glsl");
+	expectRejected(path("main.frag"), mainSource(), "cannot open include");
+}
+
+TEST_F(IncludeTree, AngleBracketIncludeIsRejected) {
+	expectRejected(path("main.frag"),
+				   "#version 450\n#include <lib/tint.glsl>\n"
+				   "layout(location = 0) out vec4 color;\n"
+				   "void main() { color = vec4(1.0); }\n",
+				   "not supported");
 }

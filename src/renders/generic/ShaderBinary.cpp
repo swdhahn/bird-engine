@@ -148,6 +148,8 @@ std::vector<uint8_t> serializeShaderBinary(const ShaderBinary& binary) {
 		checkedNarrow<uint16_t>(binary.pushConstantSize, "pushConstantSize");
 	header.pushConstantMemberCount = checkedNarrow<uint16_t>(
 		binary.pushConstants.size(), "pushConstantMemberCount");
+	header.dependencyCount =
+		checkedNarrow<uint16_t>(binary.dependencies.size(), "dependencyCount");
 
 	ByteWriter writer;
 	writer.put(header);
@@ -168,6 +170,12 @@ std::vector<uint8_t> serializeShaderBinary(const ShaderBinary& binary) {
 			checkedNarrow<uint16_t>(member.offset, "offset"), member.type,
 			checkedNarrow<uint16_t>(member.name.size(), "name")});
 		writer.putBytes(member.name.data(), member.name.size());
+	}
+	for (const ShaderDependency& dependency : binary.dependencies) {
+		writer.put(format::ShaderDependencyInfo{
+			dependency.contentHash,
+			checkedNarrow<uint16_t>(dependency.path.size(), "path")});
+		writer.putBytes(dependency.path.data(), dependency.path.size());
 	}
 	return writer.take();
 }
@@ -198,6 +206,11 @@ ShaderBinary parseShaderBinary(const std::vector<uint8_t>& bytes) {
 			{reader.getString(info.nameSize), info.offset,
 			 static_cast<format::PushConstantType>(info.type)});
 	}
+	for (uint16_t i = 0; i < header.dependencyCount; i++) {
+		const auto info = reader.get<format::ShaderDependencyInfo>();
+		binary.dependencies.push_back(
+			{reader.getString(info.pathSize), info.contentHash});
+	}
 	if (!reader.atEnd()) {
 		throw ShaderBinaryError("Shader binary has trailing bytes");
 	}
@@ -227,18 +240,6 @@ void writeShaderBinaryFile(const std::string& path,
 	if (!file) {
 		throw ShaderBinaryError("Unable to write shader binary " + path);
 	}
-}
-
-bool isShaderBinaryCurrent(const std::string& path, uint64_t sourceHash) {
-	std::ifstream file(path, std::ios::binary);
-	format::ShaderFileHeader header{};
-	if (!file.read(reinterpret_cast<char*>(&header), sizeof(header))) {
-		return false;
-	}
-	return std::memcmp(header.magic, format::SHADER_FILE_MAGIC,
-					   sizeof(header.magic)) == 0 &&
-		   header.version == format::SHADER_FORMAT_VERSION &&
-		   header.sourceHash == sourceHash;
 }
 
 }  // namespace bird
