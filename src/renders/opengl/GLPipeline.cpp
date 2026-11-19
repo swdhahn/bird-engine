@@ -114,12 +114,10 @@ void GLPipeline::renderUI() {
 	uiGlobals.view = Matrix4(1.0f);
 	m_globalUBO->update(&uiGlobals, 1, 0);
 
-	glActiveTexture(GL_TEXTURE0);
-	((GLTexture*)uiManager->getFont()->getAtlas().get())->bind();
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	m_uiRenderer->draw(drawList);
+	m_uiRenderer->draw(drawList, uiManager->getFont()->getAtlas().get());
 
 	glDisable(GL_BLEND);
 	glBindTexture(GL_TEXTURE_2D, 0);

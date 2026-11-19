@@ -1,6 +1,7 @@
 #include <Application.h>
 #include <scene/2D/UIButton.h>
 #include <scene/2D/UICheckBox.h>
+#include <scene/2D/UIColorPicker.h>
 #include <scene/2D/UIDialog.h>
 #include <scene/2D/UIDropdown.h>
 #include <scene/2D/UIExpander.h>
@@ -11,6 +12,7 @@
 #include <scene/2D/UIPanel.h>
 #include <scene/2D/UIProgressBar.h>
 #include <scene/2D/UIRadioGroup.h>
+#include <scene/2D/UIRichInputs.h>
 #include <scene/2D/UIScrollView.h>
 #include <scene/2D/UISlider.h>
 #include <scene/2D/UIStack.h>
@@ -305,6 +307,58 @@ void buildListsTab(UIObject* page) {
 		->add<UILabel>("Hidden until expanded");
 }
 
+void buildColorTab(UIObject* page) {
+	auto* column = page->add<UIStack>(UIAxis::Vertical);
+	column->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
+	column->setGap(10.0f);
+	auto* picker = column->add<UIColorPicker>(Vector4(0.0f, 0.48f, 0.8f, 1.0f));
+	auto* line = column->add<UIStack>(UIAxis::Horizontal);
+	line->setAlign(UIAlign::Center);
+	line->add<UILabel>("Compact button:");
+	auto* button = line->add<UIColorButton>(Vector4(0.9f, 0.3f, 0.2f, 1.0f));
+	auto* readout = line->add<UILabel>("#E64D33");
+	button->setOnColorChanged([readout](const Vector4& c) {
+		readout->setText(color::toHex(c));
+	});
+	picker->setOnChanged([button](const Vector4& c) { button->setColor(c); });
+}
+
+void buildRichTab(UIObject* page) {
+	auto* column = page->add<UIStack>(UIAxis::Vertical);
+	column->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
+	column->setAlign(UIAlign::Stretch);
+	column->setGap(8.0f);
+
+	auto* rangeRow = row(column, "Price");
+	auto* range = rangeRow->add<UIRangeSlider>(0.0f, 500.0f, 120.0f, 380.0f);
+	range->setStep(10.0f).setMinGap(20.0f);
+	range->setWidth(UISizeRule::fill());
+	auto* rangeLabel = rangeRow->add<UILabel>("120 - 380");
+	rangeLabel->setWidth(UISizeRule::fixed(80.0f));
+	range->setOnChanged([rangeLabel](float lo, float hi) {
+		rangeLabel->setText(std::to_string(static_cast<int>(lo)) + " - " +
+							std::to_string(static_cast<int>(hi)));
+	});
+
+	const std::pair<const char*, int> binds[] = {
+		{"Jump", 32}, {"Sprint", 340}, {"Interact", 69}};	// GLFW key codes
+	for (const auto& [action, key] : binds) {
+		row(column, action)->add<UIKeyBindField>(key)->setWidth(UISizeRule::fixed(150.0f));
+	}
+
+	auto texture = RESOURCE_MANAGER->loadTexture("assets/textures/waterfall.png");
+	auto* split = column->add<UISplitter>(UIAxis::Horizontal, 0.45f);
+	split->setHeight(UISizeRule::fill());
+	auto* cover = split->getFirst()->add<UIImage>(texture, UIImageFit::Cover);
+	cover->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
+	cover->setCornerRadius(8.0f);
+	auto* contain = split->getSecond()->add<UIImage>(texture, UIImageFit::Contain);
+	contain->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
+	contain->setTint(Vector4(1.0f, 0.85f, 0.7f, 1.0f));
+	column->add<UILabel>("Drag the divider; double-click it to reset")
+		->setColor(Vector4(0.6f, 0.62f, 0.66f, 1.0f));
+}
+
 void buildScrollTab(UIObject* page) {
 	auto* scroll = page->add<UIScrollView>();
 	scroll->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
@@ -320,7 +374,7 @@ void buildScrollTab(UIObject* page) {
 }
 
 void openGalleryWindow(UIManager* ui) {
-	auto* window = ui->getRoot()->add<UIWindow>("UI Gallery", Vector2(540, 470));
+	auto* window = ui->getRoot()->add<UIWindow>("UI Gallery", Vector2(640, 540));
 	window->setOffset(Vector2(40.0f, 120.0f));
 	auto* tabs = window->getContent()->add<UITabView>();
 	tabs->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
@@ -328,6 +382,8 @@ void openGalleryWindow(UIManager* ui) {
 	buildChoicesTab(tabs->addTab<UIObject>("Choices"));
 	buildTextTab(tabs->addTab<UIObject>("Text"));
 	buildListsTab(tabs->addTab<UIObject>("Lists"));
+	buildColorTab(tabs->addTab<UIObject>("Color"));
+	buildRichTab(tabs->addTab<UIObject>("Rich"));
 	buildLayoutTab(tabs->addTab<UIObject>("Layout"));
 	buildScrollTab(tabs->addTab<UIObject>("Scroll"));
 }

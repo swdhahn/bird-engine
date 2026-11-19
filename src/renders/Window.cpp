@@ -7,6 +7,8 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
+#include <cctype>
+
 #include "../util/stb_image.h"
 #include "GraphicsPipeline.h"
 
@@ -118,6 +120,49 @@ void Window::setCursor(UICursor cursor) {
 		m_cursors[index] = glfwCreateStandardCursor(kShapes[index]);
 	}
 	glfwSetCursor(m_pWindow, m_cursors[index]);
+}
+
+std::string Window::keyName(int keyCode) {
+	// Printable keys follow the active keyboard layout.
+	if (const char* name = glfwGetKeyName(keyCode, 0)) {
+		std::string upper(name);
+		for (char& c : upper) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+		return upper;
+	}
+	if (keyCode >= GLFW_KEY_F1 && keyCode <= GLFW_KEY_F25) {
+		return "F" + std::to_string(keyCode - GLFW_KEY_F1 + 1);
+	}
+	if (keyCode >= GLFW_KEY_KP_0 && keyCode <= GLFW_KEY_KP_9) {
+		return "Numpad " + std::to_string(keyCode - GLFW_KEY_KP_0);
+	}
+	switch (keyCode) {
+		case GLFW_KEY_SPACE: return "Space";
+		case GLFW_KEY_ENTER: return "Enter";
+		case GLFW_KEY_TAB: return "Tab";
+		case GLFW_KEY_ESCAPE: return "Escape";
+		case GLFW_KEY_BACKSPACE: return "Backspace";
+		case GLFW_KEY_DELETE: return "Delete";
+		case GLFW_KEY_INSERT: return "Insert";
+		case GLFW_KEY_HOME: return "Home";
+		case GLFW_KEY_END: return "End";
+		case GLFW_KEY_PAGE_UP: return "Page Up";
+		case GLFW_KEY_PAGE_DOWN: return "Page Down";
+		case GLFW_KEY_LEFT: return "Left";
+		case GLFW_KEY_RIGHT: return "Right";
+		case GLFW_KEY_UP: return "Up";
+		case GLFW_KEY_DOWN: return "Down";
+		case GLFW_KEY_LEFT_SHIFT: return "Left Shift";
+		case GLFW_KEY_RIGHT_SHIFT: return "Right Shift";
+		case GLFW_KEY_LEFT_CONTROL: return "Left Ctrl";
+		case GLFW_KEY_RIGHT_CONTROL: return "Right Ctrl";
+		case GLFW_KEY_LEFT_ALT: return "Left Alt";
+		case GLFW_KEY_RIGHT_ALT: return "Right Alt";
+		case GLFW_KEY_LEFT_SUPER: return "Left Super";
+		case GLFW_KEY_RIGHT_SUPER: return "Right Super";
+		case GLFW_KEY_CAPS_LOCK: return "Caps Lock";
+		case GLFW_KEY_KP_ENTER: return "Numpad Enter";
+		default: return "Key " + std::to_string(keyCode);
+	}
 }
 
 Window::~Window() {

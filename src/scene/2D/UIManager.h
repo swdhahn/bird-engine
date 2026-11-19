@@ -66,7 +66,7 @@ class UIManager {
 	void scroll(Vector2 position, Vector2 delta);
 	/** @param pressed - true for press and repeat, false for release. */
 	void key(UIKey key, bool pressed, bool repeat,
-			 uint8_t modifiers = UI_MOD_NONE);
+			 uint8_t modifiers = UI_MOD_NONE, int keyCode = -1);
 	void character(uint32_t codepoint);
 
 	/** True while focused UI (e.g. a text box) should own the keyboard. */

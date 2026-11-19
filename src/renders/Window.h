@@ -44,6 +44,7 @@ namespace bird {
         std::string getClipboardText() override;
         void setClipboardText(const std::string& text) override;
         void setCursor(UICursor cursor) override;
+        std::string keyName(int keyCode) override;
 
     private:
         GLFWwindow* m_pWindow;

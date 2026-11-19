@@ -220,6 +220,12 @@ UIObject& UIObject::setTooltip(std::string tooltip) {
 	return *this;
 }
 
+UIObject& UIObject::setClipChildren(bool clip) {
+	m_clipChildren = clip;
+	markLayoutDirty();
+	return *this;
+}
+
 UIObject& UIObject::setContextMenu(std::vector<UIMenuItem> items) {
 	m_contextMenu = items.empty() ? nullptr : makeMenu(std::move(items));
 	return *this;

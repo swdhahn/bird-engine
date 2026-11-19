@@ -26,6 +26,10 @@ class UIPlatform {
 	virtual std::string getClipboardText() = 0;
 	virtual void setClipboardText(const std::string& text) = 0;
 	virtual void setCursor(UICursor cursor) = 0;
+	/** Human-readable name of a raw key code, e.g. "W", "Space", "F5". */
+	virtual std::string keyName(int keyCode) {
+		return "Key " + std::to_string(keyCode);
+	}
 };
 
 }  // namespace bird

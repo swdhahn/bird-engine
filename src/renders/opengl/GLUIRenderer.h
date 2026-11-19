@@ -8,6 +8,7 @@
 
 namespace bird {
 class UIDrawList;
+class Texture;
 }
 
 namespace bird::gl {
@@ -24,7 +25,11 @@ class GLUIRenderer {
 	GLUIRenderer(const GLUIRenderer&) = delete;
 	GLUIRenderer& operator=(const GLUIRenderer&) = delete;
 
-	void draw(const UIDrawList& list);
+	/**
+	 * Draws every command of the list; commands without a texture use the
+	 * font atlas. Binds textures on unit 0.
+	 */
+	void draw(const UIDrawList& list, const Texture* atlas);
 
    private:
 	uint32_t m_vao = 0;

@@ -2,6 +2,7 @@
 #define BIRD_UIDRAWLIST_H
 
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,7 @@
 namespace bird {
 
 class Font;
+class Texture;
 
 /** Interleaved vertex consumed by the UI shader (one draw call). */
 struct UIVertex {
@@ -22,8 +24,21 @@ struct UIVertex {
 	// xy = position relative to the box centre, zw = box half size.
 	// A zero half size disables the shape (glyphs, triangles, plain rects).
 	Vector4 shape;
-	Vector4 style;		  // x = corner radius, y = border width, z = softness
+	// x = corner radius, y = border width, z = softness,
+	// w = 1 for images (plain texture sampling instead of the SDF atlas)
+	Vector4 style;
 	Vector4 borderColor;  // RGBA, blended in over the inner border band
+};
+
+/**
+ * A run of indices drawn with one texture. texture == nullptr means the
+ * UI font atlas (text and solid shapes); images switch textures, so the
+ * list is usually one command, plus a few per visible image.
+ */
+struct UIDrawCommand {
+	const Texture* texture;
+	uint32_t firstIndex;
+	uint32_t indexCount;
 };
 
 /**
@@ -63,6 +78,26 @@ class UIDrawList {
 				const Vector4& color);
 	/** Solid triangle (chevrons, arrows). */
 	void triangle(Vector2 a, Vector2 b, Vector2 c, const Vector4& color);
+	/** Triangle with per-vertex colours, interpolated (colour wheels). */
+	void triangle(Vector2 a, Vector2 b, Vector2 c, const Vector4& colorA,
+				  const Vector4& colorB, const Vector4& colorC);
+	/**
+	 * Rectangle with per-corner colours (gradients).
+	 * @param topLeft, topRight, bottomLeft, bottomRight - corner colours.
+	 */
+	void gradientRect(const UIRect& localRect, const Vector4& topLeft,
+					  const Vector4& topRight, const Vector4& bottomLeft,
+					  const Vector4& bottomRight);
+	/** Two-tone checkerboard (behind translucent colours). */
+	void checkerboard(const UIRect& localRect, float cell,
+					  const Vector4& light, const Vector4& dark);
+	/**
+	 * Textured quad from an arbitrary texture, multiplied by tint, with
+	 * optional rounded corners. Starts a new draw command when the texture
+	 * differs from the previous primitive's.
+	 */
+	void image(const Texture* texture, const UIRect& localRect, Vector2 uvMin,
+			   Vector2 uvMax, const Vector4& tint, float radius = 0.0f);
 	/** Anti-aliased line segment with round caps. */
 	void line(Vector2 a, Vector2 b, float thickness, const Vector4& color);
 	/** Atlas-textured quad (glyphs). */
@@ -74,6 +109,7 @@ class UIDrawList {
 
 	const std::vector<UIVertex>& vertices() const { return m_vertices; }
 	const std::vector<uint32_t>& indices() const { return m_indices; }
+	const std::vector<UIDrawCommand>& commands() const { return m_commands; }
 
    private:
 	/** Corner order TL, BL, TR, BR in every array. */
@@ -82,6 +118,7 @@ class UIDrawList {
 		Vector2 uvs[4];
 		Vector2 shapeLocal[4]{Vector2(0.0f), Vector2(0.0f), Vector2(0.0f),
 							  Vector2(0.0f)};
+		Vector4 colors[4];	// per-corner colours
 		Vector2 halfSize{0.0f};
 		Vector4 style{0.0f};
 		Vector4 borderColor{0.0f};
@@ -89,13 +126,17 @@ class UIDrawList {
 
 	Vector2 toScreen(Vector2 local) const;
 	bool clipIsEmpty() const;
-	void emit(const QuadSpec& spec, const Vector4& color);
+	void emit(const QuadSpec& spec, const Texture* texture = nullptr);
+	/** Appends indices to the command for `texture`, starting one if needed. */
+	void appendIndices(std::initializer_list<uint32_t> indices,
+					   const Texture* texture);
 	void plainQuad(const UIRect& localRect, Vector2 uvMin, Vector2 uvMax,
 				   const Vector4& color);
 
 	std::vector<UIVertex> m_vertices;
 	std::vector<uint32_t> m_indices;
 	std::vector<UIRect> m_clipStack;
+	std::vector<UIDrawCommand> m_commands;
 	Matrix3 m_transform{1.0f};
 	Vector2 m_whiteUV;
 };

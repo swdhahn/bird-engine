@@ -57,6 +57,7 @@ struct UIKeyEvent {
 	UIKey key = UIKey::Unknown;
 	uint8_t modifiers = UI_MOD_NONE;
 	bool repeat = false;
+	int keyCode = -1;  // raw platform key code (GLFW_KEY_*), -1 if unknown
 
 	bool shift() const { return modifiers & UI_MOD_SHIFT; }
 	bool control() const { return modifiers & UI_MOD_CONTROL; }

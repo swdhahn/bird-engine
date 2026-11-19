@@ -96,6 +96,8 @@ class UIObject : public ScreenObject {
 	/** Text shown after hovering for UITheme::tooltipDelaySeconds. */
 	UIObject& setTooltip(std::string tooltip);
 	UIObject& setTheme(std::shared_ptr<UITheme> theme);
+	/** Clips descendants to childClipRect() (scroll areas, panes). */
+	UIObject& setClipChildren(bool clip);
 	/** Menu opened at the cursor on a right click inside this node. */
 	UIObject& setContextMenu(std::vector<UIMenuItem> items);
 	const UIMenuItems& getContextMenu() const { return m_contextMenu; }

@@ -20,6 +20,9 @@ void main() {
         fragPosition.x > fragClip.z || fragPosition.y > fragClip.w) {
         discard;
     }
-    vec4 shaded = uiShade(fragColor, atlas, fragTexCoord);
+    // Images sample their own texture directly; everything else shares
+    // the font atlas, whose alpha holds a signed distance field.
+    vec4 shaded = fragStyle.w > 0.5 ? fragColor * texture(atlas, fragTexCoord)
+                                    : uiShade(fragColor, atlas, fragTexCoord);
     out_color = applyShape(shaded, fragShape, fragStyle, fragBorderColor);
 }

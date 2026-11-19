@@ -312,11 +312,12 @@ void UIManager::scroll(Vector2 position, Vector2 delta) {
 	flushRemovals();
 }
 
-void UIManager::key(UIKey key, bool pressed, bool repeat, uint8_t modifiers) {
+void UIManager::key(UIKey key, bool pressed, bool repeat, uint8_t modifiers,
+					int keyCode) {
 	if (!pressed) return;
 	flushRemovals();
 	layoutNow();
-	const UIKeyEvent event{key, modifiers, repeat};
+	const UIKeyEvent event{key, modifiers, repeat, keyCode};
 	if (UIObject* popup = getTopPopup()) {
 		if (key == UIKey::Tab) {
 			closeAllPopups();  // then move focus as usual

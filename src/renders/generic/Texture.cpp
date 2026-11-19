@@ -51,7 +51,21 @@ std::shared_ptr<Texture> TextureBuilder::build() {
 						GL_LINEAR_MIPMAP_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, GL_RGBA,
+		// Upload in the data's real channel layout: treating 3-channel data
+		// as RGBA reads past the end of the pixel buffer.
+		GLenum layout = GL_RGBA;
+		if (m_format & FORMAT_8RGB) {
+			layout = GL_RGB;
+		} else if (m_format & FORMAT_8GA) {
+			layout = GL_RG;
+			const GLint swizzle[4] = {GL_RED, GL_RED, GL_RED, GL_GREEN};
+			glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle);
+		} else if (m_format & FORMAT_8G) {
+			layout = GL_RED;
+			const GLint swizzle[4] = {GL_RED, GL_RED, GL_RED, GL_ONE};
+			glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle);
+		}
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, layout,
 					 GL_UNSIGNED_BYTE, m_pData);
 		glGenerateMipmap(GL_TEXTURE_2D);
 

@@ -28,4 +28,8 @@ target_sources(scene PRIVATE
   UIRowView.h UIRowView.cpp
   UIListView.h UIListView.cpp
   UITreeView.h UITreeView.cpp
-  UIExpander.h UIExpander.cpp)
+  UIExpander.h UIExpander.cpp
+  UIColor.h UIColor.cpp
+  UIColorControls.h UIColorControls.cpp
+  UIColorPicker.h UIColorPicker.cpp
+  UIRichInputs.h UIRichInputs.cpp)

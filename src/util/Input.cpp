@@ -203,7 +203,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action,
 				  int mods) {
 	if (UIManager* ui = uiManager()) {
 		ui->key(uiKey(key), action != GLFW_RELEASE, action == GLFW_REPEAT,
-				uiModifiers(mods));
+				uiModifiers(mods), key);
 	}
 }
 

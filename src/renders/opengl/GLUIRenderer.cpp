@@ -5,6 +5,7 @@
 #include <cstddef>
 
 #include "../../scene/2D/UIDrawList.h"
+#include "GLTexture.h"
 
 namespace bird::gl {
 
@@ -47,7 +48,7 @@ GLUIRenderer::~GLUIRenderer() {
 	glDeleteVertexArrays(1, &m_vao);
 }
 
-void GLUIRenderer::draw(const UIDrawList& list) {
+void GLUIRenderer::draw(const UIDrawList& list, const Texture* atlas) {
 	if (list.indices().empty()) return;
 	// Bind the VAO first so the element buffer update targets it.
 	glBindVertexArray(m_vao);
@@ -55,8 +56,15 @@ void GLUIRenderer::draw(const UIDrawList& list) {
 					   list.vertices().size(), 0);
 	m_indices->update(const_cast<uint32_t*>(list.indices().data()),
 					  list.indices().size(), 0);
-	glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(list.indices().size()),
-				   GL_UNSIGNED_INT, nullptr);
+	glActiveTexture(GL_TEXTURE0);
+	for (const UIDrawCommand& command : list.commands()) {
+		const Texture* texture = command.texture ? command.texture : atlas;
+		if (!texture) continue;
+		const_cast<GLTexture*>(static_cast<const GLTexture*>(texture))->bind();
+		glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indexCount),
+					   GL_UNSIGNED_INT,
+					   reinterpret_cast<void*>(command.firstIndex * sizeof(uint32_t)));
+	}
 	glBindVertexArray(0);
 }
 
