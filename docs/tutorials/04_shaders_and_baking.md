@@ -41,6 +41,7 @@ layout(binding = 0) uniform Global {
 // Per-draw model matrix (push constant, std430)
 layout(push_constant) uniform ObjectConstants {
     mat4 model;
+    mat3 normalMatrix;  // inverse-transpose of mat3(model), computed on the CPU
 } pc;
 
 // Outputs to fragment shader
@@ -51,7 +52,7 @@ layout(location = 2) out vec3 fragWorldPos;
 void main() {
     vec4 worldPos = pc.model * vec4(inPosition, 1.0);
     fragWorldPos = worldPos.xyz;
-    fragNormal = mat3(pc.model) * inNormal;
+    fragNormal = pc.normalMatrix * inNormal;  // correct under rotation and scale
     fragTexCoord = inTexCoord;
     gl_Position = globals.perspective * globals.view * worldPos;
 }

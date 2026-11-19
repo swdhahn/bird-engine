@@ -29,6 +29,8 @@
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
 #include <Jolt/Physics/Body/BodyFilter.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
@@ -42,12 +44,23 @@
 #include "../util/Math.h"
 #include "CollisionShape.h"
 #include "ContactEvent.h"
+#include "CharacterControllerComponent.h"
 #include "PhysicsLayers.h"
 
 namespace bird {
 
 class RigidBodyComponent;
+class CharacterControllerComponent;
 class PhysicsWorld;
+class WorldObject;
+class Component;
+
+/**
+ * The world a component on this object belongs to: the nearest scene
+ * owning a world, starting at the object (when a Scene) or its parent.
+ * @throws std::logic_error when the object is not in a scene.
+ */
+PhysicsWorld* resolvePhysicsWorld(WorldObject* object, const char* who);
 
 // ------------------------------------------------------------ conversions
 
@@ -212,6 +225,19 @@ struct PhysicsWorldImpl {
 	std::map<std::pair<uint32_t, uint32_t>, PairState> pairs;
 
 	JPH::BodyIDVector activeScratch;
+
+	// Character controllers, stepped before the simulation.
+	std::vector<CharacterControllerComponent*> characters;
+	// Inner body ID -> character, so queries can report the character.
+	std::unordered_map<uint32_t, CharacterControllerComponent*> characterByInnerBody;
+	JPH::CharacterVsCharacterCollisionSimple characterVsCharacter;
+};
+
+/** Native state of a character controller. */
+struct CharacterControllerComponent::Native {
+	JPH::Ref<JPH::CharacterVirtual> character;
+	JPH::CharacterVirtual::ExtendedUpdateSettings update;
+	JPH::ObjectLayer layer = 0;
 };
 
 }  // namespace bird

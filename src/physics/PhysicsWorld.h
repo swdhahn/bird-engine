@@ -12,8 +12,10 @@
 
 namespace bird {
 
+class Component;
 class PhysicsServer;
 class RigidBodyComponent;
+class WorldObject;
 struct PhysicsWorldImpl;
 
 struct PhysicsWorldSettings {
@@ -24,7 +26,10 @@ struct PhysicsWorldSettings {
 };
 
 struct RaycastHit {
+	/** The rigid body hit, or nullptr when the hit is a character. */
 	RigidBodyComponent* body = nullptr;
+	/** The object hit (a rigid body's or a character controller's). */
+	WorldObject* object = nullptr;
 	Vector3 point{0.0f};
 	/** Surface normal at the hit, facing the ray origin. */
 	Vector3 normal{0.0f};
@@ -32,7 +37,10 @@ struct RaycastHit {
 };
 
 struct ShapeCastHit {
+	/** The rigid body hit, or nullptr when the hit is a character. */
 	RigidBodyComponent* body = nullptr;
+	/** The object hit (a rigid body's or a character controller's). */
+	WorldObject* object = nullptr;
 	/** Contact point on the hit body. */
 	Vector3 point{0.0f};
 	/** Normal pointing from the hit body towards the cast shape. */
@@ -47,7 +55,8 @@ struct ShapeCastHit {
  * Scenes own worlds (see Scene::getPhysicsWorld); RigidBodyComponents join
  * the world of their scene. step() runs one fixed step:
  *   1. pre-sync: objects the game moved are pushed to their bodies
- *      (teleport for static and dynamic bodies, MoveKinematic for kinematic);
+ *      (teleport for static and dynamic bodies, MoveKinematic for kinematic),
+ *      then character controllers move and write their position back;
  *   2. the Jolt update, on the server's worker threads;
  *   3. post-sync: active dynamic bodies write their pose back to their
  *      objects (O(active bodies));
@@ -71,8 +80,10 @@ class PhysicsWorld {
 	void setGravity(const Vector3& gravity);
 	Vector3 getGravity() const;
 
-	/** Bodies in this world. */
+	/** Rigid bodies in this world (characters not included). */
 	size_t getBodyCount() const;
+	/** Character controllers in this world. */
+	size_t getCharacterCount() const;
 	/** Bodies currently awake (simulated). */
 	size_t getActiveBodyCount() const;
 
@@ -81,19 +92,20 @@ class PhysicsWorld {
 	 * @param direction Ray direction (normalized internally).
 	 * @param maxDistance Ray length.
 	 * @param mask Layers to test against.
-	 * @param ignore Optional body to skip (such as the caster's own).
+	 * @param ignore Optional RigidBodyComponent or CharacterControllerComponent
+	 *        to skip (such as the caster's own).
 	 * @throws std::invalid_argument for a zero direction or non-positive length.
 	 */
 	std::optional<RaycastHit> raycast(const Vector3& origin, const Vector3& direction,
 									  float maxDistance,
 									  PhysicsLayerMask mask = kAllPhysicsLayers,
-									  const RigidBodyComponent* ignore = nullptr) const;
+									  const Component* ignore = nullptr) const;
 
 	/** Every hit along a ray (one per body), nearest first. */
 	std::vector<RaycastHit> raycastAll(const Vector3& origin, const Vector3& direction,
 									   float maxDistance,
 									   PhysicsLayerMask mask = kAllPhysicsLayers,
-									   const RigidBodyComponent* ignore = nullptr) const;
+									   const Component* ignore = nullptr) const;
 
 	/**
 	 * Sweeps a shape from `from` to `to` (keeping `rotation`) and reports the
@@ -103,17 +115,18 @@ class PhysicsWorld {
 	std::optional<ShapeCastHit> shapeCast(const CollisionShape& shape, const Vector3& from,
 										  const Quaternion& rotation, const Vector3& to,
 										  PhysicsLayerMask mask = kAllPhysicsLayers,
-										  const RigidBodyComponent* ignore = nullptr) const;
+										  const Component* ignore = nullptr) const;
 
 	/**
-	 * Bodies overlapping a shape placed at position/rotation (each once).
+	 * Rigid bodies overlapping a shape placed at position/rotation (each
+	 * once; characters are not reported).
 	 * @throws std::invalid_argument for an empty shape.
 	 */
 	std::vector<RigidBodyComponent*> overlap(const CollisionShape& shape,
 											 const Vector3& position,
 											 const Quaternion& rotation,
 											 PhysicsLayerMask mask = kAllPhysicsLayers,
-											 const RigidBodyComponent* ignore = nullptr) const;
+											 const Component* ignore = nullptr) const;
 
 	/** Engine-internal. */
 	PhysicsWorldImpl& _impl() { return *m_impl; }

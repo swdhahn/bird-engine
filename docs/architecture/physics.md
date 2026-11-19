@@ -11,6 +11,7 @@ Bird Engine simulates rigid bodies with [Jolt Physics](https://github.com/jrouwe
 | `PhysicsServer` | `physics/PhysicsServer.h` | Process-wide state: Jolt's allocator and type registry, the step scratch arena, worker threads and collision filters. Exactly one exists at a time; the `Application` owns it. |
 | `PhysicsWorld` | `physics/PhysicsWorld.h` | One independent simulation (a `JPH::PhysicsSystem`). Owned by a `Scene`. Steps, gravity and queries. |
 | `RigidBodyComponent` | `physics/RigidBodyComponent.h` | Gives its `WorldObject` a body in its scene's world. Forces, velocities and contact callbacks. |
+| `CharacterControllerComponent` | `physics/CharacterControllerComponent.h` | A swept, upright capsule for players and NPCs: walking, slopes, stairs, jumping, pushing (Jolt `CharacterVirtual`). |
 | `CollisionShape` | `physics/CollisionShape.h` | Immutable, cheaply copied geometry: box, sphere, capsule, cylinder, convex hull, triangle mesh, compound. |
 | `ContactEvent` | `physics/ContactEvent.h` | Payload of contact and trigger notifications. |
 | `FixedStepClock` | `physics/FixedStepClock.h` | Turns frame time into whole fixed steps. |
@@ -60,10 +61,12 @@ Bodies always use **world-space** transforms, whatever the scene depth.
 
 `PhysicsWorld::step(fixedDelta)` runs four phases:
 
-1. **Pre-sync.** For every body, the object's *transform revision* is compared with the revision last synchronized (an integer compare, O(bodies)). When the game moved the object:
+1. **Pre-sync and characters.** For every body, the object's *transform revision* is compared with the revision last synchronized (an integer compare, O(bodies)). When the game moved the object:
    - static and dynamic bodies are teleported (`SetPositionAndRotation`);
    - kinematic bodies get `MoveKinematic`, so they push dynamic bodies along their path instead of popping through them. Their velocity is cleared on the next unchanged step, so they stop at the target;
    - a changed scale rebuilds the body's `ScaledShape`.
+
+   Then every character controller moves (section 5) and writes its position back.
 2. **Simulation.** `PhysicsSystem::Update` runs on the server's worker threads.
 3. **Post-sync.** Only **active** bodies are visited (`GetActiveBodies`, O(awake bodies)). Dynamic ones write their pose back to their object. The component records the resulting revision, so the write-back is not mistaken for a game edit and echoed back. Sleeping piles cost nothing.
 4. **Events.** Contact and trigger notifications are delivered on the calling (main) thread.
@@ -99,7 +102,34 @@ Events reach the component's own callbacks (`setOnContactBegin` and the others) 
 
 ---
 
-## 5. Collision Layers
+## 5. Character Controllers
+
+A `CharacterControllerComponent` is not simulated like a rigid body. Each step it **sweeps** an upright capsule through the world (Jolt's `CharacterVirtual`), which gives game-like movement:
+- it walks up steps no taller than `stepHeight`;
+- it sticks to descending slopes and stairs (`stickToFloorDistance`);
+- it slides along walls;
+- it refuses slopes steeper than `maxSlopeDegrees`, reporting `GroundState::OnSteepGround`;
+- it never tips over.
+
+**Velocity each step** follows Jolt's standard recipe:
+1. When standing on walkable ground, the character takes on the ground's velocity (so it rides moving platforms), plus the requested jump.
+2. In the air, it keeps its vertical velocity.
+3. Gravity (scaled by `gravityFactor`) is added.
+4. The horizontal part of `setMoveVelocity()` is added; that move velocity persists until changed.
+5. `setVelocity()` replaces the whole computation for one step, for knockback.
+
+**Interaction with bodies:**
+- The character pushes dynamic bodies, with a force capped at `pushStrength` (100 N by default). A 1 m³ crate at the default density weighs 1000 kg and will not budge; give pushable props a `mass`.
+- An inner kinematic body, with the same shape and layers, lets falling bodies land on the character and lets queries hit it. In a hit, `RaycastHit::object` is the character's object and `body` is `nullptr`.
+- Pass the character as a query's `ignore` argument to see past it.
+- `getTouchingBodies()` lists the rigid bodies collided with in the last step; `getGroundBody()` and `getGroundNormal()` describe what the character stands on.
+- Characters also collide with one another.
+
+**Transform:** the object's position is the character's **feet**; the default capsule is lifted by half its height. Moving the object teleports the character; `teleport()` does so immediately. The object's rotation does not tilt the capsule.
+
+---
+
+## 6. Collision Layers
 
 A body has `layers` (the layers it occupies) and a `mask` (the layers it collides with). Two bodies collide when each one's layers intersect the other's mask, as in Godot:
 
@@ -116,7 +146,7 @@ Queries take a mask of the layers to hit.
 
 ---
 
-## 6. Queries
+## 7. Queries
 
 | Method | Returns |
 |--------|---------|
@@ -125,11 +155,11 @@ Queries take a mask of the layers to hit.
 | `shapeCast(shape, from, rotation, to, mask, ignore)` | The first `ShapeCastHit` along a swept shape: body, point, normal, fraction. |
 | `overlap(shape, position, rotation, mask, ignore)` | Every body overlapping the placed shape, each once. |
 
-`ignore` skips one body, typically the caster's own.
+`ignore` skips one `RigidBodyComponent` or `CharacterControllerComponent`, typically the caster's own. Hits report both `body` (rigid bodies only) and `object` (rigid bodies and characters).
 
 ---
 
-## 7. Shapes and Their Rules
+## 8. Shapes and Their Rules
 
 - Shapes are built at unit scale in object space. A body applies its object's scale on top through a `ScaledShape`. Non-uniform scale on a sphere or capsule is corrected to the nearest valid scale.
 - Factories validate their input and throw `std::invalid_argument` on non-positive dimensions, too few hull points, or out-of-range indices.
@@ -137,10 +167,11 @@ Queries take a mask of the layers to hit.
   - They are allowed only on static and kinematic bodies; the component's constructor throws for a dynamic mesh, or for a compound containing one.
   - Use `convexHull` for moving, mesh-like bodies.
 - Both `triangleMesh(meshes)` and `convexHull(meshes)` read the CPU-side vertex data that loaded meshes keep.
+- A `compound` of one part becomes an offset shape (Jolt's static compound needs at least two), which is handy for shifting a shape's origin.
 
 ---
 
-## 8. Build Notes
+## 9. Build Notes
 
 - All Jolt-dependent code compiles in the `physics` object library, which links `Jolt::Jolt` for its include paths and definitions.
 - Jolt is built as **Release** (`libs/CMakeLists.txt`). Its exported definitions (`JPH_PROFILE_ENABLED`, `JPH_DEBUG_RENDERER` and others) then match what Debug and Release engine builds compile with, so class layouts agree.
@@ -150,9 +181,10 @@ Queries take a mask of the layers to hit.
 
 ---
 
-## 9. Known Limits
+## 10. Known Limits
 
-- No character controller, joints or constraints yet.
+- No joints or constraints yet.
+- Character controllers have no contact events; poll `getTouchingBodies()` and the ground state.
 - No debug wireframe drawing of colliders.
 - No render interpolation: bodies render at their last step's pose, so motion can show slight judder when the frame rate is not a multiple of 60 Hz.
 - Seven collision layers.

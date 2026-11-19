@@ -68,13 +68,16 @@ RigidBodyComponent::~RigidBodyComponent() {
 	destroyBody();
 }
 
-void RigidBodyComponent::_init() {
-	WorldObject* object = world_object();
+PhysicsWorld* resolvePhysicsWorld(WorldObject* object, const char* who) {
 	Scene* scene = object->getType() == SCENE ? static_cast<Scene*>(object) : object->getParent();
 	if (scene == nullptr) {
-		throw std::logic_error("RigidBodyComponent: object is not in a scene");
+		throw std::logic_error(std::string(who) + ": object is not in a scene");
 	}
-	m_world = scene->getPhysicsWorld();
+	return scene->getPhysicsWorld();
+}
+
+void RigidBodyComponent::_init() {
+	m_world = resolvePhysicsWorld(world_object(), "RigidBodyComponent");
 	createBody();
 }
 

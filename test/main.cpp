@@ -1,4 +1,5 @@
 #include <Application.h>
+#include <physics/CharacterControllerComponent.h>
 #include <physics/CollisionShape.h>
 #include <physics/PhysicsWorld.h>
 #include <physics/RigidBodyComponent.h>
@@ -42,6 +43,9 @@
 #include <string>
 #include <vector>
 
+// True while the camera rides the walking character (toggle with C).
+bool g_walkMode = false;
+
 class POVCamera : public bird::ProcessScript<bird::Camera> {
    public:
 	POVCamera() {}
@@ -63,6 +67,8 @@ class POVCamera : public bird::ProcessScript<bird::Camera> {
 		// The camera looks down its local -Z; turning right is a negative yaw.
 		object()->rotateLocal(bird::Vector3(0, 1, 0),
 							  -rotVal * rotSpeed * delta);
+
+		if (g_walkMode) return;	 // the character script moves the camera
 
 		const bird::Vector3 local(
 			input()->getActionValue("move_right") -
@@ -453,9 +459,10 @@ class PlaygroundScript : public bird::ProcessScript<bird::WorldObject> {
 
 	/** hud: three lines (counts, last event, key help). */
 	PlaygroundScript(bird::Camera* camera, std::vector<Spawn> boxes,
+					 bird::CharacterControllerComponent* walker,
 					 std::array<bird::UILabel*, 3> hud)
-		: m_camera(camera), m_boxes(std::move(boxes)), m_hud(hud) {
-		m_hud[2]->setText("F: push box   R: drop again");
+		: m_camera(camera), m_boxes(std::move(boxes)), m_walker(walker), m_hud(hud) {
+		m_hud[2]->setText("F: push box   R: drop again   C: walk / fly");
 	}
 
 	void init() override {}
@@ -475,8 +482,17 @@ class PlaygroundScript : public bird::ProcessScript<bird::WorldObject> {
 		const bool reset = input()->getActionValue("physics_reset") > 0.5f;
 		if (push && !m_pushHeld) pushUnderCrosshair();
 		if (reset && !m_resetHeld) resetStack();
+		const bool walk = input()->getActionValue("physics_walk") > 0.5f;
+		if (walk && !m_walkHeld) toggleWalk();
 		m_pushHeld = push;
 		m_resetHeld = reset;
+		m_walkHeld = walk;
+
+		if (g_walkMode) {
+			// Eye height above the character's feet.
+			m_camera->setWorldPosition(m_walker->world_object()->getWorldPosition() +
+									   bird::Vector3(0, 1.6f, 0));
+		}
 
 		bird::PhysicsWorld* world = scene()->getPhysicsWorld();
 		m_hud[0]->setText("Bodies " + std::to_string(world->getBodyCount()) +
@@ -486,15 +502,52 @@ class PlaygroundScript : public bird::ProcessScript<bird::WorldObject> {
 		m_hud[1]->setText(m_message);
 	}
 
+	void physicsProcess(float fixedDelta) override {
+		if (!g_walkMode) {
+			m_walker->setMoveVelocity(bird::Vector3(0.0f));
+			return;
+		}
+		// Steer in the camera's horizontal frame.
+		const bird::Quaternion rotation =
+			m_camera->getWorldRotation() * m_camera->getLocalRotation();
+		bird::Vector3 forward = rotation * bird::Vector3(0, 0, -1);
+		forward.y = 0;
+		forward = glm::length(forward) > 0 ? glm::normalize(forward) : bird::Vector3(0, 0, -1);
+		const bird::Vector3 right(-forward.z, 0, forward.x);
+		const float ahead = input()->getActionValue("move_forward") -
+							input()->getActionValue("move_backward");
+		const float side = input()->getActionValue("move_right") -
+						   input()->getActionValue("move_left");
+		m_walker->setMoveVelocity((forward * ahead + right * side) * 4.5f);
+		if (m_walker->world_object()->getWorldPosition().y < -30.0f) {
+			m_walker->teleport(bird::Vector3(0, -1.0f, -8));  // fell off the slab
+		}
+		if (input()->getActionValue("move_up") > 0.5f) m_walker->jump(5.0f);
+	}
+
    private:
+	void toggleWalk() {
+		g_walkMode = !g_walkMode;
+		if (g_walkMode) {
+			// Drop in below the camera, clamped onto the slab (x +-12, z -30..-6).
+			const bird::Vector3 eye = m_camera->getWorldPosition();
+			m_walker->teleport(bird::Vector3(glm::clamp(eye.x, -11.0f, 11.0f), -1.0f,
+											 glm::clamp(eye.z, -29.0f, -7.0f)));
+		}
+		m_message = g_walkMode ? "Walking: WASD, Space jumps, arrows turn"
+							   : "Flying: WASD, Space/Shift up/down";
+	}
+
 	void pushUnderCrosshair() {
 		const bird::Quaternion rotation =
 			m_camera->getWorldRotation() * m_camera->getLocalRotation();
 		const bird::Vector3 forward = rotation * bird::Vector3(0, 0, -1);
 		const bird::Vector3 eye =
 			m_camera->getWorldPosition() + m_camera->getLocalPosition();
-		auto hit = scene()->getPhysicsWorld()->raycast(eye, forward, 200.0f);
-		if (!hit || hit->body->getMotionType() != bird::MotionType::Dynamic) {
+		auto hit = scene()->getPhysicsWorld()->raycast(eye, forward, 200.0f,
+													   bird::kAllPhysicsLayers, m_walker);
+		if (!hit || hit->body == nullptr ||
+			hit->body->getMotionType() != bird::MotionType::Dynamic) {
 			m_message = "Push: nothing movable under the crosshair";
 			return;
 		}
@@ -515,11 +568,13 @@ class PlaygroundScript : public bird::ProcessScript<bird::WorldObject> {
 
 	bird::Camera* m_camera;
 	std::vector<Spawn> m_boxes;
+	bird::CharacterControllerComponent* m_walker;
 	std::array<bird::UILabel*, 3> m_hud;
 	std::string m_message = "Physics ready";
 	int m_inZone = 0;
 	bool m_pushHeld = false;
 	bool m_resetHeld = false;
+	bool m_walkHeld = false;
 };
 
 /** Adds a mesh object with an optional body to the scene. */
@@ -561,7 +616,9 @@ void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui) {
 									   -21.0f + z * 1.6f);
 				const Quaternion rotation = glm::angleAxis(
 					0.37f * i, glm::normalize(Vector3(i % 3, 1, (i * 7) % 5)));
-				auto body = _own_mk<RigidBodyComponent>(unitBox);
+				RigidBodySettings crate;
+				crate.mass = 20.0f;	 // light enough for the character to shove
+				auto body = _own_mk<RigidBodyComponent>(unitBox, crate);
 				RigidBodyComponent* raw = body.get();
 				WorldObject* object = addObject(scene, cube, position,
 												Vector3(0.5f), std::move(body));
@@ -590,7 +647,17 @@ void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui) {
 		line->setColor(Vector4(1.0f, 0.95f, 0.6f, 1.0f));
 	}
 
-	auto script = _own_mk<PlaygroundScript>(camera, std::move(boxes), hud);
+	// Walking character, parked on the slab until C is pressed.
+	CharacterSettings walkerSettings;
+	walkerSettings.pushStrength = 600.0f;
+	auto walker = _own_mk<CharacterControllerComponent>(walkerSettings);
+	CharacterControllerComponent* walkerRaw = walker.get();
+	auto walkerObject = _own_mk<WorldObject>();
+	walkerObject->addComponent(std::move(walker));
+	walkerObject->setWorldPosition({0, -2.0f, -10});
+	scene->addChild(std::move(walkerObject));
+
+	auto script = _own_mk<PlaygroundScript>(camera, std::move(boxes), walkerRaw, hud);
 	PlaygroundScript* scriptRaw = script.get();
 	zoneBody->setOnTriggerEnter(
 		[scriptRaw](const ContactEvent& e) { scriptRaw->enterZone(e); });
@@ -619,6 +686,7 @@ class MainScript : public bird::Script<bird::Scene> {
 		bird::INPUT->addAction(bird::Action("look_right").addKey(KEY_RIGHT));
 		bird::INPUT->addAction(bird::Action("physics_push").addKey(KEY_F));
 		bird::INPUT->addAction(bird::Action("physics_reset").addKey(KEY_R));
+		bird::INPUT->addAction(bird::Action("physics_walk").addKey(KEY_C));
 
 		auto e = bird::_own_mk<bird::WorldObject>();
 		e->addComponent(bird::_own_mk<bird::MeshComponent>(

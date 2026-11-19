@@ -440,3 +440,193 @@ TEST(FixedStepClock, StepsAccumulateAndClamp) {
 	EXPECT_EQ(slow.advance(-1.0), 0);
 	EXPECT_THROW(FixedStepClock(0.0f), std::invalid_argument);
 }
+
+// ------------------------------------------------------------- characters
+
+#include "physics/CharacterControllerComponent.h"
+
+namespace {
+
+class CharacterTest : public PhysicsTest {
+   protected:
+	struct Walker {
+		WorldObject* object;
+		CharacterControllerComponent* character;
+	};
+
+	Walker addCharacter(const Vector3& feet, CharacterSettings settings = {}) {
+		auto object = _own_mk<WorldObject>();
+		auto component = _own_mk<CharacterControllerComponent>(settings);
+		CharacterControllerComponent* character = component.get();
+		object->addComponent(std::move(component));
+		object->setWorldPosition(feet);
+		WorldObject* raw = object.get();
+		root->addChild(std::move(object));
+		return {raw, character};
+	}
+
+	Body addStaticBox(const Vector3& halfExtents, const Vector3& center,
+					  const Quaternion& rotation = Quaternion(1, 0, 0, 0)) {
+		Body box = add(CollisionShape::box(halfExtents), center, motion(MotionType::Static));
+		box.body->teleport(center, rotation);
+		return box;
+	}
+};
+
+}  // namespace
+
+TEST_F(CharacterTest, FallsAndLandsOnItsFeet) {
+	addFloor();	 // top at y = 1
+	Walker w = addCharacter({0, 4, 0});
+	EXPECT_EQ(world().getCharacterCount(), 1u);
+	run(1);
+	EXPECT_EQ(w.character->getGroundState(), GroundState::InAir);
+	run(120);
+	EXPECT_EQ(w.character->getGroundState(), GroundState::OnGround);
+	EXPECT_NEAR(w.object->getWorldPosition().y, 1.0f, 0.05f);	// feet on the floor
+	EXPECT_NEAR(w.character->getGroundNormal().y, 1.0f, 1e-3f);
+}
+
+TEST_F(CharacterTest, WalksAtTheMoveVelocityAndStopsAtWalls) {
+	addFloor();
+	Walker w = addCharacter({0, 1, 0});
+	run(10);
+	w.character->setMoveVelocity({3, 5, 0});  // vertical part ignored
+	run(60);
+	EXPECT_NEAR(w.object->getWorldPosition().x, 3.0f, 0.15f);
+	EXPECT_NEAR(w.object->getWorldPosition().y, 1.0f, 0.05f);
+
+	addStaticBox({0.5f, 2, 2}, {6, 3, 0});	// wall face at x = 5.5
+	run(120);
+	EXPECT_NEAR(w.object->getWorldPosition().x, 5.5f - 0.3f, 0.1f);	 // radius 0.3
+}
+
+TEST_F(CharacterTest, JumpsOnlyFromTheGround) {
+	addFloor();
+	Walker w = addCharacter({0, 1, 0});
+	run(10);
+	ASSERT_TRUE(w.character->jump(5));
+	float peak = 0;
+	for (int i = 0; i < 60; i++) {
+		run(1);
+		peak = std::max(peak, w.object->getWorldPosition().y);
+		if (i == 5) EXPECT_FALSE(w.character->jump(5));	// airborne: refused
+	}
+	EXPECT_NEAR(peak - 1.0f, 5.0f * 5.0f / (2 * 9.81f), 0.15f);	 // v^2 / 2g
+	run(60);
+	EXPECT_TRUE(w.character->isOnGround());
+}
+
+TEST_F(CharacterTest, ClimbsLowStepsButNotHighOnes) {
+	addFloor();
+	addStaticBox({1, 0.15f, 3}, {3, 1.15f, 0});	 // 0.3 m step at x = 2
+	addStaticBox({1, 0.4f, 3}, {3, 1.4f, 5});	 // 0.8 m ledge at x = 2
+	Walker low = addCharacter({0, 1, 0});
+	Walker high = addCharacter({0, 1, 5});
+	run(10);
+	low.character->setMoveVelocity({2, 0, 0});
+	high.character->setMoveVelocity({2, 0, 0});
+	run(90);
+	EXPECT_GT(low.object->getWorldPosition().x, 2.5f);
+	EXPECT_NEAR(low.object->getWorldPosition().y, 1.3f, 0.05f);
+	EXPECT_LT(high.object->getWorldPosition().x, 2.0f);
+}
+
+TEST_F(CharacterTest, SteepSlopesAreNotWalkable) {
+	const float angle = glm::radians(60.0f);
+	addStaticBox({5, 0.5f, 5}, {0, 0, 0}, glm::angleAxis(angle, Vector3(0, 0, 1)));
+	Walker w = addCharacter({0, 4, 0});
+	bool steep = false, walkable = false;
+	for (int i = 0; i < 120; i++) {
+		run(1);
+		steep = steep || w.character->getGroundState() == GroundState::OnSteepGround;
+		walkable = walkable || w.character->isOnGround();
+	}
+	EXPECT_TRUE(steep);
+	EXPECT_FALSE(walkable);
+}
+
+TEST_F(CharacterTest, PushesDynamicBodiesAndReportsThem) {
+	addFloor();
+	RigidBodySettings light;
+	light.mass = 5.0f;	// the default density would make it 216 kg: too heavy at 100 N
+	Body crate = add(CollisionShape::box({0.3f, 0.3f, 0.3f}), {1.5f, 1.3f, 0}, light);
+	Walker w = addCharacter({0, 1, 0});
+	run(30);
+	w.character->setMoveVelocity({2, 0, 0});
+	bool touched = false;
+	for (int i = 0; i < 60; i++) {
+		run(1);
+		for (RigidBodyComponent* body : w.character->getTouchingBodies()) {
+			touched = touched || body == crate.body;
+		}
+	}
+	EXPECT_TRUE(touched);
+	EXPECT_GT(crate.object->getWorldPosition().x, 2.0f);
+}
+
+TEST_F(CharacterTest, FallingBodiesAndRaycastsHitTheCharacter) {
+	addFloor();
+	Walker w = addCharacter({0, 1, 0});
+	run(5);
+	auto hit = world().raycast({0, 10, 0}, {0, -1, 0}, 20);
+	ASSERT_TRUE(hit.has_value());
+	EXPECT_EQ(hit->object, w.object);
+	EXPECT_EQ(hit->body, nullptr);
+	EXPECT_NEAR(hit->point.y, 2.8f, 0.05f);	 // head at 1 + 1.8
+	auto past = world().raycast({0, 10, 0}, {0, -1, 0}, 20, kAllPhysicsLayers, w.character);
+	ASSERT_TRUE(past.has_value());
+	EXPECT_NE(past->object, w.object);
+
+	Body ball = add(CollisionShape::sphere(0.2f), {0, 5, 0});
+	run(90);
+	EXPECT_GT(ball.object->getWorldPosition().y, 2.5f);	 // resting on the head
+}
+
+TEST_F(CharacterTest, MovingTheObjectTeleportsAndRemovalCleansUp) {
+	addFloor();
+	Walker w = addCharacter({0, 1, 0});
+	run(10);
+	w.object->setWorldPosition({10, 1, 0});
+	run(1);
+	EXPECT_NEAR(w.object->getWorldPosition().x, 10.0f, 1e-3f);
+	w.character->teleport({-10, 1, 0});
+	EXPECT_TRUE(world().raycast({-10, 10, 0}, {0, -1, 0}, 20)->object == w.object);
+
+	root->removeChild(w.object);
+	EXPECT_EQ(world().getCharacterCount(), 0u);
+	EXPECT_EQ(world().raycast({-10, 10, 0}, {0, -1, 0}, 20)->object,
+			  world().raycast({0, 10, 0}, {0, -1, 0}, 20)->object);  // only the floor
+}
+
+TEST_F(CharacterTest, WorldDestroyedBeforeTheComponent) {
+	auto isolatedOwned = _own_mk<Scene>();
+	Scene* isolated = isolatedOwned.get();
+	isolated->createPhysicsWorld();
+	root->addChild(std::move(isolatedOwned));
+	auto object = _own_mk<WorldObject>();
+	auto component = _own_mk<CharacterControllerComponent>();
+	CharacterControllerComponent* character = component.get();
+	object->addComponent(std::move(component));
+	isolated->addChild(std::move(object));
+	ASSERT_TRUE(character->isInWorld());
+	root.reset();  // scene, world and character all go; must not crash
+	SUCCEED();
+}
+
+TEST_F(CharacterTest, InvalidSettingsAreRejected) {
+	CharacterSettings tooShort;
+	tooShort.height = 0.5f;	 // < 2 * radius
+	EXPECT_THROW(CharacterControllerComponent{tooShort}, std::invalid_argument);
+	CharacterSettings slope;
+	slope.maxSlopeDegrees = 95;
+	EXPECT_THROW(CharacterControllerComponent{slope}, std::invalid_argument);
+	CharacterControllerComponent loose;
+	EXPECT_THROW(loose.getGroundState(), std::logic_error);
+}
+
+TEST_F(PhysicsTest, SinglePartCompoundOffsetsItsShape) {
+	add(CollisionShape::compound({{CollisionShape::box({1, 1, 1}), {0, 5, 0}}}), {0, 0, 0},
+		motion(MotionType::Static));
+	EXPECT_NEAR(world().raycast({0, 10, 0}, {0, -1, 0}, 20)->point.y, 6.0f, 1e-3f);
+}

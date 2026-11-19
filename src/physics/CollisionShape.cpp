@@ -171,6 +171,16 @@ CollisionShape CollisionShape::compound(const std::vector<Part>& parts) {
 	if (parts.empty()) {
 		throw std::invalid_argument("CollisionShape::compound: needs at least one part");
 	}
+	if (parts.size() == 1) {
+		const Part& part = parts.front();
+		if (part.shape.isEmpty()) {
+			throw std::invalid_argument("CollisionShape::compound: empty part");
+		}
+		return wrap(JPH::RotatedTranslatedShapeSettings(toJolt(part.position),
+														toJolt(part.rotation),
+														nativeShape(part.shape)),
+					Kind::Compound, part.shape.containsTriangleMesh(), "compound");
+	}
 	JPH::StaticCompoundShapeSettings settings;
 	bool containsMesh = false;
 	for (const Part& part : parts) {

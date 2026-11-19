@@ -68,7 +68,8 @@ class Camera : public WorldObject {
 	WorldEnvironment m_env;
 
    private:
-	static constexpr float kFieldOfView = 70.0f;
+	// Vertical field of view in radians (70 degrees).
+	static constexpr float kFieldOfView = 70.0f * 3.14159265358979f / 180.0f;
 	static constexpr float kNearPlane = 0.1f;
 	static constexpr float kFarPlane = 1000.0f;
 

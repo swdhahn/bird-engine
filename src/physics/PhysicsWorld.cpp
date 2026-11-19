@@ -7,6 +7,7 @@
 
 #include "PhysicsInternal.h"
 #include "PhysicsServer.h"
+#include "CharacterControllerComponent.h"
 #include "RigidBodyComponent.h"
 
 namespace bird {
@@ -76,11 +77,27 @@ void deliverPair(const PhysicsWorldImpl& impl, uint32_t a, uint32_t b, EventKind
 	deliver(impl, b, a, kind, point, -normalAtoB);
 }
 
-const JPH::BodyFilter& bodyFilterFor(const RigidBodyComponent* ignore,
-									 JPH::IgnoreSingleBodyFilter& storage,
-									 const JPH::BodyFilter& acceptAll) {
-	return ignore != nullptr && ignore->isInWorld() ? static_cast<const JPH::BodyFilter&>(storage)
-													: acceptAll;
+/** The Jolt body a query should skip (invalid when none). */
+JPH::BodyID ignoredBody(const Component* ignore) {
+	if (auto* body = dynamic_cast<const RigidBodyComponent*>(ignore)) {
+		if (body->isInWorld()) return JPH::BodyID(body->_bodyId());
+	}
+	if (auto* character = dynamic_cast<const CharacterControllerComponent*>(ignore)) {
+		if (character->isInWorld()) return JPH::BodyID(character->_innerBodyId());
+	}
+	return JPH::BodyID();
+}
+
+/** Fills a hit's body and object from a Jolt body ID. */
+template <typename Hit>
+void identify(const PhysicsWorldImpl& impl, uint32_t id, Hit& hit) {
+	hit.body = lookup(impl, id);
+	if (hit.body != nullptr) {
+		hit.object = hit.body->world_object();
+		return;
+	}
+	auto it = impl.characterByInnerBody.find(id);
+	if (it != impl.characterByInnerBody.end()) hit.object = it->second->world_object();
 }
 
 Vector3 normalizedDirection(const Vector3& direction, const char* what) {
@@ -128,6 +145,11 @@ PhysicsWorld::PhysicsWorld(PhysicsServer& server, const PhysicsWorldSettings& se
 PhysicsWorld::~PhysicsWorld() {
 	// Bodies are freed with the PhysicsSystem; components just let go.
 	for (RigidBodyComponent* body : m_impl->bodies) body->_forgetWorld();
+	// Characters release their CharacterVirtual (and inner body) now, while
+	// the PhysicsSystem still exists.
+	for (CharacterControllerComponent* character : std::vector(m_impl->characters)) {
+		character->_forgetWorld();
+	}
 	m_server._unregisterWorld(this);
 }
 
@@ -142,6 +164,7 @@ void PhysicsWorld::step(float fixedDelta) {
 	PhysicsWorldImpl& impl = *m_impl;
 
 	for (RigidBodyComponent* body : impl.bodies) body->_preStep(fixedDelta);
+	for (CharacterControllerComponent* character : impl.characters) character->_step(fixedDelta);
 
 	const JPH::EPhysicsUpdateError error =
 		impl.system.Update(fixedDelta, 1, impl.server->tempAllocator.get(),
@@ -273,6 +296,10 @@ size_t PhysicsWorld::getBodyCount() const {
 	return m_impl->bodies.size();
 }
 
+size_t PhysicsWorld::getCharacterCount() const {
+	return m_impl->characters.size();
+}
+
 size_t PhysicsWorld::getActiveBodyCount() const {
 	return m_impl->system.GetNumActiveBodies(JPH::EBodyType::RigidBody);
 }
@@ -281,25 +308,23 @@ size_t PhysicsWorld::getActiveBodyCount() const {
 
 std::optional<RaycastHit> PhysicsWorld::raycast(const Vector3& origin, const Vector3& direction,
 												float maxDistance, PhysicsLayerMask mask,
-												const RigidBodyComponent* ignore) const {
+												const Component* ignore) const {
 	const Vector3 dir = normalizedDirection(direction, "raycast");
 	if (!(maxDistance > 0.0f)) {
 		throw std::invalid_argument("PhysicsWorld::raycast: maxDistance must be positive");
 	}
 	const JPH::RRayCast ray{toJolt(origin), toJolt(dir * maxDistance)};
 	JPH::RayCastResult result;
-	JPH::IgnoreSingleBodyFilter ignoreFilter(
-		ignore != nullptr ? JPH::BodyID(ignore->_bodyId()) : JPH::BodyID());
-	const JPH::BodyFilter acceptAll;
+	const JPH::IgnoreSingleBodyFilter ignoreFilter(ignoredBody(ignore));
 	const QueryLayerFilter layerFilter(mask);
 	if (!m_impl->system.GetNarrowPhaseQuery().CastRay(
 			ray, result, JPH::BroadPhaseLayerFilter(), layerFilter,
-			bodyFilterFor(ignore, ignoreFilter, acceptAll))) {
+			ignoreFilter)) {
 		return std::nullopt;
 	}
 
 	RaycastHit hit;
-	hit.body = lookup(*m_impl, result.mBodyID.GetIndexAndSequenceNumber());
+	identify(*m_impl, result.mBodyID.GetIndexAndSequenceNumber(), hit);
 	hit.distance = result.mFraction * maxDistance;
 	hit.point = origin + dir * hit.distance;
 	JPH::BodyLockRead lock(m_impl->system.GetBodyLockInterface(), result.mBodyID);
@@ -315,7 +340,7 @@ std::optional<RaycastHit> PhysicsWorld::raycast(const Vector3& origin, const Vec
 std::vector<RaycastHit> PhysicsWorld::raycastAll(const Vector3& origin,
 												 const Vector3& direction, float maxDistance,
 												 PhysicsLayerMask mask,
-												 const RigidBodyComponent* ignore) const {
+												 const Component* ignore) const {
 	const Vector3 dir = normalizedDirection(direction, "raycastAll");
 	if (!(maxDistance > 0.0f)) {
 		throw std::invalid_argument("PhysicsWorld::raycastAll: maxDistance must be positive");
@@ -323,13 +348,11 @@ std::vector<RaycastHit> PhysicsWorld::raycastAll(const Vector3& origin,
 	const JPH::RRayCast ray{toJolt(origin), toJolt(dir * maxDistance)};
 	JPH::RayCastSettings settings;
 	JPH::AllHitCollisionCollector<JPH::CastRayCollector> collector;
-	JPH::IgnoreSingleBodyFilter ignoreFilter(
-		ignore != nullptr ? JPH::BodyID(ignore->_bodyId()) : JPH::BodyID());
-	const JPH::BodyFilter acceptAll;
+	const JPH::IgnoreSingleBodyFilter ignoreFilter(ignoredBody(ignore));
 	const QueryLayerFilter layerFilter(mask);
 	m_impl->system.GetNarrowPhaseQuery().CastRay(ray, settings, collector,
 												 JPH::BroadPhaseLayerFilter(), layerFilter,
-												 bodyFilterFor(ignore, ignoreFilter, acceptAll));
+												 ignoreFilter);
 	collector.Sort();
 
 	std::vector<RaycastHit> hits;
@@ -338,7 +361,7 @@ std::vector<RaycastHit> PhysicsWorld::raycastAll(const Vector3& origin,
 		const uint32_t id = result.mBodyID.GetIndexAndSequenceNumber();
 		if (!seen.insert(id).second) continue;	// nearest hit per body only
 		RaycastHit hit;
-		hit.body = lookup(*m_impl, id);
+		identify(*m_impl, id, hit);
 		hit.distance = result.mFraction * maxDistance;
 		hit.point = origin + dir * hit.distance;
 		JPH::BodyLockRead lock(m_impl->system.GetBodyLockInterface(), result.mBodyID);
@@ -356,7 +379,7 @@ std::optional<ShapeCastHit> PhysicsWorld::shapeCast(const CollisionShape& shape,
 													const Vector3& from,
 													const Quaternion& rotation,
 													const Vector3& to, PhysicsLayerMask mask,
-													const RigidBodyComponent* ignore) const {
+													const Component* ignore) const {
 	requireShape(shape, "shapeCast");
 	const JPH::Shape* native = nativeShape(shape);
 	const JPH::RShapeCast cast = JPH::RShapeCast::sFromWorldTransform(
@@ -364,18 +387,16 @@ std::optional<ShapeCastHit> PhysicsWorld::shapeCast(const CollisionShape& shape,
 		JPH::RMat44::sRotationTranslation(toJolt(rotation), toJolt(from)), toJolt(to - from));
 	JPH::ShapeCastSettings settings;
 	JPH::ClosestHitCollisionCollector<JPH::CastShapeCollector> collector;
-	JPH::IgnoreSingleBodyFilter ignoreFilter(
-		ignore != nullptr ? JPH::BodyID(ignore->_bodyId()) : JPH::BodyID());
-	const JPH::BodyFilter acceptAll;
+	const JPH::IgnoreSingleBodyFilter ignoreFilter(ignoredBody(ignore));
 	const QueryLayerFilter layerFilter(mask);
 	m_impl->system.GetNarrowPhaseQuery().CastShape(
 		cast, settings, JPH::RVec3::sZero(), collector, JPH::BroadPhaseLayerFilter(),
-		layerFilter, bodyFilterFor(ignore, ignoreFilter, acceptAll));
+		layerFilter, ignoreFilter);
 	if (!collector.HadHit()) return std::nullopt;
 
 	const JPH::ShapeCastResult& result = collector.mHit;
 	ShapeCastHit hit;
-	hit.body = lookup(*m_impl, result.mBodyID2.GetIndexAndSequenceNumber());
+	identify(*m_impl, result.mBodyID2.GetIndexAndSequenceNumber(), hit);
 	hit.fraction = result.mFraction;
 	hit.point = toBird(JPH::Vec3(result.mContactPointOn2));
 	const JPH::Vec3 axis = result.mPenetrationAxis;
@@ -387,19 +408,17 @@ std::vector<RigidBodyComponent*> PhysicsWorld::overlap(const CollisionShape& sha
 													   const Vector3& position,
 													   const Quaternion& rotation,
 													   PhysicsLayerMask mask,
-													   const RigidBodyComponent* ignore) const {
+													   const Component* ignore) const {
 	requireShape(shape, "overlap");
 	const JPH::Shape* native = nativeShape(shape);
 	JPH::CollideShapeSettings settings;
 	JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> collector;
-	JPH::IgnoreSingleBodyFilter ignoreFilter(
-		ignore != nullptr ? JPH::BodyID(ignore->_bodyId()) : JPH::BodyID());
-	const JPH::BodyFilter acceptAll;
+	const JPH::IgnoreSingleBodyFilter ignoreFilter(ignoredBody(ignore));
 	const QueryLayerFilter layerFilter(mask);
 	m_impl->system.GetNarrowPhaseQuery().CollideShape(
 		native, JPH::Vec3::sReplicate(1.0f), comTransform(native, position, rotation),
 		settings, JPH::RVec3::sZero(), collector, JPH::BroadPhaseLayerFilter(), layerFilter,
-		bodyFilterFor(ignore, ignoreFilter, acceptAll));
+		ignoreFilter);
 
 	std::vector<RigidBodyComponent*> bodies;
 	std::unordered_set<uint32_t> seen;

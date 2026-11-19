@@ -34,6 +34,16 @@ struct GlobalUBOData {
  */
 struct ObjectPushConstants {
 	Matrix4 model;
+	/** Inverse-transpose of the model's 3x3, as std430 mat3 (vec3 columns
+	 * padded to 16 bytes). Lights normals correctly on rotated objects. */
+	Vector4 normalMatrix[3];
+
+	explicit ObjectPushConstants(const Matrix4& modelMatrix) : model(modelMatrix) {
+		const Matrix3 normal = glm::transpose(glm::inverse(Matrix3(modelMatrix)));
+		for (int column = 0; column < 3; column++) {
+			normalMatrix[column] = Vector4(normal[column], 0.0f);
+		}
+	}
 };
 
 /**

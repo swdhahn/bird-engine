@@ -49,7 +49,7 @@ Hands-on walkthroughs introducing engine systems progressively with complete, ru
 - **[Tutorial 2: Camera & Input Handling](tutorials/02_camera_and_input.md)**: Subclassing `ProcessScript<Camera>`, binding input actions, and implementing a smooth free-look camera controller.
 - **[Tutorial 3: Building UI Layouts](tutorials/03_building_ui_layouts.md)**: Crafting responsive 2D interfaces with `UIManager`, `UIStack`, buttons, sliders, text inputs, modal dialogs, lists and trees, the colour picker, and rich inputs.
 - **[Tutorial 4: Shaders & Asset Baking](tutorials/04_shaders_and_baking.md)**: Writing Vulkan-compatible GLSL shaders, configuring push constants, baking with `BuildTools`, and material assignment.
-- **[Tutorial 5: Rigid-Body Physics](tutorials/05_rigid_body_physics.md)**: Static floors and falling boxes with `RigidBodyComponent`, forces in `physicsProcess`, contact and trigger events, raycast picking, and collision layers.
+- **[Tutorial 5: Rigid-Body Physics](tutorials/05_rigid_body_physics.md)**: Static floors and falling boxes with `RigidBodyComponent`, forces in `physicsProcess`, contact and trigger events, raycast picking, collision layers, and a walking character controller.
 
 ### 3. [Architecture Deep Dives](architecture/lifecycle_and_main_loop.md)
 Under-the-hood technical references detailing internal mechanics and design decisions.
@@ -59,4 +59,4 @@ Under-the-hood technical references detailing internal mechanics and design deci
 - **[Rendering Pipeline](architecture/rendering_pipeline.md)**: Multi-backend rendering (`GLPipeline`, `VKPipeline`), offscreen FBOs, post-processing (FXAA), and UI blending passes.
 - **[2D UI Framework](architecture/ui_framework.md)**: The two-pass layout system (measure & arrange), event bubbling, popups and focus, `UIDrawList` batching, and the widget library including virtualized lists and trees, the colour picker, and rich inputs.
 - **[Resource Management](architecture/resource_management.md)**: Asset caching in `ResourceManager`, binary `.bird` formats, and `BuildTools` compilation.
-- **[Physics](architecture/physics.md)**: Jolt integration: per-scene worlds, the fixed-step loop, transform synchronization, main-thread contact and trigger events, collision layers, and queries.
+- **[Physics](architecture/physics.md)**: Jolt integration: per-scene worlds, the fixed-step loop, transform synchronization, character controllers, main-thread contact and trigger events, collision layers, and queries.

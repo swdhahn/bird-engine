@@ -4,7 +4,8 @@ This tutorial adds physics to a scene:
 1. a static floor and falling boxes;
 2. pushing bodies with impulses from a script;
 3. reacting to contacts and trigger zones;
-4. picking objects with a raycast.
+4. picking objects with a raycast;
+5. a walking character controller.
 
 The design behind these APIs is described in [Physics](../architecture/physics.md).
 
@@ -167,12 +168,70 @@ Both bodies must agree: A's layers must intersect B's mask, and B's layers A's m
 
 ---
 
-## 6. Try It
+## 6. A Walking Character
+
+A `CharacterControllerComponent` gives a player or NPC capsule movement: it walks up stairs and slopes, stops at walls and steep slopes, and pushes light dynamic bodies. The object's position is the character's feet.
+
+```cpp
+#include <physics/CharacterControllerComponent.h>
+
+class PlayerController : public ProcessScript<WorldObject> {
+   public:
+    explicit PlayerController(Camera* camera) : m_camera(camera) {}
+    void init() override {
+        for (auto& component : components()) {
+            if (auto* c = dynamic_cast<CharacterControllerComponent*>(component.get())) m_character = c;
+        }
+    }
+    void deinit() override {}
+
+    void physicsProcess(float fixedDelta) override {
+        // Steer in the camera's horizontal frame.
+        Vector3 forward = m_camera->getWorldRotation() * Vector3(0, 0, -1);
+        forward.y = 0;
+        forward = glm::normalize(forward);
+        const Vector3 right(-forward.z, 0, forward.x);
+        const float ahead = input()->getActionValue("move_forward") -
+                            input()->getActionValue("move_backward");
+        const float side = input()->getActionValue("move_right") -
+                           input()->getActionValue("move_left");
+        m_character->setMoveVelocity((forward * ahead + right * side) * 4.5f);  // persists
+        if (input()->getActionValue("jump") > 0.5f) m_character->jump(5.0f);   // only from the ground
+    }
+
+    void process(float delta) override {
+        // First-person camera at eye height.
+        m_camera->setWorldPosition(object()->getWorldPosition() + Vector3(0, 1.6f, 0));
+    }
+
+   private:
+    Camera* m_camera;
+    CharacterControllerComponent* m_character = nullptr;
+};
+
+void addPlayer(Scene* scene, Camera* camera) {
+    CharacterSettings settings;  // 1.8 m tall, 0.3 m radius, 0.4 m steps, 50 degree slopes
+    settings.pushStrength = 600.0f;
+
+    auto player = _own_mk<WorldObject>();
+    player->addComponent(_own_mk<CharacterControllerComponent>(settings));
+    player->addComponent(_own_mk<PlayerController>(camera));
+    player->setWorldPosition({0, 0, -8});
+    scene->addChild(std::move(player));
+}
+```
+
+`getGroundState()` reports `OnGround`, `OnSteepGround`, `NotSupported` or `InAir`, and `getTouchingBodies()` lists what the character bumped into. Remember that pushing is force-limited: give crates a modest `mass` (the default density makes a 1 m cube weigh a tonne).
+
+---
+
+## 7. Try It
 
 `test/main.cpp` contains a playground:
 - 80 boxes drop onto a slab;
 - a trigger zone counts the boxes inside it;
-- **F** pushes the box under the crosshair, and **R** drops the boxes again.
+- **F** pushes the box under the crosshair, and **R** drops the boxes again;
+- **C** switches between flying and walking as a first-person character (WASD, **Space** jumps) that can shove the boxes.
 
 The HUD shows the body count, the awake count and the last event.
 
