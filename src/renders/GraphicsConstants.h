@@ -5,28 +5,13 @@
 #ifndef BIRD_GRAPHICSCONSTANTS_H
 #define BIRD_GRAPHICSCONSTANTS_H
 
-#include <iostream>
-#include <vector>
-#include <string>
-#include <algorithm>
-#include <cmath>
-#include <map>
-#include <memory>
-
-#include <array>
 #include <cstdint>
-#include <iostream>
-#include <optional>
-#include <set>
-#include <stdexcept>
-#include <string>
-#include <vector>
-
-#include "../util/Math.h"
-
 
 namespace bird {
 
+/**
+ * Supported rendering backend APIs.
+ */
 enum GraphicsPipelineType {
 	GRAPHICS_PIPELINE_NONE,
 	GRAPHICS_PIPELINE_OPENGL,
@@ -35,8 +20,13 @@ enum GraphicsPipelineType {
 	GRAPHICS_PIPELINE_DIRECTX
 };
 
+/** Currently active graphics backend. */
 extern GraphicsPipelineType CURRENT_GRAPHICS_PIPELINE;
+
+/** Window width in screen coordinate points. */
 extern uint32_t WINDOW_WIDTH;
+
+/** Window height in screen coordinate points. */
 extern uint32_t WINDOW_HEIGHT;
 
 }  // namespace bird

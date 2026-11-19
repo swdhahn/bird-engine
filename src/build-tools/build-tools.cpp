@@ -9,7 +9,10 @@
 int main(int argc, char* argv[]) {
 	bird::AssetLoader loader;
 
-	loader.init("assets");
-
+	const size_t failures = loader.init("assets");
+	if (failures > 0) {
+		std::cerr << failures << " asset(s) failed to compile" << std::endl;
+		return 1;
+	}
 	return 0;
 }

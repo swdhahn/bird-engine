@@ -1,0 +1,296 @@
+#include "UIDrawList.h"
+
+#include <algorithm>
+#include <stdexcept>
+
+#include "../../renders/generic/Font.h"
+
+namespace bird {
+
+UIDrawList::UIDrawList(Vector2 whiteUV) : m_whiteUV(whiteUV) {
+	clear();
+}
+
+void UIDrawList::clear() {
+	m_vertices.clear();
+	m_indices.clear();
+	m_commands.clear();
+	m_clipStack.assign(1, UIRect::unbounded());
+	m_transform = Matrix3(1.0f);
+}
+
+void UIDrawList::setWhiteUV(Vector2 whiteUV) {
+	m_whiteUV = whiteUV;
+}
+
+void UIDrawList::setTransform(const Matrix3& transform) {
+	m_transform = transform;
+}
+
+Vector2 UIDrawList::toScreen(Vector2 local) const {
+	const Vector3 screen = m_transform * Vector3(local, 1.0f);
+	return Vector2(screen.x, screen.y);
+}
+
+void UIDrawList::pushClip(const UIRect& localRect) {
+	// Axis-aligned bounds of the transformed rect (exact without rotation).
+	const Vector2 corners[4] = {
+		toScreen(localRect.position),
+		toScreen(localRect.position + Vector2(localRect.size.x, 0.0f)),
+		toScreen(localRect.position + Vector2(0.0f, localRect.size.y)),
+		toScreen(localRect.max())};
+	Vector2 low = corners[0], high = corners[0];
+	for (const Vector2& corner : corners) {
+		low = glm::min(low, corner);
+		high = glm::max(high, corner);
+	}
+	m_clipStack.push_back(currentClip().intersect({low, high - low}));
+}
+
+void UIDrawList::popClip() {
+	if (m_clipStack.size() <= 1) {
+		throw std::logic_error("UIDrawList::popClip without matching push");
+	}
+	m_clipStack.pop_back();
+}
+
+const UIRect& UIDrawList::currentClip() const {
+	return m_clipStack.back();
+}
+
+bool UIDrawList::clipIsEmpty() const {
+	const UIRect& clip = currentClip();
+	return clip.size.x <= 0.0f || clip.size.y <= 0.0f;
+}
+
+void UIDrawList::appendIndices(std::initializer_list<uint32_t> indices,
+								const Texture* texture) {
+	if (m_commands.empty() || m_commands.back().texture != texture) {
+		m_commands.push_back(
+			{texture, static_cast<uint32_t>(m_indices.size()), 0});
+	}
+	m_indices.insert(m_indices.end(), indices);
+	m_commands.back().indexCount += static_cast<uint32_t>(indices.size());
+}
+
+void UIDrawList::emit(const QuadSpec& spec, const Texture* texture) {
+	const UIRect& clip = currentClip();
+	const Vector4 clipBounds(clip.position, clip.max());
+	const auto base = static_cast<uint32_t>(m_vertices.size());
+	for (int i = 0; i < 4; i++) {
+		m_vertices.push_back(
+			{toScreen(spec.corners[i]), spec.uvs[i], spec.colors[i], clipBounds,
+			 Vector4(spec.shapeLocal[i], spec.halfSize), spec.style,
+			 spec.borderColor});
+	}
+	appendIndices({base, base + 1, base + 2, base + 2, base + 1, base + 3},
+				  texture);
+}
+
+void UIDrawList::plainQuad(const UIRect& r, Vector2 uvMin, Vector2 uvMax,
+						   const Vector4& color) {
+	if (clipIsEmpty() || color.a <= 0.0f) return;
+	QuadSpec spec;
+	spec.corners[0] = r.position;
+	spec.corners[1] = r.position + Vector2(0.0f, r.size.y);
+	spec.corners[2] = r.position + Vector2(r.size.x, 0.0f);
+	spec.corners[3] = r.max();
+	spec.uvs[0] = uvMin;
+	spec.uvs[1] = Vector2(uvMin.x, uvMax.y);
+	spec.uvs[2] = Vector2(uvMax.x, uvMin.y);
+	spec.uvs[3] = uvMax;
+	for (Vector4& c : spec.colors) c = color;
+	emit(spec);
+}
+
+void UIDrawList::rect(const UIRect& localRect, const Vector4& color) {
+	plainQuad(localRect, m_whiteUV, m_whiteUV, color);
+}
+
+void UIDrawList::border(const UIRect& r, float t, const Vector4& color) {
+	if (t <= 0.0f) return;
+	const Vector2 p = r.position, s = r.size;
+	rect({p, Vector2(s.x, t)}, color);
+	rect({p + Vector2(0.0f, s.y - t), Vector2(s.x, t)}, color);
+	rect({p + Vector2(0.0f, t), Vector2(t, s.y - 2 * t)}, color);
+	rect({p + Vector2(s.x - t, t), Vector2(t, s.y - 2 * t)}, color);
+}
+
+void UIDrawList::roundedRect(const UIRect& r, const Vector4& fill,
+							 float radius, float borderWidth,
+							 const Vector4& borderColor) {
+	const bool hasBorder = borderWidth > 0.0f && borderColor.a > 0.0f;
+	if (clipIsEmpty() || (fill.a <= 0.0f && !hasBorder)) return;
+	if (r.size.x <= 0.0f || r.size.y <= 0.0f) return;
+	const Vector2 half = r.size * 0.5f;
+	const Vector2 center = r.position + half;
+	QuadSpec spec;
+	spec.corners[0] = r.position;
+	spec.corners[1] = r.position + Vector2(0.0f, r.size.y);
+	spec.corners[2] = r.position + Vector2(r.size.x, 0.0f);
+	spec.corners[3] = r.max();
+	for (int i = 0; i < 4; i++) {
+		spec.uvs[i] = m_whiteUV;
+		spec.shapeLocal[i] = spec.corners[i] - center;
+	}
+	spec.halfSize = half;
+	spec.style = Vector4(std::clamp(radius, 0.0f, std::min(half.x, half.y)),
+						 hasBorder ? borderWidth : 0.0f, 0.0f, 0.0f);
+	spec.borderColor = borderColor;
+	for (Vector4& c : spec.colors) c = fill;
+	emit(spec);
+}
+
+void UIDrawList::shadow(const UIRect& r, float radius, float blur,
+						const Vector4& color) {
+	if (clipIsEmpty() || color.a <= 0.0f || blur <= 0.0f) return;
+	const Vector2 half = r.size * 0.5f;
+	const Vector2 center = r.position + half;
+	const Vector2 low = r.position - Vector2(blur);
+	const Vector2 high = r.max() + Vector2(blur);
+	QuadSpec spec;
+	spec.corners[0] = low;
+	spec.corners[1] = Vector2(low.x, high.y);
+	spec.corners[2] = Vector2(high.x, low.y);
+	spec.corners[3] = high;
+	for (int i = 0; i < 4; i++) {
+		spec.uvs[i] = m_whiteUV;
+		spec.shapeLocal[i] = spec.corners[i] - center;
+	}
+	spec.halfSize = glm::max(half, Vector2(0.5f));
+	spec.style = Vector4(std::clamp(radius, 0.0f, std::min(half.x, half.y)),
+						 0.0f, blur, 0.0f);
+	for (Vector4& c : spec.colors) c = color;
+	emit(spec);
+}
+
+void UIDrawList::triangle(Vector2 a, Vector2 b, Vector2 c,
+						  const Vector4& color) {
+	if (clipIsEmpty() || color.a <= 0.0f) return;
+	const UIRect& clip = currentClip();
+	const Vector4 clipBounds(clip.position, clip.max());
+	const auto base = static_cast<uint32_t>(m_vertices.size());
+	for (const Vector2& p : {a, b, c}) {
+		m_vertices.push_back({toScreen(p), m_whiteUV, color, clipBounds,
+							  Vector4(0.0f), Vector4(0.0f), Vector4(0.0f)});
+	}
+	appendIndices({base, base + 1, base + 2}, nullptr);
+}
+
+void UIDrawList::triangle(Vector2 a, Vector2 b, Vector2 c,
+						  const Vector4& colorA, const Vector4& colorB,
+						  const Vector4& colorC) {
+	if (clipIsEmpty()) return;
+	const UIRect& clip = currentClip();
+	const Vector4 clipBounds(clip.position, clip.max());
+	const auto base = static_cast<uint32_t>(m_vertices.size());
+	const Vector2 points[3] = {a, b, c};
+	const Vector4 colors[3] = {colorA, colorB, colorC};
+	for (int i = 0; i < 3; i++) {
+		m_vertices.push_back({toScreen(points[i]), m_whiteUV, colors[i],
+							  clipBounds, Vector4(0.0f), Vector4(0.0f),
+							  Vector4(0.0f)});
+	}
+	appendIndices({base, base + 1, base + 2}, nullptr);
+}
+
+void UIDrawList::gradientRect(const UIRect& r, const Vector4& topLeft,
+							  const Vector4& topRight,
+							  const Vector4& bottomLeft,
+							  const Vector4& bottomRight) {
+	if (clipIsEmpty()) return;
+	QuadSpec spec;
+	spec.corners[0] = r.position;
+	spec.corners[1] = r.position + Vector2(0.0f, r.size.y);
+	spec.corners[2] = r.position + Vector2(r.size.x, 0.0f);
+	spec.corners[3] = r.max();
+	for (Vector2& uv : spec.uvs) uv = m_whiteUV;
+	spec.colors[0] = topLeft;
+	spec.colors[1] = bottomLeft;
+	spec.colors[2] = topRight;
+	spec.colors[3] = bottomRight;
+	emit(spec);
+}
+
+void UIDrawList::checkerboard(const UIRect& r, float cell, const Vector4& light,
+							  const Vector4& dark) {
+	if (cell <= 0.0f) return;
+	rect(r, light);
+	for (float y = 0.0f; y < r.size.y; y += cell) {
+		const int row = static_cast<int>(y / cell);
+		for (float x = (row % 2) * cell; x < r.size.x; x += 2.0f * cell) {
+			rect({r.position + Vector2(x, y),
+				  glm::min(Vector2(cell), r.size - Vector2(x, y))},
+				 dark);
+		}
+	}
+}
+
+void UIDrawList::image(const Texture* texture, const UIRect& r, Vector2 uvMin,
+					   Vector2 uvMax, const Vector4& tint, float radius) {
+	if (!texture || clipIsEmpty() || tint.a <= 0.0f) return;
+	const Vector2 half = r.size * 0.5f;
+	const Vector2 center = r.position + half;
+	QuadSpec spec;
+	spec.corners[0] = r.position;
+	spec.corners[1] = r.position + Vector2(0.0f, r.size.y);
+	spec.corners[2] = r.position + Vector2(r.size.x, 0.0f);
+	spec.corners[3] = r.max();
+	spec.uvs[0] = uvMin;
+	spec.uvs[1] = Vector2(uvMin.x, uvMax.y);
+	spec.uvs[2] = Vector2(uvMax.x, uvMin.y);
+	spec.uvs[3] = uvMax;
+	for (int i = 0; i < 4; i++) {
+		spec.colors[i] = tint;
+		spec.shapeLocal[i] = spec.corners[i] - center;
+	}
+	// A shape is only needed for rounded corners.
+	spec.halfSize = radius > 0.0f ? half : Vector2(0.0f);
+	spec.style = Vector4(std::clamp(radius, 0.0f, std::min(half.x, half.y)),
+						 0.0f, 0.0f, 1.0f);
+	emit(spec, texture);
+}
+
+void UIDrawList::line(Vector2 a, Vector2 b, float thickness,
+					  const Vector4& color) {
+	if (clipIsEmpty() || color.a <= 0.0f || thickness <= 0.0f) return;
+	const Vector2 delta = b - a;
+	const float length = glm::length(delta);
+	if (length <= 0.0f) return;
+	// A capsule: a rounded box in the segment's own frame, radius t/2,
+	// padded by one pixel so the anti-aliased edge is not cut off.
+	const Vector2 along = delta / length;
+	const Vector2 across(-along.y, along.x);
+	const float halfThick = thickness * 0.5f;
+	const Vector2 half(length * 0.5f + halfThick, halfThick);
+	const Vector2 pad = half + Vector2(1.0f);
+	const Vector2 center = (a + b) * 0.5f;
+	const Vector2 frame[4] = {Vector2(-pad.x, -pad.y), Vector2(-pad.x, pad.y),
+							  Vector2(pad.x, -pad.y), Vector2(pad.x, pad.y)};
+	QuadSpec spec;
+	for (int i = 0; i < 4; i++) {
+		spec.corners[i] = center + along * frame[i].x + across * frame[i].y;
+		spec.uvs[i] = m_whiteUV;
+		spec.shapeLocal[i] = frame[i];
+	}
+	spec.halfSize = half;
+	spec.style = Vector4(halfThick, 0.0f, 0.0f, 0.0f);
+	for (Vector4& c : spec.colors) c = color;
+	emit(spec);
+}
+
+void UIDrawList::quad(const UIRect& localRect, Vector2 uvMin, Vector2 uvMax,
+					  const Vector4& color) {
+	plainQuad(localRect, uvMin, uvMax, color);
+}
+
+void UIDrawList::text(const Font& font, const std::string& text,
+					  Vector2 localPosition, float pixelHeight,
+					  const Vector4& color) {
+	for (const GlyphQuad& glyph : font.layoutLine(text, pixelHeight)) {
+		plainQuad({localPosition + glyph.position, glyph.size}, glyph.uvMin,
+				  glyph.uvMax, color);
+	}
+}
+
+}  // namespace bird

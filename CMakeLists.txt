@@ -8,6 +8,7 @@ project(Bird)
 set(BIRD_FILES
     src/util/stb_image.h
     src/util/Constants.h
+    src/util/Memory.hpp
     src/util/Math.h
     src/util/Math.cpp
     src/util/File.cpp
@@ -146,12 +147,9 @@ target_link_libraries(
           libglew_static
           assimp::assimp
           VOLK::volk
-          Jolt::Jolt
-          shaderc::shaderc_combined
-          ${SPIRV_LIBRARIES}
-          spirv-cross-core
-          spirv-cross-glsl
-          spirv-cross-cpp)
+          Jolt::Jolt)
+# Shader compilation (shaderc, SPIRV-Cross) lives in BirdBake/BuildTools;
+# the runtime only loads baked .bird shaders.
 
 target_compile_definitions(Bird_core PRIVATE BIRD_CORE_EXPORTS)
 if(NOT MSVC)
@@ -162,12 +160,37 @@ endif()
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 add_subdirectory(src/build-tools)
 
+# Unit tests (optional; requires GoogleTest)
+option(BIRD_BUILD_TESTS "Build Bird engine unit tests" ON)
+if(BIRD_BUILD_TESTS)
+  find_package(GTest CONFIG QUIET)
+  if(GTest_FOUND)
+    enable_testing()
+    add_subdirectory(tests)
+  else()
+    message(STATUS "GoogleTest not found; skipping unit tests")
+  endif()
+endif()
+
+set_target_properties(Bird PROPERTIES 
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH "$ORIGIN"
+)
+
 install(
   DIRECTORY src/
   DESTINATION include
   FILES_MATCHING
   PATTERN "*.h"
   PATTERN "*.hpp")
+install(
+	DIRECTORY assets/shaders/
+	DESTINATION assets/shaders
+	FILES_MATCHING
+	PATTERN "*.vert"
+	PATTERN "*.frag"
+	PATTERN "*.bird"
+)
 install(
   TARGETS Bird_core Bird BuildTools glm
   EXPORT Bird_Engine
@@ -181,5 +204,5 @@ install(
   EXPORT Bird_Engine
   FILE Bird_EngineConfig.cmake
   NAMESPACE Bird::
-  DESTINATION cmake/Bird_Engine)
+  DESTINATION lib/cmake/Bird_Engine)
 install(DIRECTORY libs/install/include/glm DESTINATION include)

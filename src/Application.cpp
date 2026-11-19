@@ -4,104 +4,112 @@
 
 #include "Application.h"
 
-#include <memory>
-
-#include "physics/PhysicsPipeline.h"
 #include "renders/Window.h"
 #include "renders/opengl/GLPipeline.h"
+#include "scene/2D/UIManager.h"
+#include "scene/Scene.h"
+#include "scene/components/Component.h"
+#include "scene/components/ProcessScript.h"
+#include "scene/components/Script.h"
+
 namespace bird {
 
 Input* INPUT = nullptr;
 ResourceManager* RESOURCE_MANAGER = nullptr;
 Application* APPLICATION = nullptr;
 
-Application::Application(Scene& scene) : m_scene(&scene) {}
+Application::Application() {}
 
-Application::~Application() = default;
+Application::~Application() {}
 
-void Application::init() {
-	m_graphicsPipeline = std::make_unique<gl::GLPipeline>();
-	m_physicsPipeline = std::make_unique<PhysicsPipeline>();
-
+void Application::init(Script<Scene>* script) {
+	m_graphicsPipeline = new gl::GLPipeline();
 	m_graphicsPipeline->init();
-	m_physicsPipeline->init();
-
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	RESOURCE_MANAGER = new ResourceManager();
+	RESOURCE_MANAGER->init();
 	APPLICATION = this;
 
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
+	m_uiManager = new UIManager();
+	m_uiManager->init(RESOURCE_MANAGER->loadFont(UIManager::kDefaultFontPath),
+					  m_graphicsPipeline->getWindow().get());
+	// The compositor may already have resized the window (e.g. tiling).
+	handleResize();
 
-	INPUT->addAction(Action("move_forward").addKey(KEY_W));
-	INPUT->addAction(Action("move_backward").addKey(KEY_S));
-	INPUT->addAction(Action("move_left").addKey(KEY_A));
-	INPUT->addAction(Action("move_right").addKey(KEY_D));
-	INPUT->addAction(Action("move_up").addKey(KEY_SPACE));
-	INPUT->addAction(Action("move_down").addKey(KEY_LEFT_SHIFT));
+	m_scene = new Scene();
+	m_scene->addComponent(std::unique_ptr<Script<Scene>>(script));
+	m_scene->init(nullptr);
 
-	INPUT->addAction(Action("look_up").addKey(KEY_UP));
-	INPUT->addAction(Action("look_down").addKey(KEY_DOWN));
-	INPUT->addAction(Action("look_left").addKey(KEY_LEFT));
-	INPUT->addAction(Action("look_right").addKey(KEY_RIGHT));
-
-	m_scene->init();
+	run();
 }
 
 void Application::run() {
-	init();
-
 	double lastTime = Window::getGLFWTime();
-	double physicsTime = Window::getGLFWTime();
 	float delta = 0.0f;
-	float delta2 = 0.0f;
-	float fixedStep = 1.0 / 60.0;  // physics step time
-	double accumulator = 0.0;
+	uint16_t fps = 0;
 
+	double secondTime = Window::getGLFWTime();
 	while (!m_graphicsPipeline->getWindow()->shouldWindowClose()) {
 		delta = (Window::getGLFWTime() - lastTime);
 		lastTime = Window::getGLFWTime();
 
-		if (delta > 0.25) delta = 0.25;
-		accumulator += delta;
-		while (accumulator >= fixedStep) {
-			m_physicsPipeline->update(fixedStep);
-
-			m_graphicsPipeline->getCamera()->process(delta);
-			if (m_graphicsPipeline->getCamera()->needsMatrixUpdate()) {
-				m_graphicsPipeline->getCamera()->updateTransformationMatrix();
-			}
-			processScene(m_scene, delta);
-
-			INPUT->tick();
-
-			accumulator -= fixedStep;
+		if (m_graphicsPipeline->getCamera()->needsMatrixUpdate()) {
+			m_graphicsPipeline->getCamera()->updateTransformationMatrix();
 		}
 
+		// PROCESS SECTION
+		m_uiManager->process(delta);
+		for (int i = 0; i < m_processableScripts.size(); i++) {
+			m_processableScripts[i]->process(delta);
+		}
+
+		processScene(m_scene, delta);
+		// PROCESS SECTION END
+
 		m_graphicsPipeline->renderRootScene(m_scene);
+		fps++;
+		if (secondTime + 1.0 < Window::getGLFWTime()) {
+			std::cout << "FPS: " << fps << std::endl;
+			fps = 0;
+			secondTime = Window::getGLFWTime();
+		}
+		INPUT->tick();
 		m_graphicsPipeline->getWindow()->pollWindow();
+		handleResize();
 	}
 
 	deinit();
 }
 
 void Application::processScene(Scene* scene, float delta) {
-	for (auto& entity : scene->getEntities()) {
-		entity->process(delta);
-		if (entity->needsMatrixUpdate()) {
-			entity->updateTransformationMatrix();
+	for (auto& obj : scene->getChildren()) {
+		if (obj->needsMatrixUpdate()) {
+			obj->updateTransformationMatrix();
 		}
 	}
-	for (auto& child : scene->getChildren()) {
-		processScene(child.get(), delta);
+	for (auto& obj : scene->getChildrenScenes()) {
+		processScene(obj, delta);
 	}
+}
+
+void Application::addProcessableScript(ProcessScriptComponent* script) {
+	m_processableScripts.push_back(script);
+}
+void Application::removeProcessableScript(ProcessScriptComponent* script) {
+	m_processableScripts.erase(std::remove(m_processableScripts.begin(),
+										   m_processableScripts.end(), script),
+							   m_processableScripts.end());
 }
 
 void Application::deinit() {
 	m_scene->deinit();
 
+	m_uiManager->deinit();
+	delete m_uiManager;
 	delete INPUT;
-	m_physicsPipeline->cleanup();
 	m_graphicsPipeline->cleanUp();
+	delete m_graphicsPipeline;
 }
 void Application::setCamera(bird::Camera* camera) {
 	m_graphicsPipeline->setCamera(camera);
@@ -111,11 +119,20 @@ bird::Camera* Application::getCamera() {
 }
 
 GraphicsPipeline* Application::getGraphicsPipeline() {
-	return m_graphicsPipeline.get();
+	return m_graphicsPipeline;
 }
 
-PhysicsPipeline* Application::getPhysicsPipeline() {
-	return m_physicsPipeline.get();
+void Application::handleResize() {
+	Window* window = m_graphicsPipeline->getWindow().get();
+	if (!window->pollResize()) return;
+	m_graphicsPipeline->resize(
+		window->getFramebufferWidth(), window->getFramebufferHeight(),
+		window->getWidth(), window->getHeight());
+	m_uiManager->setViewportSize(window->getWidth(), window->getHeight());
+}
+
+UIManager* Application::getUIManager() {
+	return m_uiManager;
 }
 
 }  // namespace bird

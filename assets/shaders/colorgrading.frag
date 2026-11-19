@@ -1,4 +1,4 @@
-#version 430
+#version 450
 
 layout(location = 0) in vec2 fragTexCoord;
 layout(binding = 0) uniform sampler2D screenTexture;

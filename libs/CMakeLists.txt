@@ -25,6 +25,42 @@ else()
     set(COMPILER_WARNING_FLAGS "-Werror -Wdeprecated-declarations")
 endif()
 
+# ==============================================================================
+# DART SDK (Pre-compiled Download)
+# ==============================================================================
+# Detect OS
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(DART_OS "windows")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    set(DART_OS "macos")
+else()
+    set(DART_OS "linux")
+endif()
+
+# Detect Architecture
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|aarch64|arm64")
+    set(DART_ARCH "arm64")
+else()
+    set(DART_ARCH "x64")
+endif()
+
+set(DART_SDK_URL "https://storage.googleapis.com/dart-archive/channels/stable/release/latest/sdk/dartsdk-${DART_OS}-${DART_ARCH}-release.zip")
+
+ExternalProject_Add(
+  DART_SDK
+  URL ${DART_SDK_URL}
+  PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/DART_SDK
+  # No build or configure steps required for pre-compiled binaries
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND ""
+  # Copy the extracted dart-sdk folder to our install directory
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR> ${DEPS_INSTALL_DIR}/dart-sdk
+)
+
+# ==============================================================================
+# C++ DEPENDENCIES
+# ==============================================================================
+
 ExternalProject_Add(
   GLM
   URL "https://github.com/g-truc/glm/archive/refs/tags/0.9.9.8.tar.gz"
@@ -32,6 +68,7 @@ ExternalProject_Add(
   BUILD_COMMAND ""
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR>/glm
                   ${DEPS_INSTALL_DIR}/include/glm)
+
 set(GLFW_APPLE_FLAG "")
 if(APPLE)
     set(GLFW_APPLE_FLAG "-DCMAKE_C_FLAGS=-fblocks")
@@ -43,22 +80,25 @@ ExternalProject_Add(
   CMAKE_ARGS -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_DOCS=OFF
              -DGLFW_BUILD_TESTS=OFF ${GLFW_APPLE_FLAG}
              "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}")
+
 ExternalProject_Add(
   GLEW
   URL "https://github.com/Perlmint/glew-cmake/archive/refs/tags/glew-cmake-2.2.0.tar.gz"
   PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/GLEW
   CMAKE_ARGS -DONLY_LIBS=ON -Dglew-cmake_BUILD_SHARED=OFF "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}")
 
-set(ASSIMP_ZLIB_MODE OFF)
-if(WIN32)
-    set(ASSIMP_ZLIB_MODE ON)
-endif()
 ExternalProject_Add(
   ASSIMP
   URL "https://github.com/assimp/assimp/archive/refs/tags/v5.3.1.tar.gz"
   PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/ASSIMP
-  CMAKE_ARGS -DASSIMP_BUILD_TESTS=OFF -DBUILD_SHARED_LIBS=OFF -DASSIMP_BUILD_ZLIB=${ASSIMP_ZLIB_MODE} -DASSIMP_WARNINGS_AS_ERRORS=OFF -DASSIMP_INSTALL_PDB=OFF
-             "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}" ${COMPILER_WARNING_FLAGS})
+  CMAKE_ARGS -DASSIMP_BUILD_TESTS=OFF 
+             -DBUILD_SHARED_LIBS=OFF 
+             -DASSIMP_BUILD_ZLIB=ON 
+             -DASSIMP_WARNINGS_AS_ERRORS=OFF 
+             -DASSIMP_INSTALL_PDB=OFF
+             "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}" 
+             ${COMPILER_WARNING_FLAGS})
+
 ExternalProject_Add(
         VULKAN
         URL "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.3.266.tar.gz"
@@ -67,6 +107,7 @@ ExternalProject_Add(
         INSTALL_COMMAND
         ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR>/include
         ${DEPS_INSTALL_DIR}/include)
+
 ExternalProject_Add(
   VOLK
   URL "https://github.com/zeux/volk/archive/refs/tags/1.3.250.tar.gz"
@@ -74,12 +115,11 @@ ExternalProject_Add(
   CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}" -DVOLK_INSTALL=ON "-DCMAKE_C_FLAGS=-I${DEPS_INSTALL_DIR}/include"
   DEPENDS VULKAN
   INSTALL_COMMAND
-    # Copy the static library from its build location to the install lib folder
     ${CMAKE_COMMAND} -E copy <BINARY_DIR>${BUILD_SUBDIR}/${LIB_PREFIX}volk${LIB_EXT}
     ${DEPS_INSTALL_DIR}/lib/${LIB_PREFIX}volk${LIB_EXT}
-    # Copy the volk.h header to the install include folder
   COMMAND ${CMAKE_COMMAND} -E copy <SOURCE_DIR>/volk.h
           ${DEPS_INSTALL_DIR}/include/volk.h)
+
 ExternalProject_Add(
   SPIRV_CROSS
   URL "https://github.com/KhronosGroup/SPIRV-Cross/archive/refs/tags/MoltenVK-1.1.5.tar.gz"
@@ -103,6 +143,7 @@ ExternalProject_Add(
              -DSHADERC_SKIP_COPYRIGHT_CHECK=TRUE
              -DSHADERC_ENABLE_GLSLANG_COMBINED=ON
              -DSHADERC_ENABLE_SPIRV_TOOLS_COMBINED=ON
+             -DZLIB_USE_STATIC_LIBS=OFF
              ${SHADERC_EXTRA_ARGS})
 
 ExternalProject_Add_Step(

@@ -1,11 +1,10 @@
 add_library(
   scene OBJECT
+  Object.h
   Scene.cpp
   Scene.h
   WorldObject.cpp
   WorldObject.h
-  Entity.cpp
-  Entity.h
   Camera.cpp
   Camera.h
   Light.cpp
@@ -14,6 +13,7 @@ add_library(
   DefaultCamera.h)
 
 add_subdirectory(components)
+add_subdirectory(2D)
 
 target_link_libraries(scene PRIVATE glm)
 set_target_properties(scene PROPERTIES POSITION_INDEPENDENT_CODE TRUE)

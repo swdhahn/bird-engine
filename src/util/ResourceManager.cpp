@@ -7,25 +7,36 @@
 namespace bird {
 
 ResourceManager::ResourceManager() {
-	m_resources = new std::unordered_map<std::string,
-										 std::shared_ptr<Resource>>[CUSTOM + 1];
+	m_resources = new std::unordered_map<
+		std::string, std::shared_ptr<Resource>>[ASSET_TYPE_CUSTOM + 1];
 }
 
 ResourceManager::~ResourceManager() {
-	delete m_resources;
+	delete[] m_resources;
 }
 
-void ResourceManager::init() {}
+void ResourceManager::init() {
+	m_defaultShader = loadShader(
+		ShaderBuilder()
+			.attachShaderFile("assets/shaders/default.vert", VERTEX)
+			.attachShaderFile("assets/shaders/default.frag", FRAGMENT));
+}
 
 std::shared_ptr<Texture> ResourceManager::loadTexture(std::string path) {
-	if (m_resources[TEXTURE].find(path) != m_resources[TEXTURE].end()) {
-		return std::static_pointer_cast<Texture>(m_resources[TEXTURE].at(path));
+	if (m_resources[ASSET_TYPE_TEXTURE].find(path) !=
+		m_resources[ASSET_TYPE_TEXTURE].end()) {
+		return std::static_pointer_cast<Texture>(
+			m_resources[ASSET_TYPE_TEXTURE].at(path));
 	}
 
-	std::fstream file(path + ".bird", std::ios::in | std::ios::binary);
+	std::fstream file(RESOURCE_PATH + path + ".bird",
+					  std::ios::in | std::ios::binary);
 
 	if (!file.is_open()) {
-		std::cout << "Error loading file: " << path << std::endl;
+		std::cout << "Error loading file. File does not exist: " << path
+				  << std::endl;
+		std::cerr << std::strerror(errno) << std::endl;
+		file.close();
 		return std::shared_ptr<Texture>(0);
 	}
 
@@ -37,6 +48,7 @@ std::shared_ptr<Texture> ResourceManager::loadTexture(std::string path) {
 	uint8_t* data = new uint8_t[width * height * channels];
 	file.read(reinterpret_cast<char*>(data),
 			  width * height * channels * sizeof(uint8_t));
+	file.close();
 
 	if (channels == 0) {
 		std::cout << "Error loading file: " << path << std::endl;
@@ -49,8 +61,55 @@ std::shared_ptr<Texture> ResourceManager::loadTexture(std::string path) {
 
 	std::shared_ptr<Texture> tex =
 		TextureBuilder(data, width, height, form).build();
-	addResource(path, tex, TEXTURE);
+	addResource(path, tex, ASSET_TYPE_TEXTURE);
 	return tex;
+}
+
+std::shared_ptr<Font> ResourceManager::loadFont(std::string path) {
+	auto& fonts = m_resources[ASSET_TYPE_FONT];
+	if (fonts.find(path) != fonts.end()) {
+		return std::static_pointer_cast<Font>(fonts.at(path));
+	}
+
+	std::fstream file(RESOURCE_PATH + path + ".bird",
+					  std::ios::in | std::ios::binary);
+	if (!file.is_open()) {
+		std::cerr << "Error loading font. File does not exist: " << path
+				  << ".bird (run BuildTools)" << std::endl;
+		return nullptr;
+	}
+
+	format::FontHeader header{};
+	file.read(reinterpret_cast<char*>(&header), sizeof(header));
+	std::vector<format::FontGlyph> glyphs(header.glyphCount);
+	file.read(reinterpret_cast<char*>(glyphs.data()),
+			  glyphs.size() * sizeof(format::FontGlyph));
+	const size_t texelCount =
+		static_cast<size_t>(header.atlasWidth) * header.atlasHeight;
+	std::vector<uint8_t> distance(texelCount);
+	file.read(reinterpret_cast<char*>(distance.data()), distance.size());
+	if (!file) {
+		throw std::runtime_error("Truncated font file: " + path + ".bird");
+	}
+	file.close();
+
+	// Expand the distance field into the alpha of white RGBA texels; the UI
+	// shader converts distance to coverage for glyphs and solid quads alike.
+	uint8_t* rgba = new uint8_t[texelCount * 4];
+	for (size_t i = 0; i < texelCount; i++) {
+		rgba[i * 4 + 0] = 0xFF;
+		rgba[i * 4 + 1] = 0xFF;
+		rgba[i * 4 + 2] = 0xFF;
+		rgba[i * 4 + 3] = distance[i];
+	}
+	std::shared_ptr<Texture> atlas =
+		TextureBuilder(rgba, header.atlasWidth, header.atlasHeight,
+					   FORMAT_8RGBA)
+			.build();
+
+	auto font = std::make_shared<Font>(header, std::move(glyphs), atlas);
+	addResource(path, font, ASSET_TYPE_FONT);
+	return font;
 }
 
 std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
@@ -58,10 +117,12 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 		return m_meshes.at(path);
 	}
 	// load mesh from file
-	std::fstream file(path + ".bird", std::ios::in | std::ios::binary);
+	std::fstream file(RESOURCE_PATH + path + ".bird",
+					  std::ios::in | std::ios::binary);
 
 	if (!file.is_open()) {
 		std::cout << "Error loading file: " << path << std::endl;
+		file.close();
 		return std::vector<std::shared_ptr<Mesh>>(0);
 	}
 
@@ -125,12 +186,16 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 			createBuffer<float>(static_cast<bird::BufferMode>(
 									bird::BUFFER_STAGED | bird::BUFFER_ARRAY),
 								std::move(normals), normalCount * normalSize);
+
 		std::unique_ptr<bird::Buffer<float, 2>> textureCoordBuffer =
 			createBuffer<float, 2>(
 				static_cast<bird::BufferMode>(bird::BUFFER_STAGED |
 											  bird::BUFFER_ARRAY),
 				std::move(textureCoords), textureCoordCount * textureCoordSize);
+
 		bird::MeshBuilder mb = bird::MeshBuilder();
+
+		std::cout << vertexBuffer.get()->getBufferSize() << std::endl;
 		mb.setIndexBuffer(std::move(indexBuffer))
 			.setVertexBuffer(std::move(vertexBuffer))
 			.setNormalBuffer(std::move(normalBuffer))
@@ -139,6 +204,8 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 		// Load Material
 		std::shared_ptr<Material> mat =
 			loadMaterial(path + std::to_string(materialIndex) + ".mat");
+
+		mat->setShader(m_defaultShader);
 
 		mb.setMaterial(mat);
 		meshes.data()[i] = mb.build();
@@ -153,16 +220,19 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 }
 
 std::shared_ptr<Material> ResourceManager::loadMaterial(std::string path) {
-	if (m_resources[MATERIAL].find(path) != m_resources[MATERIAL].end()) {
+	if (m_resources[ASSET_TYPE_MATERIAL].find(path) !=
+		m_resources[ASSET_TYPE_MATERIAL].end()) {
 		return std::static_pointer_cast<Material>(
-			m_resources[MATERIAL].at(path));
+			m_resources[ASSET_TYPE_MATERIAL].at(path));
 	}
 
 	// load material from file
-	std::fstream file(path + ".bird", std::ios::in | std::ios::binary);
+	std::fstream file(RESOURCE_PATH + path + ".bird",
+					  std::ios::in | std::ios::binary);
 
 	if (!file.is_open()) {
 		std::cout << "Error loading file: " << path << std::endl;
+		file.close();
 		return std::shared_ptr<Material>(0);
 	}
 
@@ -179,30 +249,34 @@ std::shared_ptr<Material> ResourceManager::loadMaterial(std::string path) {
 	uint8_t textureCount = 0;
 	file.read(reinterpret_cast<char*>(&textureCount), sizeof(uint8_t));
 	for (int i = 0; i < textureCount; i++) {
-		std::string texPath;
+		std::string texPath = "";
 		uint16_t texPathSize = 0;
+
 		file.read(reinterpret_cast<char*>(&texPathSize), sizeof(uint16_t));
-		file.read(reinterpret_cast<char*>(&texPath), texPathSize);
+		texPath.resize(texPathSize);
+		file.read(reinterpret_cast<char*>(&texPath[0]), texPathSize);
+
 		std::filesystem::path p(path);
 		p = p.remove_filename();
 		texPath = std::string(p.string() + texPath);
 
-		std::cout << "Path: " << "../" + texPath + ".bird" << std::endl;
+		std::cout << texPath << std::endl;
+		std::shared_ptr<Texture> tex = loadTexture(texPath);
 
-		std::shared_ptr<Texture> tex = loadTexture("../" + texPath);
 		mat->addTexture(tex);
 	}
 
 	file.close();
 
-	addResource(path, mat, MATERIAL);
+	addResource(path, mat, ASSET_TYPE_MATERIAL);
 
 	return mat;
 }
 
 std::shared_ptr<Shader> ResourceManager::loadShader(ShaderBuilder& builder) {
 	std::shared_ptr<Shader> shader = builder.create();
-	addResource(builder.m_shaderFiles.data()[0].first, shader, SHADER);
+	addResource(builder.m_shaderFiles.data()[0].first, shader,
+				ASSET_TYPE_SHADER);
 	return shader;
 }
 
@@ -213,7 +287,7 @@ void ResourceManager::loadCustom(std::string path) {}
 void ResourceManager::addResource(std::string path,
 								  std::shared_ptr<Resource> resource,
 								  AssetType type) {
-	if (type == MESH) {
+	if (type == ASSET_TYPE_MESH) {
 		// throw RuntimeException("Error: Cannot add mesh to resource manager
 		// using addResource function. ");
 		std::cout << "Error: Cannot add mesh to resource manager using "
@@ -229,6 +303,10 @@ void ResourceManager::addMesh(std::string path,
 							  std::vector<std::shared_ptr<Mesh>> meshes) {
 	m_meshes.insert(std::pair<std::string, std::vector<std::shared_ptr<Mesh>>>(
 		path, meshes));
+}
+
+std::shared_ptr<Shader> ResourceManager::getDefaultShader() {
+	return m_defaultShader;
 }
 
 }  // namespace bird

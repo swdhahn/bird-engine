@@ -4,7 +4,7 @@
 
 #include "WorldObject.h"
 
-#include "components/PhysicsBodyComponent.h"
+#include "Scene.h"
 
 namespace bird {
 
@@ -16,17 +16,23 @@ WorldObject::WorldObject()
 	  m_scale(1),
 	  m_transformMatrix(1),
 	  m_needsMatrixUpdate(true),
-	  m_components(),
-	  m_physicsBody(nullptr),
+	  m_isInitiated(false),
 	  m_id(++s_uniqueIdentificationIndex) {}
 
-WorldObject::~WorldObject() {}
+void WorldObject::init(Scene* parent) {
+	m_parent = parent;
+	for (int i = 0; i < m_components.size(); i++) {
+		m_components[i]->_init();
+		m_components[i]->init();
+	}
+	m_isInitiated = true;
+}
 
-void WorldObject::_deinit() {
-	deinit();
+void WorldObject::deinit() {
 	for (int i = 0; i < m_components.size(); i++) {
 		m_components[i]->deinit();
 	}
+	m_isInitiated = false;
 }
 
 const uint64_t& WorldObject::getID() const {
@@ -104,8 +110,6 @@ void WorldObject::setTransformMatrix(Matrix4 transformMatrix) {
 
 void WorldObject::updateTransformationMatrix() {
 	updateTransformMatrix(this, &m_transformMatrix);
-	if (m_physicsBody != nullptr && !m_physicsBody->m_physicsUpdateTransfer)
-		m_physicsBody->updateTransform();
 }
 
 bool WorldObject::needsMatrixUpdate() const {
@@ -120,34 +124,31 @@ void WorldObject::setScale(Vector3 scale) {
 	m_scale = scale;
 }
 
-void WorldObject::addComponent(std::unique_ptr<Component> component) {
-	Component* c = component.get();
-	PhysicsBodyComponent* phys = dynamic_cast<PhysicsBodyComponent*>(c);
+std::vector<_own<Component>>& WorldObject::getComponents() {
+	return m_components;
+}
 
-	if (phys != nullptr) {
-		if (m_physicsBody != nullptr) {
-			std::cout << "You are trying to add another Physics Component when one already exists"
-					  << std::endl;
-			std::exit(-1);
-		}
-		m_physicsBody = phys;
+void WorldObject::addComponent(_own<Component> component) {
+	Component* c = component.get();
+	m_components.emplace_back(_mv(component));
+	c->setWorldObject(this);
+	if (m_isInitiated) {
+		c->_init();
+		c->init();
 	}
-	m_components.emplace_back(std::move(component));
-	c->setParent(this);
-	c->init();
 }
 
 void WorldObject::removeComponent(Component* component) {
 	component->deinit();
-	PhysicsBodyComponent* phys = dynamic_cast<PhysicsBodyComponent*>(component);
+	m_components.erase(std::remove_if(m_components.begin(), m_components.end(),
+									  [&](_own<Component>& comp) {
+										  return (component == comp.get());
+									  }),
+					   m_components.begin());
+}
 
-	if (phys != nullptr) {
-		m_physicsBody = nullptr;
-	}
-	m_components.erase(
-			std::remove_if(m_components.begin(), m_components.end(),
-					[&](std::unique_ptr<Component>& comp) { return (component == comp.get()); }),
-			m_components.begin());
+Scene* WorldObject::getParent() {
+	return m_parent;
 }
 
 }  // namespace bird

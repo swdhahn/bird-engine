@@ -5,11 +5,17 @@
 #ifndef BIRD_VKRENDERPASS_H
 #define BIRD_VKRENDERPASS_H
 
+#include <vector>
+#include <volk.h>
+
 #include "VKConstants.h"
 #include "VKSwapChain.h"
 
 namespace bird::vk {
 
+    /**
+     * Manages a Vulkan VkRenderPass object describing color and depth attachments.
+     */
     class VKRenderPass {
     public:
         VKRenderPass(const VKPhysicalDevice* pPhysicalDevice, const VKLogicalDevice* pDevice, const VKSwapChain* pSwapChain);
@@ -29,6 +35,6 @@ namespace bird::vk {
         const VKPhysicalDevice* m_pPhysicalDevice;
     };
 
-} // bird
+} // namespace bird::vk
 
 #endif //BIRD_VKRENDERPASS_H

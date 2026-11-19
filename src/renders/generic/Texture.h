@@ -5,21 +5,23 @@
 #ifndef BIRD_TEXTURE_H
 #define BIRD_TEXTURE_H
 
-#include <iostream>
-#include <vector>
-#include <string>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <iostream>
 #include <map>
 #include <memory>
-#include <cstdint>
 #include <string>
+#include <vector>
 
 #include "../../util/Constants.h"
 #include "../../util/Resource.h"
 
 namespace bird {
 
+/**
+ * Texture pixel formats and generation flags.
+ */
 enum TextureFormat {
 	FORMAT_HAS_MIPMAPS = 1,
 	FORMAT_8G = 1 << 1,
@@ -30,49 +32,60 @@ enum TextureFormat {
 
 class Texture;
 
+/**
+ * Fluent builder for configuring and uploading 2D GPU textures.
+ */
 class TextureBuilder {
    public:
-	TextureBuilder(void* pData, uint32_t width, uint32_t height,
+	TextureBuilder(uint8_t* pData, uint32_t width, uint32_t height,
 				   TextureFormat format);
 
+	/** Enables automatic mipmap level generation on GPU upload. */
 	TextureBuilder& generateMipMaps();
+
+	/** Sets minification/magnification filter to bilinear interpolation. */
 	TextureBuilder& filterLinear();
+
+	/** Sets minification/magnification filter to nearest-neighbor (pixelated). */
 	TextureBuilder& filterNearest();
 
+	/** Instantiates and uploads the GPU texture using the active backend. */
 	std::shared_ptr<Texture> build();
 
    private:
-	void* m_pData = nullptr;
+	uint8_t* m_pData = nullptr;
 	uint32_t m_width, m_height, m_channels;
 	TextureFormat m_format;
 	bool m_generateMipMaps = false;
 	bool m_linearFiltering = false;
 	bool m_nearestFiltering = false;
 
-	void createLinearInterpolated(void* srcData, void* dstData, uint32_t nWidth,
-								  uint32_t nHeight);
-	void createNearestInterpolated(void* srcData, void* dstData,
+	void createLinearInterpolated(uint8_t* srcData, uint8_t* dstData,
+								  uint32_t nWidth, uint32_t nHeight);
+	void createNearestInterpolated(uint8_t* srcData, uint8_t* dstData,
 								   uint32_t nWidth, uint32_t nHeight);
 };
 
 /**
- * Todo: Add functions that edit textures?
+ * 2D GPU texture resource.
  *
- * Texture is a class that holds a pointer to the texture data itself and the
- * width and height of an image.
- *
+ * Owns raw pixel memory and dimensions. Implements Resource serialization
+ * for reading/writing cached .bird textures.
  */
 class Texture : public Resource {
    public:
-	explicit Texture(void* data, uint32_t width, uint32_t height,
+	explicit Texture(uint8_t* data, uint32_t width, uint32_t height,
 					 TextureFormat format);
 	virtual ~Texture();
 
-	void read();
-	void write();
+	void read() override;
+	void write() override;
 
+	/** Creates a builder loading an image from disk. */
 	static TextureBuilder create(const std::string& path);
-	static TextureBuilder create(void* data, uint32_t width, uint32_t height,
+
+	/** Creates a builder from in-memory raw pixel data. */
+	static TextureBuilder create(uint8_t* data, uint32_t width, uint32_t height,
 								 TextureFormat format);
 
 	const TextureFormat& getFormat();
@@ -80,7 +93,7 @@ class Texture : public Resource {
 	uint32_t getHeight();
 
    protected:
-	void* m_pData;
+	uint8_t* m_pData;
 	uint32_t m_width, m_height;
 	TextureFormat m_format;
 

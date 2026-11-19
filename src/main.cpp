@@ -2,30 +2,36 @@
 
 #include "Application.h"
 #include "scene/Scene.h"
+#include "scene/components/Script.h"
+#include "util/ResourceManager.h"
 
 // --- Platform Specific Includes & Macros ---
 #if defined(_WIN32) || defined(_WIN64)
-	#include <windows.h>
+#include <windows.h>
 
-	// Windows Definitions
-	#define LIB_HANDLE HMODULE
-	#define LIB_OPEN(path) LoadLibraryA(path)
-	#define LIB_SYM(handle, name) GetProcAddress(handle, name)
-	#define LIB_CLOSE(handle) FreeLibrary(handle)
+// Windows Definitions
+#define LIB_HANDLE HMODULE
+#define LIB_OPEN(path) LoadLibraryA(path)
+#define LIB_SYM(handle, name) GetProcAddress(handle, name)
+#define LIB_CLOSE(handle) FreeLibrary(handle)
 
-	// Helper to get a readable string from Windows errors
-	std::string GetPlatformError() {
-		DWORD error = GetLastError();
-		if (error == 0) return "Unknown Error";
-		LPSTR messageBuffer = nullptr;
-		size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-									 NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
-		std::string message(messageBuffer, size);
-		LocalFree(messageBuffer);
-		return message;
-	}
+// Helper to get a readable string from Windows errors
+std::string GetPlatformError() {
+	DWORD error = GetLastError();
+	if (error == 0) return "Unknown Error";
+	LPSTR messageBuffer = nullptr;
+	size_t size = FormatMessageA(
+		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+			FORMAT_MESSAGE_IGNORE_INSERTS,
+		NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		(LPSTR)&messageBuffer, 0, NULL);
+	std::string message(messageBuffer, size);
+	LocalFree(messageBuffer);
+	return message;
+}
 
-// Windows usually needs an extension for LoadLibrary, unlike dlopen which sometimes guesses
+// Windows usually needs an extension for LoadLibrary, unlike dlopen which
+// sometimes guesses
 const std::string LIB_EXT = ".dll";
 
 #else
@@ -83,10 +89,10 @@ int main(int argc, char** argv) {
 		std::cerr << "Please provide a path to your application" << std::endl;
 		exit(1);
 	}
+	std::string directory_path("");
+	if (argc > 2) directory_path = std::string(argv[2]);
 	std::string path(argv[1]);
 	path += LIB_EXT;
-
-
 
 	LIB_HANDLE app_handle = LIB_OPEN(path.c_str());
 	if (!app_handle) {
@@ -95,23 +101,25 @@ int main(int argc, char** argv) {
 		std::cerr << "dlopen error: " << GetPlatformError() << std::endl;
 		exit(1);
 	}
-	bird::Scene* (*app_entry)();
+	bird::Script<bird::Scene>* (*app_entry)();
 	auto app_entry_raw = LIB_SYM(app_handle, "app_entry");
 	if (app_entry_raw != nullptr) {
-		app_entry = reinterpret_cast<bird::Scene* (*)()>(app_entry_raw);
+		app_entry =
+			reinterpret_cast<bird::Script<bird::Scene>* (*)()>(app_entry_raw);
 	} else {
-		std::cerr << "Could not locate any 'bird::Scene* app_entry();'"
+		std::cerr << "Could not locate any 'bird::Script* app_entry();'"
 				  << std::endl;
 		std::cerr << "dlsym error: " << GetPlatformError() << std::endl;
 		LIB_CLOSE(app_handle);
 		exit(1);
 	}
-	bird::Scene* scene = app_entry();
+	bird::Script<bird::Scene>* script = app_entry();
 
-	bird::Application app(*scene);
+	bird::Application app;
+	bird::ResourceManager::RESOURCE_PATH = directory_path;
 
 	try {
-		app.run();
+		app.init(script);
 	} catch (std::exception& e) {
 		std::cerr << e.what() << std::endl;
 		return EXIT_FAILURE;

@@ -5,20 +5,14 @@
 
 namespace bird {
 
-// Object Layers: "Who am I?"
-namespace ObjectLayers {
-static constexpr uint16_t NON_MOVING = 0;
-static constexpr uint16_t MOVING = 1;
-static constexpr uint16_t NUM_LAYERS = 2;
-};	// namespace ObjectLayers
-
-// BroadPhase Layers: "Which bucket do I go in?"
-// (Used for high-level optimization)
-namespace BroadPhaseLayers {
-static constexpr uint8_t NON_MOVING = 0;
-static constexpr uint8_t MOVING = 1;
-static constexpr uint8_t NUM_LAYERS = 2;
-};	// namespace BroadPhaseLayers
+/**
+ * Collision filtering layers and category bitmasks for physical simulation queries.
+ */
+enum PhysicsLayer : uint16_t {
+	LAYER_NON_MOVING = 0,
+	LAYER_MOVING = 1,
+	LAYER_NUM_LAYERS = 2
+};
 
 }  // namespace bird
 

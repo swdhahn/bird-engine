@@ -5,6 +5,7 @@
 #ifndef BIRD_MATH_H
 #define BIRD_MATH_H
 
+#include <algorithm>
 #define PI 3.141592
 
 #include <stdint.h>
@@ -12,10 +13,12 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <glm/mat3x3.hpp>
 #include <iostream>
 
 namespace bird {
 class WorldObject;
+class ScreenObject;
 
 typedef glm::vec2 Vector2;
 typedef glm::vec3 Vector3;
@@ -30,33 +33,77 @@ typedef glm::mat4x4 Matrix4;
 typedef glm::mat4x2 Matrix4x2;
 typedef glm::mat4x3 Matrix4x3;
 
+/**
+ * Creates an orientation quaternion from an axis and rotation angle.
+ * @param angle Rotation in radians.
+ * @param axis Normalized axis of rotation.
+ */
 inline Quaternion fromAngleAxis(const float& angle, const Vector3& axis) {
 	return glm::angleAxis(angle, axis);
 }
 
+/**
+ * Creates a 4x4 view matrix oriented from eye position looking toward target.
+ * @param eyePos Camera eye position in world space.
+ * @param lookPos Target focus position in world space.
+ * @param upDir World up vector (typically (0, 1, 0)).
+ */
 inline Matrix4 lookAt(const Vector3& eyePos, const Vector3& lookPos,
 					  const Vector3& upDir) {
 	return glm::lookAt(eyePos, lookPos, upDir);
 }
 
+/**
+ * Creates a rotation quaternion pointing along direction.
+ * @param direction Normalized forward direction vector.
+ * @param upDir Normalized up reference vector.
+ */
 inline Quaternion lookAt(const Vector3& direction, const Vector3& upDir) {
 	return glm::quatLookAt(direction, upDir);
 }
 
+/**
+ * Computes a combined Translation * Rotation * Scale 4x4 model matrix for an object.
+ */
 Matrix4 createTransformMatrix(WorldObject* obj);
+
+/**
+ * Writes updated 4x4 model matrix directly into destination matrix pointer.
+ */
 void updateTransformMatrix(WorldObject* obj, Matrix4* dst);
 
 /**
+ * Writes updated 3x3 2D affine transform matrix directly into destination.
+ */
+void updateTransformMatrix(ScreenObject* obj, Matrix3* dst);
+
+/**
+ * Tests whether a 2D point lies inside an axis-aligned bounding rectangle.
+ * @param point Coordinates of the point to test.
+ * @param bounds Rectangular region defined as Vector4(x, y, width, height).
+ */
+bool contains(const Vector2& point, const Vector4& bounds);
+
+/**
+ * Generates a right-handed perspective projection matrix.
  *
- * @param width - width of window
- * @param height - height of window
- * @param fov - fov in radians
- * @param near - near distance plane
- * @param far - far distance plane (value of -1 will create infinite far plane)
- * @return Perspective matrix generated from this method
+ * @param width Viewport width in pixels.
+ * @param height Viewport height in pixels.
+ * @param fov Field of view in radians.
+ * @param near Distance to the near clipping plane (must be > 0).
+ * @param far Distance to far clipping plane (-1 creates an infinite projection).
+ * @return 4x4 perspective projection matrix.
  */
 Matrix4 createPerspectiveMatrix(uint32_t width, uint32_t height, float fov,
 								float near, float far);
+
+/**
+ * Linearly interpolates between two values, clamping factor to [0, 1].
+ */
+template <typename T>
+T lerp(const T& from, const T& to, float deltaTime) {
+	return from + (to - from) * std::clamp(deltaTime, 0.0f, 1.0f);
+}
 
 std::ostream& operator<<(std::ostream& out, const Vector2& s);
 std::ostream& operator<<(std::ostream& out, const Vector3& s);

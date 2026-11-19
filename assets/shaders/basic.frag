@@ -1,4 +1,4 @@
-#version 430
+#version 450
 
 layout(location = 0) in vec3 fragPos;
 layout(location = 1) in vec3 fragNormal;
@@ -8,7 +8,7 @@ layout(location = 3) flat in vec3 fragViewPos;
 layout(binding = 0) uniform sampler2D tex;
 
 layout(std140, binding = 1) uniform Material {
-    vec3 diffuse;
+    vec4 diffuse;
     vec3 specular;
     vec3 ambient;
     float shininess;
@@ -26,6 +26,6 @@ void main() {
 
     float lighting = 0.2 + max(0.0, dot(fragNormal, lightDir)) * 0.8;
     float z = 0.0;
-    vec3 color = (lighting + spec) * vec3(1.0, 0.1, 0.4) * (diffuse + texture(tex, fragTexCoord).rgb);
+    vec3 color = (lighting + spec) * vec3(1.0, 0.1, 0.4) * (diffuse.xyz + texture(tex, fragTexCoord).rgb);
     out_color = vec4(color, 1.0);
 }

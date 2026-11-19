@@ -5,26 +5,55 @@
 #ifndef BIRD_GLSHADER_H
 #define BIRD_GLSHADER_H
 
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "../generic/Shader.h"
+#include "../generic/ShaderBinary.h"
 #include "GLBuffer.h"
 
 namespace bird::gl {
 
+/**
+ * An OpenGL program linked from baked shader stages (<file>.bird). Uses the
+ * GLSL 460 variant on 4.6+ contexts and GLSL 410 otherwise (macOS); the
+ * BIRD_GL_SHADER_TARGET environment variable ("410" or "460") overrides.
+ */
 class GLShader : public Shader {
    public:
+	/**
+	 * @param shaderFiles - source paths and stages; each loads <path>.bird.
+	 * @throws ShaderBinaryError when a .bird is missing or invalid.
+	 * @throws std::runtime_error on a stage mismatch or compile/link error.
+	 */
 	GLShader(std::vector<std::pair<std::string, ShaderPipeline>> shaderFiles);
 	~GLShader() override;
 
-	void loadPerspectiveMatrix(Matrix4 perspectiveMatrix) override;
-	void loadViewMatrix(Matrix4 viewMatrix) override;
-	void loadModelMatrix(Matrix4 modelMatrix) override;
+	void setPushConstants(const void* data, uint32_t size,
+						  uint32_t offset = 0) override;
 
 	void bind() const;
 	void unbind() const;
 
+	/** @return the variant this process uses for every GL program. */
+	static format::ShaderTarget activeTarget();
+
    private:
+	struct PushConstantSlot {
+		int32_t location;  // -1 when the driver optimized the member away
+		uint32_t offset;
+		format::PushConstantType type;
+	};
+
+	uint32_t compileStage(const ShaderBinary& binary, const std::string& path,
+						  format::ShaderTarget target);
+	void applyResourceBindings(const std::vector<ShaderBinary>& stages);
+	void resolvePushConstants(const std::vector<ShaderBinary>& stages);
+
 	uint32_t m_programId;
-	// std::vector<GLBuffer> m_uniformBuffers;
+	uint32_t m_pushConstantSize = 0;
+	std::vector<PushConstantSlot> m_pushConstants;
 };
 
 }  // namespace bird::gl

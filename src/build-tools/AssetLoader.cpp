@@ -4,28 +4,50 @@
 
 #include "AssetLoader.h"
 
+#include <cctype>
+#include <cstring>
+#include <filesystem>
+#include <string>
+#include <unordered_map>
+
+#include "FormatHeaders.h"
+#include "ShaderBaker.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "../util/stb_image.h"
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "../util/stb_truetype.h"
 
 namespace bird {
 
-enum AssetType { TEXTURE, MODEL, SCENE, SOUND, SHADER, MATERIAL, CUSTOM };
+enum AssetType {
+	TEXTURE,
+	MODEL,
+	SCENE,
+	SOUND,
+	SHADER,
+	MATERIAL,
+	FONT,
+	CUSTOM
+};
 
 std::vector<std::vector<const char*>> supportedFileTypes{
 	{".png", ".jpg", ".jpeg", ".tga", ".bmp", ".psd", ".gif", ".hdr", ".pic",
 	 ".pnm"},												 // Textures
-	{".obj", ".fbx", ".gltf"},								 // 3D models
-	{".gltf"},												 // Scenes
+	{".obj", ".fbx", ".gltf", ".glb"},						 // 3D models
+	{".gltf", ".glb"},										 // Scenes
 	{".wav", ".mp3", ".ogg"},								 // Sounds
-	{".glsl", ".vert", ".frag", ".hlsl", ".metal", ".spv"},	 // Shaders
+	{".vert", ".frag", ".geom", ".comp", ".tesc", ".tese"},	 // Shaders
 	{".mtl", ".pbr"},										 // Materials
+	{".ttf", ".otf"},										 // Fonts
 	{".bird_custom"}										 // Other
 };	//*/
 
 AssetLoader::AssetLoader() {}
 AssetLoader::~AssetLoader() {}
 
-void AssetLoader::init(std::string assetPath) {
+size_t AssetLoader::init(std::string assetPath) {
+	size_t failures = 0;
 	// load assets from file
 
 	for (const auto& entry :
@@ -55,6 +77,7 @@ void AssetLoader::init(std::string assetPath) {
 		}
 
 		// Check if generated asset exists / needs updating
+		try {
 		switch ((AssetType)i) {
 			case TEXTURE:
 				loadTexture(filePath);
@@ -74,6 +97,9 @@ void AssetLoader::init(std::string assetPath) {
 			case MATERIAL:
 				loadMaterial(filePath);
 				break;
+			case FONT:
+				loadFont(filePath);
+				break;
 			case CUSTOM:
 				loadCustom(filePath);
 				break;
@@ -82,18 +108,68 @@ void AssetLoader::init(std::string assetPath) {
 				// .txt, etc.
 				break;
 		}
+		} catch (const std::exception& error) {
+			failures++;
+			std::cerr << "FAILED: " << error.what() << std::endl;
+		}
 	}
+	return failures;
 }
 
 void AssetLoader::loadAsset() {
 	// load asset
 }
 
-void AssetLoader::loadScene(std::string& path) {
+void AssetLoader::loadScene(const std::string& path) {
 	// load scene
 }
 
-void AssetLoader::loadModel(std::string& path) {
+void DebugPrintAllTextures(const aiMaterial* mat) {
+	return;
+	std::cout << "--- Material Debug Info ---" << std::endl;
+	// Iterate clearly through all known Assimp texture types
+	// Note: Assimp 5.x defines up to around 18 types.
+	const int AI_TEXTURE_TYPE_MAX = 20;
+
+	for (int i = 0; i <= AI_TEXTURE_TYPE_MAX; i++) {
+		aiTextureType type = static_cast<aiTextureType>(i);
+		unsigned int count = mat->GetTextureCount(type);
+
+		if (count > 0) {
+			std::cout << "Found " << count
+					  << " texture(s) at Type Index: " << i;
+
+			// Map index to name for clarity
+			switch (i) {
+				case 1:
+					std::cout << " (DIFFUSE)";
+					break;
+				case 12:
+					std::cout << " (BASE_COLOR / PBR)";
+					break;
+				case 5:
+					std::cout << " (HEIGHT / NORMAL)";
+					break;
+				case 6:
+					std::cout << " (NORMALS)";
+					break;
+				case 16:
+					std::cout << " (ROUGHNESS)";
+					break;
+				case 17:
+					std::cout << " (METALLIC)";
+					break;
+			}
+			std::cout << std::endl;
+
+			aiString path;
+			mat->GetTexture(type, 0, &path);
+			std::cout << "   Path: " << path.C_Str() << std::endl;
+		}
+	}
+}
+
+void AssetLoader::loadModel(const std::string& path) {
 	// load model
 	if (std::filesystem::exists(path + ".bird")) {
 		return;
@@ -103,7 +179,8 @@ void AssetLoader::loadModel(std::string& path) {
 	const aiScene* scene = importer.ReadFile(
 		path, aiProcess_CalcTangentSpace | aiProcess_Triangulate |
 				  aiProcess_SortByPType | aiProcess_JoinIdenticalVertices |
-				  aiProcess_FixInfacingNormals);
+				  aiProcess_FixInfacingNormals |
+				  aiProcess_PreTransformVertices);
 	if (scene == nullptr) {
 		std::cout << "Error loading scene" << std::endl;
 		std::cout << importer.GetErrorString() << std::endl;
@@ -182,8 +259,19 @@ void AssetLoader::loadModel(std::string& path) {
 			file.write((char*)&scene->mMeshes[i]->mNumVertices,
 					   sizeof(uint32_t));
 			file.write((char*)&two, sizeof(uint8_t));
-			file.write((char*)&scene->mMeshes[i]->mTextureCoords[0],
-					   scene->mMeshes[i]->mNumVertices * two * sizeof(float));
+			std::vector<aiVector2D> buffer2D(scene->mMeshes[i]->mNumVertices);
+
+			// Use std::transform to strip the Z component
+			// We may come back to this and support 3D texture coords
+			std::transform(scene->mMeshes[i]->mTextureCoords[0],
+						   scene->mMeshes[i]->mTextureCoords[0] +
+							   scene->mMeshes[i]->mNumVertices,
+						   buffer2D.begin(), [](const aiVector3D& v) {
+							   return aiVector2D(v.x, v.y);
+						   });
+
+			file.write((char*)buffer2D.data(),
+					   scene->mMeshes[i]->mNumVertices * sizeof(aiVector2D));
 		}
 
 		// handle extra buffer data, it is currently 0 but we'll allow custom
@@ -202,6 +290,7 @@ void AssetLoader::loadModel(std::string& path) {
 						std::ios::out | std::ios::binary);
 
 		aiMaterial* aiMat = scene->mMaterials[i];
+		DebugPrintAllTextures(aiMat);
 		aiColor3D color(0.f, 0.f, 0.f);
 		float shininess = 32, opacity = 1.0, reflectivity = 0.0, zero = 0;
 
@@ -257,6 +346,7 @@ void AssetLoader::loadModel(std::string& path) {
 		} else {
 			mf.write((char*)&reflectivity, sizeof(float));
 		}
+
 		uint8_t totalTexCount = 0;	// max 256 textures per material
 		for (unsigned int t = aiTextureType_DIFFUSE; t <= aiTextureType_UNKNOWN;
 			 ++t) {
@@ -266,15 +356,22 @@ void AssetLoader::loadModel(std::string& path) {
 
 		mf.write((char*)&totalTexCount, sizeof(uint8_t));
 
-		aiString path;
+		aiString apath;
 		for (unsigned int t = aiTextureType_DIFFUSE; t <= aiTextureType_UNKNOWN;
 			 ++t) {
 			aiTextureType texType = static_cast<aiTextureType>(t);
 			unsigned int texCount = aiMat->GetTextureCount(texType);
 			for (unsigned int i = 0; i < texCount; ++i) {
-				if (AI_SUCCESS == aiMat->GetTexture(texType, i, &path)) {
-					mf.write((char*)&path.length, sizeof(uint16_t));
-					mf.write((char*)path.C_Str(), path.length);
+				if (AI_SUCCESS == aiMat->GetTexture(texType, i, &apath)) {
+					std::string np = apath.C_Str();
+					auto fp = std::filesystem::path(np);
+					if (!fp.has_extension()) {
+						np = std::filesystem::path(path).filename().string() +
+							 "_etex" + fp.filename().string().substr(1);
+					}
+					uint16_t npl = np.size();
+					mf.write((char*)&npl, sizeof(uint16_t));
+					mf.write((char*)np.c_str(), npl);
 				}
 			}
 		}
@@ -282,10 +379,41 @@ void AssetLoader::loadModel(std::string& path) {
 		mf.close();
 	}
 
+	for (int i = 0; i < scene->mNumTextures; i++) {
+		aiTexture* image = scene->mTextures[i];
+
+		uint8_t* imgData = nullptr;
+		int width, height, channels;
+		std::string fpath = path + "_etex" + std::to_string(i);
+
+		if (scene->mTextures[i]->mHeight == 0) {
+			imgData = stbi_load_from_memory((unsigned char*)(image->pcData),
+											image->mWidth, &width, &height,
+											&channels, 0);
+			writeImage(width, height, channels, imgData, fpath);
+			stbi_image_free(imgData);
+		} else {
+			width = image->mWidth;
+			height = image->mHeight;
+			channels = 4;
+			imgData = new uint8_t[width * height * channels];
+			std::memcpy(imgData, image->pcData, width * height * channels);
+			// Assimp is in BRGA but we want RGBA
+			for (int j = 0; j < width * height; j++) {
+				imgData[j * channels] =
+					((uint8_t*)image->pcData)[j * channels + 2];
+				imgData[j * channels + 2] =
+					((uint8_t*)image->pcData)[j * channels];
+			}
+			writeImage(width, height, channels, imgData, fpath);
+			delete[] imgData;
+		}
+	}
+
 	std::cout << "Model Materials Saved!" << std::endl;
 }
 
-void AssetLoader::loadTexture(std::string& path) {
+void AssetLoader::loadTexture(const std::string& path) {
 	if (std::filesystem::exists(path + ".bird")) {
 		return;
 	}
@@ -300,28 +428,179 @@ void AssetLoader::loadTexture(std::string& path) {
 		std::cout << "Error in loading the image: " << path << std::endl;
 	}
 
+	writeImage(width, height, channels, img, path);
+
 	std::cout << "Image Compiled. Saving file" << std::endl;
+
+	stbi_image_free(img);
+}
+
+void AssetLoader::writeImage(uint32_t width, uint32_t height, uint32_t channels,
+							 uint8_t* imageData, const std::string& path) {
+	if (std::filesystem::exists(path + ".bird")) {
+		return;
+	}
 	std::fstream file(path + ".bird", std::ios::out | std::ios::binary);
 
 	file.write((char*)&width, sizeof(int32_t));
 	file.write((char*)&height, sizeof(int32_t));
 	file.write((char*)&channels, sizeof(int32_t));
-	file.write((char*)img, width * height * channels * sizeof(uint8_t));
+	file.write((char*)imageData, width * height * channels * sizeof(uint8_t));
+
+	file.close();
 
 	std::cout << "Image saved." << std::endl;
-
-	stbi_image_free(img);
 }
 
-void AssetLoader::loadSound(std::string& path) {
+namespace {
+// SDF bake parameters. Distances are encoded so that ONEDGE marks the glyph
+// outline and each texel step of PIXEL_DIST_SCALE is one pixel of distance
+// at the baked size; PADDING texels of falloff surround every glyph.
+constexpr float kFontBakedPixelHeight = 48.0f;
+constexpr int kFontSdfPadding = 6;
+constexpr unsigned char kFontSdfOnEdge = 128;
+constexpr float kFontSdfPixelDistScale =
+	static_cast<float>(kFontSdfOnEdge) / kFontSdfPadding;
+constexpr uint32_t kFontAtlasWidth = 1024;
+constexpr uint32_t kFontFirstCodepoint = 32;  // space
+constexpr uint32_t kFontGlyphCount = 95;	  // through '~'
+constexpr uint32_t kFontWhiteBlockSize = 4;	  // fully inside, for solid quads
+constexpr uint32_t kFontGlyphGap = 1;
+
+struct SdfBitmap {
+	unsigned char* pixels = nullptr;
+	int width = 0, height = 0, offsetX = 0, offsetY = 0;
+};
+
+uint32_t nextPowerOfTwo(uint32_t value) {
+	uint32_t result = 1;
+	while (result < value) result <<= 1;
+	return result;
+}
+}  // namespace
+
+void AssetLoader::loadFont(const std::string& path) {
+	if (std::filesystem::exists(path + ".bird")) {
+		return;
+	}
+	std::cout << "Compiling Font: " << path << std::endl;
+
+	const std::string ttf = readFile(path);
+	const auto* ttfData = reinterpret_cast<const unsigned char*>(ttf.data());
+	stbtt_fontinfo info;
+	if (ttf.empty() ||
+		!stbtt_InitFont(&info, ttfData, stbtt_GetFontOffsetForIndex(ttfData, 0))) {
+		throw std::runtime_error("Unable to parse font: " + path);
+	}
+	const float scale = stbtt_ScaleForPixelHeight(&info, kFontBakedPixelHeight);
+
+	// Generate every glyph's distance field, then shelf-pack them in order.
+	std::vector<SdfBitmap> bitmaps(kFontGlyphCount);
+	for (uint32_t i = 0; i < kFontGlyphCount; i++) {
+		SdfBitmap& bmp = bitmaps[i];
+		bmp.pixels = stbtt_GetCodepointSDF(
+			&info, scale, kFontFirstCodepoint + i, kFontSdfPadding,
+			kFontSdfOnEdge, kFontSdfPixelDistScale, &bmp.width, &bmp.height,
+			&bmp.offsetX, &bmp.offsetY);
+	}
+
+	std::vector<format::FontGlyph> glyphs(kFontGlyphCount);
+	uint32_t penX = 0, penY = 0, shelfHeight = 0;
+	auto place = [&](uint32_t width, uint32_t height) {
+		if (width + 2 * kFontGlyphGap > kFontAtlasWidth) {
+			throw std::runtime_error("Glyph wider than font atlas: " + path);
+		}
+		if (penX + width + kFontGlyphGap > kFontAtlasWidth) {
+			penX = 0;
+			penY += shelfHeight + kFontGlyphGap;
+			shelfHeight = 0;
+		}
+		const uint32_t x = penX + kFontGlyphGap;
+		const uint32_t y = penY + kFontGlyphGap;
+		penX += width + kFontGlyphGap;
+		shelfHeight = std::max(shelfHeight, height);
+		return std::make_pair(x, y);
+	};
+	std::vector<std::pair<uint32_t, uint32_t>> origins(kFontGlyphCount);
+	for (uint32_t i = 0; i < kFontGlyphCount; i++) {
+		if (bitmaps[i].pixels) {
+			origins[i] = place(bitmaps[i].width, bitmaps[i].height);
+		}
+	}
+	const auto whiteOrigin = place(kFontWhiteBlockSize, kFontWhiteBlockSize);
+	const uint32_t atlasHeight =
+		nextPowerOfTwo(penY + shelfHeight + 2 * kFontGlyphGap);
+
+	std::vector<uint8_t> atlas(kFontAtlasWidth * atlasHeight, 0);
+	for (uint32_t i = 0; i < kFontGlyphCount; i++) {
+		int advance = 0, leftBearing = 0;
+		stbtt_GetCodepointHMetrics(&info, kFontFirstCodepoint + i, &advance,
+								   &leftBearing);
+		const SdfBitmap& bmp = bitmaps[i];
+		format::FontGlyph& glyph = glyphs[i];
+		glyph = {0, 0, 0, 0, 0.0f, 0.0f, advance * scale};
+		if (!bmp.pixels) continue;  // whitespace: advance only
+
+		const auto [x, y] = origins[i];
+		for (int row = 0; row < bmp.height; row++) {
+			std::memcpy(&atlas[(y + row) * kFontAtlasWidth + x],
+						&bmp.pixels[row * bmp.width], bmp.width);
+		}
+		glyph.atlasX0 = static_cast<uint16_t>(x);
+		glyph.atlasY0 = static_cast<uint16_t>(y);
+		glyph.atlasX1 = static_cast<uint16_t>(x + bmp.width);
+		glyph.atlasY1 = static_cast<uint16_t>(y + bmp.height);
+		glyph.offsetX = static_cast<float>(bmp.offsetX);
+		glyph.offsetY = static_cast<float>(bmp.offsetY);
+		stbtt_FreeSDF(bmp.pixels, nullptr);
+	}
+	for (uint32_t row = 0; row < kFontWhiteBlockSize; row++) {
+		std::memset(
+			&atlas[(whiteOrigin.second + row) * kFontAtlasWidth + whiteOrigin.first],
+			0xFF, kFontWhiteBlockSize);
+	}
+
+	int ascent = 0, descent = 0, lineGap = 0;
+	stbtt_GetFontVMetrics(&info, &ascent, &descent, &lineGap);
+
+	format::FontHeader header{};
+	header.version = format::FONT_FORMAT_VERSION;
+	header.bakedPixelHeight = kFontBakedPixelHeight;
+	header.ascent = ascent * scale;
+	header.descent = descent * scale;
+	header.lineGap = lineGap * scale;
+	header.atlasWidth = kFontAtlasWidth;
+	header.atlasHeight = atlasHeight;
+	header.firstCodepoint = kFontFirstCodepoint;
+	header.glyphCount = kFontGlyphCount;
+	header.whiteTexelX = static_cast<uint16_t>(whiteOrigin.first + 1);
+	header.whiteTexelY = static_cast<uint16_t>(whiteOrigin.second + 1);
+
+	std::fstream file(path + ".bird", std::ios::out | std::ios::binary);
+	file.write(reinterpret_cast<const char*>(&header), sizeof(header));
+	file.write(reinterpret_cast<const char*>(glyphs.data()),
+			   glyphs.size() * sizeof(format::FontGlyph));
+	file.write(reinterpret_cast<const char*>(atlas.data()), atlas.size());
+	file.close();
+
+	std::cout << "Font saved (" << kFontAtlasWidth << "x" << atlasHeight
+			  << " SDF atlas)." << std::endl;
+}
+
+void AssetLoader::loadSound(const std::string& path) {
 	// load sound
 }
 
-void AssetLoader::loadShader(std::string& path) {
-	// load shader
+void AssetLoader::loadShader(const std::string& path) {
+	const std::string source = readFile(path);
+	if (!bake::needsShaderBake(path, source)) {
+		return;
+	}
+	std::cout << "Compiling Shader: " << path << std::endl;
+	writeShaderBinaryFile(path + ".bird", bake::bakeShader(path, source));
 }
 
-void AssetLoader::loadMaterial(std::string& path) {
+void AssetLoader::loadMaterial(const std::string& path) {
 	return;
 	// load material
 	// load model
@@ -340,10 +619,29 @@ void AssetLoader::loadMaterial(std::string& path) {
 
 	std::cout << "Material Compiled. Saving file" << std::endl;
 	std::fstream file(path + ".bird", std::ios::out | std::ios::binary);
+	file.close();
 }
 
-void AssetLoader::loadCustom(std::string& path) {
+void AssetLoader::loadCustom(const std::string& path) {
 	// load custom
+}
+
+std::string AssetLoader::readFile(const std::string& path) {
+	std::ifstream file(path, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open()) {
+		throw std::runtime_error("Failed to open file: " + path);
+	}
+
+	size_t fileSize = (size_t)file.tellg();
+	std::string buffer;
+	buffer.resize(fileSize);
+
+	file.seekg(0);
+	file.read(buffer.data(), fileSize);
+
+	file.close();
+	return buffer;
 }
 
 }  // namespace bird

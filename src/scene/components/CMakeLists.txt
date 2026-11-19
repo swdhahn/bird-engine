@@ -1,3 +1,2 @@
-target_sources(
-  scene PRIVATE Component.h Component.cpp MeshComponent.h MeshComponent.cpp
-                PhysicsBodyComponent.h PhysicsBodyComponent.cpp)
+target_sources(scene PRIVATE Component.h ComponentImpl.h Component.cpp MeshComponent.h
+			     MeshComponent.cpp Script.h Script.cpp ProcessScript.h ProcessScript.cpp)

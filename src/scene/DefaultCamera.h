@@ -9,20 +9,19 @@
 
 namespace bird {
 
-    class DefaultCamera : public Camera {
-    public:
-        DefaultCamera(uint32_t width, uint32_t height);
-        ~DefaultCamera();
+/**
+ * Built-in fallback camera created by the graphics pipeline when no user camera
+ * is actively bound.
+ */
+class DefaultCamera : public Camera {
+   public:
+	DefaultCamera(uint32_t width, uint32_t height);
+	~DefaultCamera();
 
-        void init() override;
-        void deinit() override;
+   private:
+	float m_speed = 10.0f;
+};
 
-        void process(float delta) override;
-    private:
-        float m_speed = 10.0f;
+}  // namespace bird
 
-    };
-
-} // bird
-
-#endif //BIRD_DEFAULTCAMERA_H
+#endif	// BIRD_DEFAULTCAMERA_H

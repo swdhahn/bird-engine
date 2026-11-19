@@ -13,7 +13,7 @@
 
 namespace bird {
 
-TextureBuilder::TextureBuilder(void* pData, uint32_t width, uint32_t height,
+TextureBuilder::TextureBuilder(uint8_t* pData, uint32_t width, uint32_t height,
 							   TextureFormat format)
 	: m_pData(pData), m_width(width), m_height(height), m_format(format) {}
 
@@ -50,8 +50,22 @@ std::shared_ptr<Texture> TextureBuilder::build() {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
 						GL_LINEAR_MIPMAP_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, m_width, m_height, 0, GL_RGB,
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		// Upload in the data's real channel layout: treating 3-channel data
+		// as RGBA reads past the end of the pixel buffer.
+		GLenum layout = GL_RGBA;
+		if (m_format & FORMAT_8RGB) {
+			layout = GL_RGB;
+		} else if (m_format & FORMAT_8GA) {
+			layout = GL_RG;
+			const GLint swizzle[4] = {GL_RED, GL_RED, GL_RED, GL_GREEN};
+			glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle);
+		} else if (m_format & FORMAT_8G) {
+			layout = GL_RED;
+			const GLint swizzle[4] = {GL_RED, GL_RED, GL_RED, GL_ONE};
+			glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle);
+		}
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_width, m_height, 0, layout,
 					 GL_UNSIGNED_BYTE, m_pData);
 		glGenerateMipmap(GL_TEXTURE_2D);
 
@@ -66,12 +80,12 @@ std::shared_ptr<Texture> TextureBuilder::build() {
 	return tex;
 }
 
-Texture::Texture(void* pData, uint32_t width, uint32_t height,
+Texture::Texture(uint8_t* pData, uint32_t width, uint32_t height,
 				 TextureFormat format)
 	: m_pData(pData), m_width(width), m_height(height), m_format(format) {}
 
 Texture::~Texture() {
-	delete m_pData;
+	delete[] m_pData;
 }
 
 void Texture::read() {}
@@ -101,7 +115,7 @@ TextureBuilder Texture::create(const std::string& path) {
 	return create(nPixels, width, height, FORMAT_8RGBA);
 }
 
-TextureBuilder Texture::create(void* data, uint32_t width, uint32_t height,
+TextureBuilder Texture::create(uint8_t* data, uint32_t width, uint32_t height,
 							   TextureFormat type) {
 	return TextureBuilder(data, width, height, type);
 }

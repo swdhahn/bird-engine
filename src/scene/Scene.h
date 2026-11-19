@@ -8,46 +8,53 @@
 #include <memory>
 #include <vector>
 
-#include "Entity.h"
 #include "WorldObject.h"
 
 namespace bird {
 
 class OptimizationSet {};
 
+/**
+ * Container and spatial grouping node for entities in the scene tree.
+ *
+ * Inherits from WorldObject and owns child WorldObject instances via unique
+ * pointers (_own<WorldObject>). Can contain nested Scene subtrees. The
+ * Application recursively traverses scenes via Application::processScene()
+ * to resolve transform matrices and render geometry.
+ */
 class Scene : public WorldObject {
+	BIRD_OBJECT(SCENE)
    public:
 	Scene();
 
-	virtual void init() = 0;
-	virtual void deinit() = 0;
+	/**
+	 * Takes ownership of a child entity and associates it with this Scene.
+	 *
+	 * Initializes the child with this scene as parent. If the child is also
+	 * a Scene (getType() == SCENE), it is also tracked in getChildrenScenes().
+	 *
+	 * @param worldObject Unique pointer to the entity being added.
+	 */
+	void addChild(_own<WorldObject> worldObject);
 
 	/**
-	 * An Entity can only be in one Scene at a time!
+	 * Deinitializes and removes a child entity from this scene.
+	 *
+	 * @param worldObject Raw pointer to the child to be destroyed.
 	 */
-	void addEntity(std::unique_ptr<Entity> entity);
-	std::unique_ptr<Entity> removeEntity(Entity* entity);
+	void removeChild(WorldObject* worldObject);
 
-	/**
-	 * A Scene can only be the child of one Scene at a time!
-	 */
-
-	void addChild(std::unique_ptr<Scene> scene);
-	std::unique_ptr<Scene> removeChild(Scene* scene);
-
-	const std::vector<std::unique_ptr<Scene>>& getChildren() const;
-	const std::vector<std::unique_ptr<Entity>>& getEntities() const;
+	std::vector<_own<WorldObject>>& getChildren();
+	std::vector<Scene*>& getChildrenScenes();
 
    protected:
 	Scene* m_parent = nullptr;
-	std::vector<std::unique_ptr<Scene>> m_children;
-	std::vector<std::unique_ptr<Entity>> m_entities;
+	std::vector<_own<WorldObject>> m_children;
+	std::vector<Scene*> m_childrenScenes;
 
    private:
 	/**
-	 * This will be implemented in the future: But, it will let you define what
-	 * specific type of optimization you would want for this scene. i.e. terrain
-	 * lod, Oct tree, portals and rooms, etc.
+	 * Spatial acceleration or optimization set (octree, BVH, LOD, portal rooms).
 	 */
 	OptimizationSet* m_optimizationSet = nullptr;
 };

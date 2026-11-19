@@ -7,6 +7,8 @@
 
 #include <string>
 #include <vector>
+#include <memory>
+#include <utility>
 
 #include "../../util/File.h"
 #include "../../util/Resource.h"
@@ -14,22 +16,38 @@
 
 namespace bird {
 
+/**
+ * Shader pipeline stage bitmask flags.
+ */
 enum ShaderPipeline { VERTEX = 1, FRAGMENT = 2, GEOMETRY = 4, TESSELATION = 8 };
 
 class Shader;
 
-/*
- * TODO: UBO turn into uint32_t bc all u need is index?
+/**
+ * Fluent builder for linking multi-stage GPU shader programs.
  */
 class ShaderBuilder {
    public:
+	/** Compiles and links the configured shader files into a GPU Shader program. */
 	std::unique_ptr<Shader> create();
+
+	/**
+	 * Attaches a shader stage file to be compiled into the program pipeline.
+	 * @param fileName Path to the shader source file (or baked .bird shader).
+	 * @param shaderStage Pipeline stage (VERTEX, FRAGMENT, etc.).
+	 */
 	ShaderBuilder& attachShaderFile(std::string fileName,
 									const ShaderPipeline shaderStage);
 
 	std::vector<std::pair<std::string, ShaderPipeline>> m_shaderFiles;
 };
 
+/**
+ * GPU shader program pipeline abstraction.
+ *
+ * Encapsulates compiled vertex, fragment, and geometry stages. Manages uniform
+ * block bindings and emulated push-constant uploads across Vulkan and OpenGL backends.
+ */
 class Shader : public Resource {
    public:
 	Shader();
@@ -38,27 +56,23 @@ class Shader : public Resource {
 	void write() override;
 	void read() override;
 
-	void initResources(std::vector<uint32_t> spirv_binary);
-	virtual void loadPerspectiveMatrix(Matrix4 perspectiveMatrix) = 0;
-	virtual void loadViewMatrix(Matrix4 viewMatrix) = 0;
-	virtual void loadModelMatrix(Matrix4 modelMatrix) = 0;
+	/**
+	 * Writes push-constant bytes, laid out exactly like the shader's
+	 * push_constant block (std430). Vulkan forwards them to
+	 * vkCmdPushConstants; OpenGL writes the matching uniforms.
+	 * @param data Source bytes, typically a struct mirroring the block.
+	 * @param size Number of bytes to write.
+	 * @param offset Byte offset within the block.
+	 * @throws std::out_of_range when the range exceeds the block.
+	 */
+	virtual void setPushConstants(const void* data, uint32_t size,
+								  uint32_t offset = 0) = 0;
 
    protected:
 	ShaderPipeline m_pipeline;
 	uint8_t m_textureCount;
 	std::vector<std::string> m_variableNames;
 };
-
-std::string preprocessShader(const std::string& source_name, int32_t kind,
-							 const std::string& source);
-std::vector<uint32_t> compileShader(const std::string& source,
-									const std::string& source_name,
-									const std::string& prevSource, int32_t kind,
-									bool optimize = false);
-std::pair<std::string, std::vector<std::pair<uint32_t, std::string>>>
-decompileShader_glsl(std::vector<uint32_t> spirv_binary,
-					 const std::string& prevShaderSource,
-					 ShaderPipeline pipeline);
 
 }  // namespace bird
 
