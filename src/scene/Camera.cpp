@@ -12,7 +12,7 @@ namespace bird {
 
 Camera::Camera(uint32_t width, uint32_t height) : WorldObject() {
 	setViewportSize(width, height);
-	translate({0.0f, 0.0f, -5.0f});
+	translate({0.0f, 0.0f, 5.0f});
 	updateTransformationMatrix();
 }
 
@@ -20,6 +20,13 @@ Camera::~Camera() {}
 
 void Camera::enable() {
 	APPLICATION->setCamera(this);
+}
+
+Matrix4 Camera::getViewMatrix() const {
+	const Quaternion rotation = getWorldRotation() * getLocalRotation();
+	const Vector3 eye = getWorldPosition() + getLocalPosition();
+	return glm::toMat4(glm::conjugate(rotation)) *
+		   glm::translate(Matrix4(1.0f), -eye);
 }
 
 const Matrix4& Camera::getPerspectiveMatrix() const {

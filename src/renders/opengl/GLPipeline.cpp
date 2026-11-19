@@ -47,6 +47,12 @@ void GLPipeline::init() {
 					.create();
 
 	m_uiRenderer = std::make_unique<GLUIRenderer>();
+	m_debugLineShader =
+		ShaderBuilder()
+			.attachShaderFile("assets/shaders/debug_line.vert", VERTEX)
+			.attachShaderFile("assets/shaders/debug_line.frag", FRAGMENT)
+			.create();
+	m_debugRenderer = std::make_unique<GLDebugRenderer>();
 	m_postProcessShader =
 		ShaderBuilder()
 			.attachShaderFile("assets/shaders/passthrough.vert", VERTEX)
@@ -81,6 +87,7 @@ void GLPipeline::renderRootScene(Scene* scene) {
 
 	glClearColor(0, 0, 0, 1);
 	renderScene(scene);
+	renderDebugLines();  // reuses the scene's global UBO (camera matrices)
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -101,6 +108,12 @@ void GLPipeline::renderRootScene(Scene* scene) {
 	// The UI is drawn after post-processing so that FXAA and colour grading
 	// leave the interface untouched.
 	renderUI();
+}
+
+void GLPipeline::renderDebugLines() {
+	if (m_debugDraw.empty()) return;
+	((GLShader*)m_debugLineShader.get())->bind();
+	m_debugRenderer->draw(m_debugDraw);
 }
 
 void GLPipeline::renderUI() {
@@ -132,7 +145,7 @@ void GLPipeline::renderScene(Scene* scene) {
 	MaterialUBOData matData;
 
 	global.perspective = m_camera->getPerspectiveMatrix();
-	global.view = m_camera->getTransformMatrix();
+	global.view = m_camera->getViewMatrix();
 	global.viewPos = Vector4(m_camera->getWorldPosition(), 0.0);
 
 	m_globalUBO->update(&global, 1, 0);
@@ -190,6 +203,7 @@ void GLPipeline::renderScene(Scene* scene) {
 }
 
 void GLPipeline::cleanUp() {
+	m_debugRenderer.reset();
 	m_pWindow.reset();
 }
 

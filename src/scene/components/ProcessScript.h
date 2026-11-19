@@ -27,6 +27,15 @@ class ProcessScriptComponent : public ScriptComponent {
 	 * @param delta Elapsed time since the last frame in seconds.
 	 */
 	virtual void process(float delta);
+
+	/**
+	 * Fixed-rate update, called zero or more times per frame just before
+	 * each physics step (see FixedStepClock). Put forces and other
+	 * simulation-coupled logic here.
+	 *
+	 * @param fixedDelta The fixed step length in seconds.
+	 */
+	virtual void physicsProcess(float fixedDelta);
 };
 
 /**

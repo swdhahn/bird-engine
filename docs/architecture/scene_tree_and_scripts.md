@@ -27,8 +27,11 @@ classDiagram
     class Scene {
         #vector<_own~WorldObject~> m_children
         #vector~Scene*~ m_childrenScenes
+        #_own~PhysicsWorld~ m_physicsWorld
         +addChild(worldObject)
         +removeChild(worldObject)
+        +detachChild(worldObject) _own~WorldObject~
+        +getPhysicsWorld() PhysicsWorld*
     }
     class Camera {
         #Matrix4 m_perspectiveMatrix
@@ -75,7 +78,16 @@ A `WorldObject` manages:
 
 ### Dirty Matrix Optimization
 Matrix multiplication (Translation * Rotation * Scale) is expensive when performed repeatedly. Whenever position, rotation, or scale changes via `translate()`, `rotate()`, or setters, `m_needsMatrixUpdate` is set to `true`.
-The central application checks `needsMatrixUpdate()` before drawing, recalculating only dirty matrices.
+The central application checks `needsMatrixUpdate()` before drawing, recalculating only dirty matrices (and clearing the flag).
+
+The same setters also increment a **transform revision** (`getTransformRevision()`). Systems that mirror the transform, such as physics bodies, compare the revision against the value they last synchronized, so they notice game-side moves without the object knowing about them.
+
+### Lifecycle Order
+- `Scene::addChild()` takes ownership and calls `init(scene)`: each component receives `_init()` then `init()`.
+- `Scene::removeChild()` calls `deinit()` while the child is still attached (each component receives `deinit()` then `_deinit()`), then destroys it.
+- `Scene::detachChild()` deinitializes the same way but hands ownership back, so the object can be added to another scene (a physics body is rebuilt in that scene's world).
+- `Scene::deinit()` deinitializes every child first, recursing into sub-scenes.
+- `WorldObject::removeComponent()` deinitializes the component only when the object is initialized.
 
 ---
 

@@ -1,0 +1,238 @@
+# Physics
+
+Bird Engine simulates rigid bodies with [Jolt Physics](https://github.com/jrouwe/JoltPhysics) (v5.4). The integration is deliberately thin. Game code works with scenes, `WorldObject`s and components. Jolt types never appear in public headers, so a game plugin does not need Jolt's include paths or compile definitions.
+
+---
+
+## 1. The Pieces
+
+| Type | Header | Role |
+|------|--------|------|
+| `PhysicsServer` | `physics/PhysicsServer.h` | Process-wide state: Jolt's allocator and type registry, the step scratch arena, worker threads and collision filters. Exactly one exists at a time; the `Application` owns it. |
+| `PhysicsWorld` | `physics/PhysicsWorld.h` | One independent simulation (a `JPH::PhysicsSystem`). Owned by a `Scene`. Steps, gravity and queries. |
+| `RigidBodyComponent` | `physics/RigidBodyComponent.h` | Gives its `WorldObject` a body in its scene's world. Forces, velocities and contact callbacks. |
+| `CharacterControllerComponent` | `physics/CharacterControllerComponent.h` | A swept, upright capsule for players and NPCs: walking, slopes, stairs, jumping, pushing (Jolt `CharacterVirtual`). |
+| `CollisionShape` | `physics/CollisionShape.h` | Immutable, cheaply copied geometry: box, sphere, capsule, cylinder, convex hull, triangle mesh, compound. |
+| `ContactEvent` | `physics/ContactEvent.h` | Payload of contact and trigger notifications. |
+| `FixedStepClock` | `physics/FixedStepClock.h` | Turns frame time into whole fixed steps. |
+| `PhysicsInternal.h` | (engine only) | The only header that includes Jolt: conversions, layer filters, the internal state of the server and worlds. |
+
+```mermaid
+flowchart TD
+    App["Application"] -- owns --> Server["PhysicsServer (one)"]
+    App -- owns --> Root["Root Scene"]
+    Root -- owns lazily --> W1["PhysicsWorld (default)"]
+    Root --> A["WorldObject + RigidBodyComponent"]
+    Root --> Sub["Sub-scene (no world)"]
+    Sub --> B["WorldObject + RigidBodyComponent"]
+    Root --> Iso["Sub-scene with createPhysicsWorld()"]
+    Iso -- owns --> W2["PhysicsWorld (isolated)"]
+    Iso --> C["WorldObject + RigidBodyComponent"]
+    A -. body in .-> W1
+    B -. body in .-> W1
+    C -. body in .-> W2
+    Server -. steps .-> W1
+    Server -. steps .-> W2
+```
+
+---
+
+## 2. Worlds Belong to Scenes
+
+A body lives in the world of the **nearest scene that owns one**, walking up from the body's scene:
+
+- The root scene creates a default world the first time something asks for it. Ordinary games never think about worlds.
+- A sub-scene without its own world shares its parent's simulation. Its `m_physicsWorld` stays `nullptr`, and `getPhysicsWorld()` returns the ancestor's.
+- `Scene::createPhysicsWorld(settings)` gives a sub-scene an **isolated** simulation, for example an editor preview or an inventory viewer. Bodies in different worlds never interact.
+- Every world registers with the `PhysicsServer`, which steps them all in creation order.
+
+The component resolves its world once, in `_init()`, an O(depth) walk, and keeps the pointer. Moving an object to another scene (`detachChild` then `addChild`) deinitializes and reinitializes it, so its body is rebuilt in the destination world.
+
+Bodies always use **world-space** transforms, whatever the scene depth.
+
+### Ownership and teardown
+- `Scene` declares `m_physicsWorld` before `m_children`, so children (and their bodies) are destroyed while the world still exists.
+- A `RigidBodyComponent` destroys its body in `_deinit()` and, as a safety net, in its destructor.
+- Only explicit removal (`deinit`, `removeChild`, `removeComponent`) sends `end` events to partners. Destructor cleanup (a scene destroyed without being deinitialized) is silent, because partner objects, and the closures their callbacks captured, may already be gone.
+- `Application::deinit()` deinitializes and destroys the root scene before the server. The server aborts with a message if any world is still alive.
+
+---
+
+## 3. One Physics Step
+
+`PhysicsWorld::step(fixedDelta)` runs four phases:
+
+1. **Pre-sync and characters.** For every body, the object's *transform revision* is compared with the revision last synchronized (an integer compare, O(bodies)). When the game moved the object:
+   - static and dynamic bodies are teleported (`SetPositionAndRotation`);
+   - kinematic bodies get `MoveKinematic`, so they push dynamic bodies along their path instead of popping through them. Their velocity is cleared on the next unchanged step, so they stop at the target;
+   - a changed scale rebuilds the body's `ScaledShape`.
+
+   Then every character controller moves (section 5) and writes its position back.
+2. **Simulation.** `PhysicsSystem::Update` runs on the server's worker threads.
+3. **Post-sync.** Only **active** bodies are visited (`GetActiveBodies`, O(awake bodies)). Dynamic ones write their pose back to their object. The component records the resulting revision, so the write-back is not mistaken for a game edit and echoed back. Sleeping piles cost nothing.
+4. **Events.** Contact and trigger notifications are delivered on the calling (main) thread.
+
+Every public method must be called from the main thread, outside `step()`.
+
+### The fixed timestep
+`Application::run()` owns a `FixedStepClock` (default 1/60 s, at most 8 steps per frame, frame time clamped to 0.25 s). Each step calls `ProcessScript::physicsProcess(fixedDelta)` on every script and then `PhysicsServer::step()`. Put forces and other simulation-coupled logic in `physicsProcess`; keep input-driven and visual logic in `process`.
+
+---
+
+## 4. Contacts and Triggers
+
+Jolt reports contacts from worker threads, one callback per touching sub-shape pair. The engine:
+
+1. **Records** them in a mutex-guarded queue (`ContactQueue`), copying only IDs, the point and the normal.
+2. **Drains** the queue on the main thread after the step and reference-counts sub-shape pairs per body pair. As a result:
+   - **begin** fires once when two bodies start touching, however many sub-shapes touch;
+   - **end** fires once when the last pair separates, or when either body is destroyed;
+   - a pair involving a **sensor** body produces **trigger** events (`onTriggerEnter` / `onTriggerExit`) instead.
+3. **Keeps contacts across sleep.** Jolt drops the contacts of a body that falls asleep. The engine keeps such pairs *dormant*:
+   - waking up still touching is not a new contact;
+   - a body that wakes and fails to re-detect the pair (for example, after being teleported away) gets its end event.
+
+Events reach the component's own callbacks (`setOnContactBegin` and the others) and every `ScriptComponent` on the same object (`onContactBegin`, `onContactEnd`, `onTriggerEnter`, `onTriggerExit`).
+
+**Character controllers take part** (section 5):
+- A character touching a rigid body sends contact events to both sides.
+- A character entering a sensor sends trigger events to both the character and the sensor, so trigger zones notice players.
+- Two characters bumping each receive a contact event.
+
+`ContactEvent` names both sides: `self`/`other` are the rigid bodies (or `nullptr`), `selfCharacter`/`otherCharacter` the characters (or `nullptr`), and `selfObject`/`otherObject` are always set.
+
+Characters are swept on the main thread, so their contacts are recorded from Jolt's per-character listener (`OnContactAdded` and `OnContactPersisted`) into the set of bodies touched during the step. Comparing that set with the previous step's produces begin and end records, delivered with the rigid-body events after the step. Character sweeps skip every character's inner body (the characters meet through character-to-character collision instead), so a pair is never reported twice.
+
+**Destroying bodies in callbacks is safe.**
+- Receivers are copied before delivery.
+- Each body is looked up again before every call, and delivery stops once either body of the pair is gone.
+- A destroyed body first ends its pairs, so the partner hears `end` with a still-valid `other` pointer.
+
+`ContactEvent::normal` points from `self` towards `other`.
+
+---
+
+## 5. Character Controllers
+
+A `CharacterControllerComponent` is not simulated like a rigid body. Each step it **sweeps** an upright capsule through the world (Jolt's `CharacterVirtual`), which gives game-like movement:
+- it walks up steps no taller than `stepHeight`;
+- it sticks to descending slopes and stairs (`stickToFloorDistance`);
+- it slides along walls;
+- it refuses slopes steeper than `maxSlopeDegrees`, reporting `GroundState::OnSteepGround`;
+- it never tips over.
+
+**Velocity each step** follows Jolt's standard recipe:
+1. When standing on walkable ground, the character takes on the ground's velocity (so it rides moving platforms), plus the requested jump.
+2. In the air, it keeps its vertical velocity.
+3. Gravity (scaled by `gravityFactor`) is added.
+4. The horizontal part of `setMoveVelocity()` is added; that move velocity persists until changed.
+5. `setVelocity()` replaces the whole computation for one step, for knockback.
+
+**Interaction with bodies:**
+- The character pushes dynamic bodies, with a force capped at `pushStrength` (100 N by default). A 1 m³ crate at the default density weighs 1000 kg and will not budge; give pushable props a `mass`.
+- An inner kinematic body, with the same shape and layers, lets falling bodies land on the character and lets queries hit it. In a hit, `RaycastHit::object` is the character's object and `body` is `nullptr`.
+- Pass the character as a query's `ignore` argument to see past it.
+- `getTouchingBodies()` lists the rigid bodies collided with in the last step; `getGroundBody()` and `getGroundNormal()` describe what the character stands on.
+- Characters also collide with one another.
+
+**Transform:** the object's position is the character's **feet**; the default capsule is lifted by half its height. Moving the object teleports the character; `teleport()` does so immediately. The object's rotation does not tilt the capsule.
+
+---
+
+## 6. Collision Layers
+
+A body has `layers` (the layers it occupies) and a `mask` (the layers it collides with). Two bodies collide when each one's layers intersect the other's mask, as in Godot:
+
+```
+(A.layers & B.mask) != 0  &&  (B.layers & A.mask) != 0
+```
+
+Seven layers are available, through `physicsLayer(0)` to `physicsLayer(6)`. The Jolt `ObjectLayer` (16 bits) packs:
+- the layers in bits 0 to 6;
+- the mask in bits 8 to 14;
+- a *moving* flag in bit 15, which places a body in the static or moving broad-phase bucket, so static-against-static pairs are never tested.
+
+Queries take a mask of the layers to hit.
+
+---
+
+## 7. Queries
+
+| Method | Returns |
+|--------|---------|
+| `raycast(origin, direction, maxDistance, mask, ignore)` | The closest `RaycastHit`: body, point, normal facing the ray, distance. |
+| `raycastAll(...)` | One hit per body, nearest first. |
+| `shapeCast(shape, from, rotation, to, mask, ignore)` | The first `ShapeCastHit` along a swept shape: body, point, normal, fraction. |
+| `overlap(shape, position, rotation, mask, ignore)` | Every body overlapping the placed shape, each once. |
+
+`ignore` skips one `RigidBodyComponent` or `CharacterControllerComponent`, typically the caster's own. Hits report both `body` (rigid bodies only) and `object` (rigid bodies and characters).
+
+---
+
+## 8. Shapes and Their Rules
+
+- Shapes are built at unit scale in object space. A body applies its object's scale on top through a `ScaledShape`. Non-uniform scale on a sphere or capsule is corrected to the nearest valid scale.
+- Factories validate their input and throw `std::invalid_argument` on non-positive dimensions, too few hull points, or out-of-range indices.
+- **Triangle meshes have no volume.**
+  - They are allowed only on static and kinematic bodies; the component's constructor throws for a dynamic mesh, or for a compound containing one.
+  - Use `convexHull` for moving, mesh-like bodies.
+- Both `triangleMesh(meshes)` and `convexHull(meshes)` read the CPU-side vertex data that loaded meshes keep.
+- A `compound` of one part becomes an offset shape (Jolt's static compound needs at least two), which is handy for shifting a shape's origin.
+- **Levels:** `triangleMeshChunks(meshes, cellsX, cellsZ)` splits a level's merged geometry into a grid of static triangle meshes (one per non-empty cell, by triangle centroid, with degenerate triangles dropped). Chunks are built in parallel and keep the input's coordinates, so every chunk body takes the level object's transform. The demo map becomes 9 static bodies.
+
+---
+
+## 9. Joints
+
+`PhysicsWorld` creates joints between two rigid bodies, or between one body and the world (pass `nullptr` as `b`). Anchors and axes are in world space, taken at creation.
+
+| Factory | Behaviour |
+|---------|-----------|
+| `createFixedJoint(a, b)` | Locks the bodies' current relative pose (weld). |
+| `createPointJoint(a, b, anchor)` | Ball and socket at the anchor. |
+| `createHingeJoint(a, b, anchor, axis, minAngle, maxAngle)` | Rotation about the axis, optionally limited. |
+| `createSliderJoint(a, b, axis, min, max)` | Translation of `a` along the axis only, optionally limited. |
+| `createDistanceJoint(a, b, anchorA, anchorB, min, max, springHz)` | Keeps the anchors within `[min, max]` (rope or rod); `springHz > 0` makes the limit a spring. |
+
+Hinges and sliders have motors (`Joint::setMotorVelocity`, `disableMotor`) and report `getPosition()` (angle or offset). `setEnabled(false)` releases a joint without destroying it. The world owns joints: `destroyJoint` removes one, and destroying either body removes its joints, after which the handle is invalid.
+
+---
+
+## 10. Render Interpolation
+
+Physics runs at a fixed 60 Hz while rendering runs at any rate, so bodies drawn at their last step's pose judder.
+- After each step the world records every moved body's and character's pose before and after the step.
+- After `processScene`, `Application` calls `PhysicsWorld::interpolate(FixedStepClock::getAlpha())`. This overrides those objects' **transform matrices** with the pose blended between the two (linear position, slerped rotation).
+- Logic positions stay at the true simulated pose, so scripts, queries and physics never see the blend. A game edit after the step (the object's revision changed) cancels the blend for that object.
+- `CharacterControllerComponent::getInterpolatedPosition()` gives the same blend for cameras that follow a character.
+- `Application::setPhysicsInterpolation(false)` turns the blending off.
+
+---
+
+## 11. Debug Drawing
+
+`Application::setPhysicsDebugDraw(true)` draws every world's colliders as wireframes each frame, configured by `getPhysicsDebugSettings()`: shapes, colour by sleep state, bounding boxes, velocities, centres of mass, and each character's ground normal. Underneath, `PhysicsWorld::debugDraw(DebugDrawList&, settings, cameraPosition)` feeds Jolt's `DebugRendererSimple` into a `DebugDrawList` that the GL pipeline draws as lines into the scene target, depth-tested, so FXAA smooths them.
+
+**Cost.** Level geometry is large: the demo map is about 290,000 triangles. Static bodies therefore go into a cached `DebugDrawLayer`, rebuilt and uploaded only when static geometry changes (a static body added, removed, moved or reshaped) or the settings change. Moving bodies are drawn every frame. With the cache the demo runs at about 1,500 FPS with wireframes on; rebuilding everything every frame gave 11.
+
+Game code can add its own lines to `GraphicsPipeline::getDebugDraw()` (`line`, `box`), or keep a cached layer of its own with `cachedLayer(key)` and `DebugDrawList::newVersion()`.
+
+---
+
+## 12. Build Notes
+
+- All Jolt-dependent code compiles in the `physics` object library, which links `Jolt::Jolt` for its include paths and definitions.
+- Jolt is built as **Release** (`libs/CMakeLists.txt`). Its exported definitions (`JPH_PROFILE_ENABLED`, `JPH_DEBUG_RENDERER` and others) then match what Debug and Release engine builds compile with, so class layouts agree.
+  - A configuration-less Jolt build lacks those features, which produced link errors and would risk layout mismatches.
+  - Jolt is also built with RTTI (`CPP_RTTI_ENABLED=ON`), because the engine derives from Jolt interfaces (the debug renderer) and uses `dynamic_cast`.
+  - After changing either, rebuild the dependency (`cmake --build libs --target JOLT`).
+- The step scratch arena (`PhysicsServerSettings::tempAllocatorBytes`, 32 MB by default) falls back to `malloc` when a step outgrows it, instead of aborting.
+
+---
+
+## 13. Known Limits
+
+- Interpolation shows motion up to one step (16.7 ms) late, the usual trade-off.
+- Contacts are not drawn in debug mode (only shapes, boxes, velocities and character ground normals).
+- No render interpolation: bodies render at their last step's pose, so motion can show slight judder when the frame rate is not a multiple of 60 Hz.
+- Seven collision layers.

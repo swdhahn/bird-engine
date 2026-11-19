@@ -189,7 +189,13 @@ ExternalProject_Add(
   URL "https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v5.4.0.tar.gz"
   PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/JOLT
   SOURCE_SUBDIR Build
-  CMAKE_ARGS -DCROSS_PLATFORM_DETERMINISTIC=ON -DTARGET_UNIT_TESTS=OFF -DTARGET_HELLO_WORLD=OFF -DTARGET_PERFORMANCE_TEST=OFF -DTARGET_SAMPLES=OFF -DTARGET_VIEWER=OFF ${JOLT_EXTRA_ARGS}
+  CMAKE_ARGS -DCROSS_PLATFORM_DETERMINISTIC=ON -DTARGET_UNIT_TESTS=OFF -DTARGET_HELLO_WORLD=OFF -DTARGET_PERFORMANCE_TEST=OFF -DTARGET_SAMPLES=OFF -DTARGET_VIEWER=OFF ${JOLT_EXTRA_ARGS} -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+             # Release: matches the JPH_* definitions Jolt exports to Debug and
+             # Release consumers (profiler, debug renderer), so layouts agree.
+             -DCMAKE_BUILD_TYPE=Release
+             # RTTI: engine classes derive from Jolt interfaces (debug renderer)
+             # and use dynamic_cast, so typeinfo must exist in the library.
+             -DCPP_RTTI_ENABLED=ON
              "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}")
 
 

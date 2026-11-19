@@ -14,4 +14,6 @@ void ProcessScriptComponent::_deinit() {
 
 void ProcessScriptComponent::process(float delta) {}
 
+void ProcessScriptComponent::physicsProcess(float fixedDelta) {}
+
 }  // namespace bird

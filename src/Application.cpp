@@ -25,7 +25,6 @@ Application::~Application() {}
 void Application::init(Script<Scene>* script) {
 	m_graphicsPipeline = new gl::GLPipeline();
 	m_graphicsPipeline->init();
-	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	RESOURCE_MANAGER = new ResourceManager();
 	RESOURCE_MANAGER->init();
 	APPLICATION = this;
@@ -36,6 +35,9 @@ void Application::init(Script<Scene>* script) {
 					  m_graphicsPipeline->getWindow().get());
 	// The compositor may already have resized the window (e.g. tiling).
 	handleResize();
+
+	// Before the scene: bodies are created as soon as objects are added.
+	m_physicsServer = _own_mk<PhysicsServer>();
 
 	m_scene = new Scene();
 	m_scene->addComponent(std::unique_ptr<Script<Scene>>(script));
@@ -58,6 +60,27 @@ void Application::run() {
 			m_graphicsPipeline->getCamera()->updateTransformationMatrix();
 		}
 
+		// Debug lines are rebuilt every frame (physics first, then scripts).
+		m_graphicsPipeline->getDebugDraw().clear();
+
+		// PHYSICS SECTION: zero or more fixed steps
+		const int physicsSteps = m_physicsClock.advance(delta);
+		const float fixedStep = m_physicsClock.getStep();
+		for (int step = 0; step < physicsSteps; step++) {
+			for (size_t i = 0; i < m_processableScripts.size(); i++) {
+				m_processableScripts[i]->physicsProcess(fixedStep);
+			}
+			m_physicsServer->step(fixedStep);
+		}
+		if (m_physicsDebugDraw) {
+			Camera* camera = m_graphicsPipeline->getCamera();
+			const Vector3 eye = camera ? camera->getWorldPosition() : Vector3(0.0f);
+			for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
+				world->debugDraw(m_graphicsPipeline->getDebugDraw(),
+								 m_physicsDebugSettings, eye);
+			}
+		}
+
 		// PROCESS SECTION
 		m_uiManager->process(delta);
 		for (int i = 0; i < m_processableScripts.size(); i++) {
@@ -65,6 +88,13 @@ void Application::run() {
 		}
 
 		processScene(m_scene, delta);
+		// After matrix updates: draw moving bodies between their last two
+		// physics poses so motion is smooth at any frame rate.
+		if (m_physicsInterpolation) {
+			for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
+				world->interpolate(m_physicsClock.getAlpha());
+			}
+		}
 		// PROCESS SECTION END
 
 		m_graphicsPipeline->renderRootScene(m_scene);
@@ -104,6 +134,10 @@ void Application::removeProcessableScript(ProcessScriptComponent* script) {
 
 void Application::deinit() {
 	m_scene->deinit();
+	// Scenes own their physics worlds, which must die before the server.
+	delete m_scene;
+	m_scene = nullptr;
+	m_physicsServer.reset();
 
 	m_uiManager->deinit();
 	delete m_uiManager;
@@ -129,6 +163,14 @@ void Application::handleResize() {
 		window->getFramebufferWidth(), window->getFramebufferHeight(),
 		window->getWidth(), window->getHeight());
 	m_uiManager->setViewportSize(window->getWidth(), window->getHeight());
+}
+
+PhysicsServer* Application::getPhysicsServer() {
+	return m_physicsServer.get();
+}
+
+FixedStepClock& Application::getPhysicsClock() {
+	return m_physicsClock;
 }
 
 UIManager* Application::getUIManager() {

@@ -30,7 +30,7 @@ Written once per frame with camera transformations:
 ```cpp
 struct GlobalUBOData {
     Matrix4 perspective; // 4x4 perspective or orthographic matrix
-    Matrix4 view;        // 4x4 view matrix (camera orientation)
+    Matrix4 view;        // Camera::getViewMatrix(): inverse of the camera pose
     Vector4 viewPos;     // Camera eye position in world space
 };
 ```
@@ -39,9 +39,11 @@ struct GlobalUBOData {
 Written per draw call for individual object transformations:
 ```cpp
 struct ObjectPushConstants {
-    Matrix4 model;       // 4x4 model transform matrix
+    Matrix4 model;           // 4x4 model transform matrix (T * R * S)
+    Vector4 normalMatrix[3]; // inverse-transpose of model's 3x3, as std430 mat3
 };
 ```
+The normal matrix is computed on the CPU per draw, so normals stay perpendicular to surfaces under rotation and non-uniform scale (the shader uses `object.normalMatrix * normal`). The block is 112 bytes, inside the 128-byte push-constant minimum.
 - In Vulkan, forwarded directly via `vkCmdPushConstants`.
 - In OpenGL, emulated through uniform buffer updates or reflected uniform locations.
 
@@ -86,7 +88,7 @@ flowchart LR
 - Binds `GlobalUBOData` with the 3D perspective projection and view matrices.
 - Loops through all registered `MeshComponent` instances:
   - Binds mesh material and diffuse textures.
-  - Updates `ObjectPushConstants` with `obj->getTransformMatrix()`.
+  - Updates `ObjectPushConstants` from `obj->getTransformMatrix()` (model and normal matrix).
   - Binds the mesh VAO (`GLMesh::getVAO()`) and submits `glDrawElements(GL_TRIANGLES, ...)`.
 
 ### Pass 2: Post-Processing Pass

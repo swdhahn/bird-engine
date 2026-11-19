@@ -1,4 +1,8 @@
 #include <Application.h>
+#include <physics/CharacterControllerComponent.h>
+#include <physics/CollisionShape.h>
+#include <physics/PhysicsWorld.h>
+#include <physics/RigidBodyComponent.h>
 #include <scene/2D/UIButton.h>
 #include <scene/2D/UICheckBox.h>
 #include <scene/2D/UIColorPicker.h>
@@ -24,17 +28,24 @@
 #include <scene/2D/UIWindow.h>
 #include <scene/2D/UIManager.h>
 #include <scene/Camera.h>
+#include <scene/Scene.h>
+#include <scene/components/ProcessScript.h>
 #include <scene/components/MeshComponent.h>
 #include <scene/components/Script.h>
 #include <util/Assets.h>
 #include <util/Math.h>
 
+#include <array>
+#include <cstdlib>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
+
+// True while the camera rides the walking character (toggle with C).
+bool g_walkMode = false;
 
 class POVCamera : public bird::ProcessScript<bird::Camera> {
    public:
@@ -50,25 +61,40 @@ class POVCamera : public bird::ProcessScript<bird::Camera> {
 	void deinit() {}
 
 	void process(float delta) {
-		float speed = 10;
-		float rotSpeed = 5;
-		float rotVal = input()->getActionValue("look_right") -
-					   input()->getActionValue("look_left");
-		object()->rotateLocal(bird::Vector3(0, 1, 0),
-							  rotVal * rotSpeed * delta);
+		const float speed = 10;
+		// Hold the right mouse button to look around (always while walking).
+		// The captured cursor is hidden and the UI ignores the pointer.
+		const bool look = g_walkMode || input()->getActionValue("look") > 0.5f;
+		input()->setMouseCaptured(look);
+		if (look) {
+			const bird::Vector2 mouse = input()->getMouseDelta();
+			m_yaw -= mouse.x * kSensitivity;
+			m_pitch = glm::clamp(m_pitch - mouse.y * kSensitivity,
+								 glm::radians(-89.0f), glm::radians(89.0f));
+		}
+		// Yaw about world up, then pitch about the camera's right axis; the
+		// camera looks down its local -Z.
+		object()->setWorldRotation(glm::angleAxis(m_yaw, bird::Vector3(0, 1, 0)) *
+								   glm::angleAxis(m_pitch, bird::Vector3(1, 0, 0)));
 
-		object()->translate(
-			bird::Vector3((-input()->getActionValue("move_right") +
-						   input()->getActionValue("move_left")) *
-							  speed * delta,
-						  (-input()->getActionValue("move_up") +
-						   input()->getActionValue("move_down")) *
-							  speed * delta,
-						  (-input()->getActionValue("move_backward") +
-						   input()->getActionValue("move_forward")) *
-							  speed * delta) *
-			object()->getLocalRotation() * object()->getWorldRotation());
+		if (g_walkMode) return;	 // the character script moves the camera
+
+		const bird::Vector3 local(
+			input()->getActionValue("move_right") -
+				input()->getActionValue("move_left"),
+			input()->getActionValue("move_up") -
+				input()->getActionValue("move_down"),
+			input()->getActionValue("move_backward") -
+				input()->getActionValue("move_forward"));
+		object()->translate(object()->getWorldRotation() *
+							object()->getLocalRotation() * local * speed *
+							delta);
 	}
+
+   private:
+	static constexpr float kSensitivity = 0.0025f;	// radians per pixel
+	float m_yaw = 0.0f;
+	float m_pitch = 0.0f;
 };
 
 
@@ -430,6 +456,268 @@ void buildGallery(bird::UIManager* ui) {
 	gallery::openGalleryWindow(ui);
 }
 
+
+// ------------------------------------------------------------- physics demo
+
+namespace playground {
+
+/** A stack of dynamic boxes, a trigger zone and a HUD. F pushes the box under
+ * the crosshair (camera forward), R rebuilds the stack. */
+class PlaygroundScript : public bird::ProcessScript<bird::WorldObject> {
+   public:
+	struct Spawn {
+		bird::RigidBodyComponent* body;
+		bird::Vector3 position;
+		bird::Quaternion rotation;
+	};
+
+	/** hud: three lines (counts, last event, key help). */
+	PlaygroundScript(bird::Camera* camera, std::vector<Spawn> boxes,
+					 bird::CharacterControllerComponent* walker,
+					 std::array<bird::UILabel*, 3> hud)
+		: m_camera(camera), m_boxes(std::move(boxes)), m_walker(walker), m_hud(hud) {
+		m_hud[2]->setText("Right mouse: look   F: push   R: drop again   C: walk / fly   "
+						  "G: colliders");
+	}
+
+	void init() override {}
+	void deinit() override {}
+
+	void enterZone(const bird::ContactEvent& e) {
+		m_inZone++;
+		m_message = e.otherCharacter ? "Trigger: you entered the zone"
+									 : "Trigger: a box entered the zone";
+	}
+	void leaveZone(const bird::ContactEvent& e) {
+		m_inZone--;
+		m_message = e.otherCharacter ? "Trigger: you left the zone"
+									 : "Trigger: a box left the zone";
+	}
+	/** Character contact events: report bumping into boxes. */
+	void walkerTouched(const bird::ContactEvent& e) {
+		if (e.other && e.other->getMotionType() == bird::MotionType::Dynamic) {
+			m_message = "Character: bumped into a box";
+		}
+	}
+
+	void process(float delta) override {
+		const bool push = input()->getActionValue("physics_push") > 0.5f;
+		const bool reset = input()->getActionValue("physics_reset") > 0.5f;
+		if (push && !m_pushHeld) pushUnderCrosshair();
+		if (reset && !m_resetHeld) resetStack();
+		const bool walk = input()->getActionValue("physics_walk") > 0.5f;
+		if (walk && !m_walkHeld) toggleWalk();
+		m_pushHeld = push;
+		m_resetHeld = reset;
+		m_walkHeld = walk;
+		const bool debug = input()->getActionValue("physics_debug") > 0.5f;
+		if (debug && !m_debugHeld) {
+			bird::APPLICATION->setPhysicsDebugDraw(
+				!bird::APPLICATION->isPhysicsDebugDrawEnabled());
+		}
+		m_debugHeld = debug;
+
+		if (g_walkMode) {
+			// Eye height above the character's feet.
+			m_camera->setWorldPosition(m_walker->getInterpolatedPosition() +
+									   bird::Vector3(0, 1.6f, 0));
+		}
+
+		bird::PhysicsWorld* world = scene()->getPhysicsWorld();
+		m_hud[0]->setText("Bodies " + std::to_string(world->getBodyCount()) +
+						  "   awake " +
+						  std::to_string(world->getActiveBodyCount()) +
+						  "   in zone " + std::to_string(m_inZone));
+		m_hud[1]->setText(m_message);
+	}
+
+	void physicsProcess(float fixedDelta) override {
+		if (!g_walkMode) {
+			m_walker->setMoveVelocity(bird::Vector3(0.0f));
+			return;
+		}
+		// Steer in the camera's horizontal frame.
+		const bird::Quaternion rotation =
+			m_camera->getWorldRotation() * m_camera->getLocalRotation();
+		bird::Vector3 forward = rotation * bird::Vector3(0, 0, -1);
+		forward.y = 0;
+		forward = glm::length(forward) > 0 ? glm::normalize(forward) : bird::Vector3(0, 0, -1);
+		const bird::Vector3 right(-forward.z, 0, forward.x);
+		const float ahead = input()->getActionValue("move_forward") -
+							input()->getActionValue("move_backward");
+		const float side = input()->getActionValue("move_right") -
+						   input()->getActionValue("move_left");
+		m_walker->setMoveVelocity((forward * ahead + right * side) * 4.5f);
+		if (m_walker->world_object()->getWorldPosition().y < -30.0f) {
+			m_walker->teleport(bird::Vector3(0, -1.0f, -8));  // fell off the slab
+		}
+		if (input()->getActionValue("move_up") > 0.5f) m_walker->jump(5.0f);
+	}
+
+   private:
+	void toggleWalk() {
+		g_walkMode = !g_walkMode;
+		if (g_walkMode) {
+			// Drop in below the camera, clamped onto the slab (x +-12, z -30..-6).
+			const bird::Vector3 eye = m_camera->getWorldPosition();
+			m_walker->teleport(bird::Vector3(glm::clamp(eye.x, -11.0f, 11.0f), -1.0f,
+											 glm::clamp(eye.z, -29.0f, -7.0f)));
+		}
+		m_message = g_walkMode ? "Walking: WASD, Space jumps, mouse looks"
+							   : "Flying: WASD, Space/Shift up/down";
+	}
+
+	void pushUnderCrosshair() {
+		const bird::Quaternion rotation =
+			m_camera->getWorldRotation() * m_camera->getLocalRotation();
+		const bird::Vector3 forward = rotation * bird::Vector3(0, 0, -1);
+		const bird::Vector3 eye =
+			m_camera->getWorldPosition() + m_camera->getLocalPosition();
+		auto hit = scene()->getPhysicsWorld()->raycast(eye, forward, 200.0f,
+													   bird::kAllPhysicsLayers, m_walker);
+		if (!hit || hit->body == nullptr ||
+			hit->body->getMotionType() != bird::MotionType::Dynamic) {
+			m_message = "Push: nothing movable under the crosshair";
+			return;
+		}
+		hit->body->applyImpulseAt(forward * 12.0f * hit->body->getMass(),
+								  hit->point);
+		m_message = "Push: hit at distance " +
+					std::to_string(int(hit->distance)) + " m";
+	}
+
+	void resetStack() {
+		for (const Spawn& box : m_boxes) {
+			box.body->teleport(box.position, box.rotation);
+			box.body->setLinearVelocity(bird::Vector3(0.0f));
+			box.body->setAngularVelocity(bird::Vector3(0.0f));
+		}
+		m_message = "Boxes dropped again";
+	}
+
+	bird::Camera* m_camera;
+	std::vector<Spawn> m_boxes;
+	bird::CharacterControllerComponent* m_walker;
+	std::array<bird::UILabel*, 3> m_hud;
+	std::string m_message = "Physics ready";
+	int m_inZone = 0;
+	bool m_pushHeld = false;
+	bool m_resetHeld = false;
+	bool m_walkHeld = false;
+	bool m_debugHeld = false;
+};
+
+/** Adds a mesh object with an optional body to the scene. */
+bird::WorldObject* addObject(bird::Scene* scene,
+							 const std::vector<std::shared_ptr<bird::Mesh>>& mesh,
+							 bird::Vector3 position, bird::Vector3 scale,
+							 std::unique_ptr<bird::RigidBodyComponent> body) {
+	auto object = bird::_own_mk<bird::WorldObject>();
+	if (!mesh.empty()) {
+		object->addComponent(bird::_own_mk<bird::MeshComponent>(mesh));
+	}
+	if (body) object->addComponent(std::move(body));
+	object->setWorldPosition(position);
+	object->setScale(scale);
+	bird::WorldObject* raw = object.get();
+	scene->addChild(std::move(object));
+	return raw;
+}
+
+void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui) {
+	using namespace bird;
+	auto cube = RESOURCE_MANAGER->loadMesh("assets/models/cube.obj");  // -1..1
+	const CollisionShape unitBox = CollisionShape::box(Vector3(1.0f));
+	RigidBodySettings still;
+	still.motionType = MotionType::Static;
+
+	// Floor slab: top face at y = -2.
+	addObject(scene, cube, {0, -2.5f, -18}, {12, 0.5f, 12},
+			  _own_mk<RigidBodyComponent>(unitBox, still));
+
+	// 80 half-metre boxes dropped from a height with varied rotations, so
+	// they tumble into a pile (deterministic, so R replays the same drop).
+	std::vector<PlaygroundScript::Spawn> boxes;
+	for (int y = 0; y < 5; y++) {
+		for (int x = 0; x < 4; x++) {
+			for (int z = 0; z < 4; z++) {
+				const int i = (y * 4 + x) * 4 + z;
+				const Vector3 position(-2.4f + x * 1.6f, 2.0f + y * 1.8f,
+									   -21.0f + z * 1.6f);
+				const Quaternion rotation = glm::angleAxis(
+					0.37f * i, glm::normalize(Vector3(i % 3, 1, (i * 7) % 5)));
+				RigidBodySettings crate;
+				crate.mass = 20.0f;	 // light enough for the character to shove
+				auto body = _own_mk<RigidBodyComponent>(unitBox, crate);
+				RigidBodyComponent* raw = body.get();
+				WorldObject* object = addObject(scene, cube, position,
+												Vector3(0.5f), std::move(body));
+				object->setWorldRotation(rotation);	 // synced at the first step
+				boxes.push_back({raw, position, rotation});
+			}
+		}
+	}
+
+	// A chain of five boxes hanging from a world pivot by ball joints (push it with F).
+	{
+		RigidBodyComponent* previous = nullptr;
+		for (int i = 0; i < 5; i++) {
+			const Vector3 position(6.0f, 6.0f - i * 1.1f, -14.0f);
+			RigidBodySettings link;
+			link.mass = 10.0f;
+			auto body = _own_mk<RigidBodyComponent>(unitBox, link);
+			RigidBodyComponent* raw = body.get();
+			addObject(scene, cube, position, Vector3(0.4f), std::move(body));
+			scene->getPhysicsWorld()->createPointJoint(raw, previous,
+													   position + Vector3(0, 0.55f, 0));
+			previous = raw;
+		}
+	}
+
+	// Invisible trigger zone in front of the stack.
+	RigidBodySettings sensor = still;
+	sensor.isSensor = true;
+	auto zone = _own_mk<RigidBodyComponent>(CollisionShape::box({3, 1, 2}), sensor);
+	RigidBodyComponent* zoneBody = zone.get();
+	addObject(scene, {}, {0, -1, -12}, Vector3(1.0f), std::move(zone));
+
+	auto* hudColumn = ui->getRoot()->add<UIStack>(UIAxis::Vertical);
+	hudColumn->setAnchor(UIAlignment::TopRight);
+	hudColumn->setPivot(UIAlignment::TopRight);
+	hudColumn->setOffset(Vector2(-16.0f, 44.0f));
+	hudColumn->setAlign(UIAlign::End);
+	hudColumn->setGap(4.0f);
+	std::array<UILabel*, 3> hud{};
+	for (UILabel*& line : hud) {
+		line = hudColumn->add<UILabel>("");
+		line->setColor(Vector4(1.0f, 0.95f, 0.6f, 1.0f));
+	}
+
+	// Walking character, parked on the slab until C is pressed.
+	CharacterSettings walkerSettings;
+	walkerSettings.pushStrength = 600.0f;
+	auto walker = _own_mk<CharacterControllerComponent>(walkerSettings);
+	CharacterControllerComponent* walkerRaw = walker.get();
+	auto walkerObject = _own_mk<WorldObject>();
+	walkerObject->addComponent(std::move(walker));
+	walkerObject->setWorldPosition({0, -2.0f, -10});
+	scene->addChild(std::move(walkerObject));
+
+	auto script = _own_mk<PlaygroundScript>(camera, std::move(boxes), walkerRaw, hud);
+	PlaygroundScript* scriptRaw = script.get();
+	zoneBody->setOnTriggerEnter(
+		[scriptRaw](const ContactEvent& e) { scriptRaw->enterZone(e); });
+	zoneBody->setOnTriggerExit(
+		[scriptRaw](const ContactEvent& e) { scriptRaw->leaveZone(e); });
+	walkerRaw->setOnContactBegin(
+		[scriptRaw](const ContactEvent& e) { scriptRaw->walkerTouched(e); });
+	auto controller = _own_mk<WorldObject>();
+	controller->addComponent(std::move(script));
+	scene->addChild(std::move(controller));
+}
+
+}  // namespace playground
+
 class MainScript : public bird::Script<bird::Scene> {
    public:
 	void init() override {
@@ -440,28 +728,42 @@ class MainScript : public bird::Script<bird::Scene> {
 		bird::INPUT->addAction(bird::Action("move_up").addKey(KEY_SPACE));
 		bird::INPUT->addAction(
 			bird::Action("move_down").addKey(KEY_LEFT_SHIFT));
-		bird::INPUT->addAction(bird::Action("look_up").addKey(KEY_UP));
-		bird::INPUT->addAction(bird::Action("look_down").addKey(KEY_DOWN));
-		bird::INPUT->addAction(bird::Action("look_left").addKey(KEY_LEFT));
-		bird::INPUT->addAction(bird::Action("look_right").addKey(KEY_RIGHT));
+		bird::INPUT->addAction(
+			bird::Action("look").addMouseButton(MOUSE_BUTTON_2));  // right button
+		bird::INPUT->addAction(bird::Action("physics_debug").addKey(KEY_G));
+		bird::INPUT->addAction(bird::Action("physics_push").addKey(KEY_F));
+		bird::INPUT->addAction(bird::Action("physics_reset").addKey(KEY_R));
+		bird::INPUT->addAction(bird::Action("physics_walk").addKey(KEY_C));
 
+		// The village map: rendered as one object, collided as a few static
+		// triangle-mesh chunks (3 x 3 grid) sharing its transform.
+		auto mapMeshes = resource_manager()->loadMesh("assets/models/maps/Map1.glb");
+		const bird::Vector3 mapPosition(0, -5, 30);
 		auto e = bird::_own_mk<bird::WorldObject>();
-		e->addComponent(bird::_own_mk<bird::MeshComponent>(
-			resource_manager()->loadMesh("assets/models/maps/Map1.glb")));
-		e->translate(bird::Vector3(0, -5, 30));
+		e->addComponent(bird::_own_mk<bird::MeshComponent>(mapMeshes));
+		e->translate(mapPosition);
 		object()->addChild(std::move(e));
-
-		auto e2 = bird::_own_mk<bird::WorldObject>();
-		e2->addComponent(bird::_own_mk<bird::MeshComponent>(
-			resource_manager()->loadMesh("assets/models/cube.obj")));
-		e2->translate(bird::Vector3(0, 5, 0));
-		object()->addChild(std::move(e2));
+		bird::RigidBodySettings level;
+		level.motionType = bird::MotionType::Static;
+		for (const bird::CollisionShape& chunk :
+			 bird::CollisionShape::triangleMeshChunks(mapMeshes, 3, 3)) {
+			auto collider = bird::_own_mk<bird::WorldObject>();
+			collider->addComponent(bird::_own_mk<bird::RigidBodyComponent>(chunk, level));
+			collider->setWorldPosition(mapPosition);
+			object()->addChild(std::move(collider));
+		}
 
 		auto cam = bird::_own_mk<bird::Camera>(1280, 720);
 		cam->addComponent(bird::_own_mk<POVCamera>());
 		cam->enable();
+		bird::Camera* camera = cam.get();
 		object()->addChild(std::move(cam));
 		buildGallery(bird::APPLICATION->getUIManager());
+		playground::build(object(), camera, bird::APPLICATION->getUIManager());
+		// BIRD_PHYSICS_DEBUG=1 starts with collider wireframes on (G toggles).
+		if (std::getenv("BIRD_PHYSICS_DEBUG") != nullptr) {
+			bird::APPLICATION->setPhysicsDebugDraw(true);
+		}
 	}
 
 	void deinit() override {}
