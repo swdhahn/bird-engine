@@ -44,7 +44,8 @@ else()
     set(DART_ARCH "x64")
 endif()
 
-set(DART_SDK_URL "https://storage.googleapis.com/dart-archive/channels/stable/release/latest/sdk/dartsdk-${DART_OS}-${DART_ARCH}-release.zip")
+set(DART_SDK_VERSION "3.8.2")
+set(DART_SDK_URL "https://storage.googleapis.com/dart-archive/channels/stable/release/${DART_SDK_VERSION}/sdk/dartsdk-${DART_OS}-${DART_ARCH}-release.zip")
 
 ExternalProject_Add(
   DART_SDK
@@ -55,6 +56,29 @@ ExternalProject_Add(
   BUILD_COMMAND ""
   # Copy the extracted dart-sdk folder to our install directory
   INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR> ${DEPS_INSTALL_DIR}/dart-sdk
+)
+
+# ==============================================================================
+# DART SHARED LIBRARY (Embedded Dart VM matching Dart 3.8.2)
+# ==============================================================================
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(DART_DLL_PLATFORM "win")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    set(DART_DLL_PLATFORM "macos")
+else()
+    set(DART_DLL_PLATFORM "linux")
+endif()
+
+set(DART_SHARED_LIB_VERSION "0.2.0")
+set(DART_SHARED_LIB_URL "https://github.com/fuzzybinary/dart_shared_library/releases/download/${DART_SHARED_LIB_VERSION}/lib-${DART_DLL_PLATFORM}.zip")
+
+ExternalProject_Add(
+  DART_SHARED_LIB
+  URL ${DART_SHARED_LIB_URL}
+  PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/DART_SHARED_LIB
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND ""
+  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR> ${DEPS_INSTALL_DIR}/dart_shared_library
 )
 
 # ==============================================================================

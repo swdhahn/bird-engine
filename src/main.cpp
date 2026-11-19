@@ -5,6 +5,11 @@
 #include "scene/components/Script.h"
 #include "util/ResourceManager.h"
 
+#ifdef BIRD_ENABLE_DART
+#include "dart/DartRuntime.h"
+#include "dart/DartScriptComponent.h"
+#endif
+
 // --- Platform Specific Includes & Macros ---
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
@@ -84,15 +89,54 @@ m_pData; |                ^~~~~~~
 
  *
  */
+static bool hasSuffix(const std::string& str, const std::string& suffix) {
+	return str.size() >= suffix.size() &&
+		   str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
 int main(int argc, char** argv) {
 	if (argc < 2) {
-		std::cerr << "Please provide a path to your application" << std::endl;
+		std::cerr << "Usage: Bird <app_library | script.dart | script.dill> "
+					 "[resource_directory]"
+				  << std::endl;
 		exit(1);
 	}
 	std::string directory_path("");
 	if (argc > 2) directory_path = std::string(argv[2]);
-	std::string path(argv[1]);
-	path += LIB_EXT;
+	std::string inputPath(argv[1]);
+
+#ifdef BIRD_ENABLE_DART
+	if (hasSuffix(inputPath, ".dart") || hasSuffix(inputPath, ".dill")) {
+		bird::DartRuntime dartRuntime;
+		if (!dartRuntime.init()) {
+			std::cerr << "Failed to initialize embedded Dart VM: "
+					  << dartRuntime.lastError() << std::endl;
+			return EXIT_FAILURE;
+		}
+		if (!dartRuntime.loadScript(inputPath)) {
+			std::cerr << "Failed to load Dart script '" << inputPath
+					  << "': " << dartRuntime.lastError() << std::endl;
+			return EXIT_FAILURE;
+		}
+
+		auto* dartScript = new bird::DartAppScript(&dartRuntime);
+		bird::Application app;
+		bird::ResourceManager::RESOURCE_PATH = directory_path;
+
+		try {
+			app.init(dartScript);
+		} catch (std::exception& e) {
+			std::cerr << e.what() << std::endl;
+			dartRuntime.shutdown();
+			return EXIT_FAILURE;
+		}
+
+		dartRuntime.shutdown();
+		return 0;
+	}
+#endif
+
+	std::string path = inputPath + LIB_EXT;
 
 	LIB_HANDLE app_handle = LIB_OPEN(path.c_str());
 	if (!app_handle) {

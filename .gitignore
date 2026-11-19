@@ -47,3 +47,8 @@ build/
 assets/models/world/GameObject.fbx
 assets/models/world/GameObject.fbx.bird
 install/
+
+# Dart tooling cache & CMake-generated FFI bindings
+.dart_tool/
+pubspec.lock
+dart/bird_engine/lib/src/generated/
