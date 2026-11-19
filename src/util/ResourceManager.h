@@ -9,6 +9,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <unordered_map>
 
@@ -31,15 +32,15 @@
 namespace bird {
 
 enum AssetType {
-	TEXTURE,
-	SCENE,
-	SOUND,
-	SHADER,
-	MATERIAL,
-	CUSTOM,
+	ASSET_TYPE_TEXTURE,
+	ASSET_TYPE_SCENE,
+	ASSET_TYPE_SOUND,
+	ASSET_TYPE_SHADER,
+	ASSET_TYPE_MATERIAL,
+	ASSET_TYPE_CUSTOM,
 	// The above are included in the m_resources variable in the ResourceManager
 	// class.
-	MESH
+	ASSET_TYPE_MESH
 };
 
 class ResourceManager {
@@ -67,9 +68,11 @@ class ResourceManager {
 					 AssetType type);
 	void addMesh(std::string path, std::vector<std::shared_ptr<Mesh>> meshes);
 
+	std::shared_ptr<Shader> getDefaultShader();
 	static inline std::string RESOURCE_PATH = "";
 
    private:
+	std::shared_ptr<Shader> m_defaultShader;
 	std::unordered_map<std::string, std::shared_ptr<Resource>>* m_resources;
 	std::unordered_map<std::string, std::vector<std::shared_ptr<Mesh>>>
 		m_meshes;

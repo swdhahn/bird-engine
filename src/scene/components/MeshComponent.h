@@ -11,16 +11,17 @@ namespace bird {
 class MeshComponent : public Component {
    public:
 	MeshComponent(std::string path);
-	MeshComponent(std::vector<std::shared_ptr<Mesh>> meshes);
+	MeshComponent(std::vector<_ref<Mesh>> meshes);
+	MeshComponent(_ref<Mesh> meshes);
 
 	void init();
 	void deinit();
 	void process(float delta);
 
-	std::vector<std::shared_ptr<Mesh>>& getMeshes();
+	std::vector<_ref<Mesh>>& getMeshes();
 
    protected:
-	std::vector<std::shared_ptr<Mesh>> m_meshes;
+	std::vector<_ref<Mesh>> m_meshes;
 };
 
 }  // namespace bird

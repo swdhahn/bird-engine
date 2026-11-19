@@ -42,6 +42,12 @@ struct UITheme {
 	float itemSpacing = 4.0f;  // Gap between elements
 };
 
+/** Shared theme applied to every UIObject that does not receive its own. */
+inline std::shared_ptr<UITheme> defaultUITheme() {
+	static const std::shared_ptr<UITheme> theme = std::make_shared<UITheme>();
+	return theme;
+}
+
 }  // namespace bird
 
 #endif	// !BIRD_UITHEME_H

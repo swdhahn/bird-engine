@@ -6,13 +6,19 @@
 
 #include <GL/glew.h>
 
+#include <algorithm>
+#include <stdexcept>
+
 namespace bird::gl {
 
-GLBuffer::GLBuffer(BufferMode bufferMode, size_t size)
-	: GLBuffer(bufferMode, nullptr, size) {}
+GLBuffer::GLBuffer(BufferMode bufferMode, size_t size, uint16_t dataSize)
+	: GLBuffer(bufferMode, nullptr, size, dataSize) {}
 
-GLBuffer::GLBuffer(BufferMode bufferMode, void* pData, size_t size)
-	: RawBuffer(bufferMode, pData, size), m_bufferId(0), m_bufferTarget(0) {
+GLBuffer::GLBuffer(BufferMode bufferMode, void* pData, size_t size,
+				   uint16_t dataSize)
+	: RawBuffer(bufferMode, pData, size, dataSize),
+	  m_bufferId(0),
+	  m_bufferTarget(0) {
 	glGenBuffers(1, &m_bufferId);
 
 	if (bufferMode & BUFFER_ARRAY) {
@@ -48,7 +54,7 @@ void GLBuffer::initialize() {
 	glBindBuffer(m_bufferTarget, m_bufferId);
 	glBufferData(
 		m_bufferTarget, m_size * m_dataSize, m_pData,
-		m_bufferMode | BUFFER_DYNAMIC ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
+		m_bufferMode & BUFFER_DYNAMIC ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
 	if (m_bufferTarget == GL_UNIFORM_BUFFER) {
 		glBindBufferRange(m_bufferTarget, m_bindingPoint, m_bufferId, 0,
 						  m_size * m_dataSize);
@@ -60,7 +66,7 @@ void GLBuffer::initialize(void* pData, size_t size) {
 	m_size = size;
 	glBufferData(
 		m_bufferTarget, size * m_dataSize, pData,
-		m_bufferMode | BUFFER_DYNAMIC ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
+		m_bufferMode & BUFFER_DYNAMIC ? GL_DYNAMIC_DRAW : GL_STATIC_DRAW);
 
 	if (m_bufferTarget == GL_UNIFORM_BUFFER) {
 		glBindBufferRange(m_bufferTarget, m_bindingPoint, m_bufferId, 0,
@@ -72,6 +78,20 @@ void GLBuffer::update(void* pData, size_t size, uint32_t offset) {
 	glBindBuffer(m_bufferTarget, m_bufferId);
 
 	if (m_bufferMode & BUFFER_STAGED) {
+		const size_t requiredSize = static_cast<size_t>(offset) + size;
+		if (requiredSize > m_size) {
+			// Geometric growth amortizes reallocations to O(1) per element.
+			// Reallocation discards prior contents, so only a write starting
+			// at offset zero may trigger it.
+			if (offset != 0) {
+				throw std::out_of_range(
+					"GLBuffer::update: offset write exceeds buffer capacity.");
+			}
+			m_size = std::max(requiredSize, m_size * 2);
+			glBufferData(m_bufferTarget, m_size * m_dataSize, nullptr,
+						 m_bufferMode & BUFFER_DYNAMIC ? GL_DYNAMIC_DRAW
+													   : GL_STATIC_DRAW);
+		}
 		glBufferSubData(m_bufferTarget, offset * m_dataSize, size * m_dataSize,
 						pData);
 	} else if (m_bufferMode & BUFFER_MAPPED) {

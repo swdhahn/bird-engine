@@ -22,12 +22,14 @@ class GLPipeline : public GraphicsPipeline {
 	void init() override;
 	void cleanUp() override;
 
-	void renderRootScene(const Scene* scene) override;
+	void renderRootScene(Scene* scene) override;
 
 	std::string getName() const override;
 
    private:
-	void renderScene(const Scene* scene);
+	void renderScene(Scene* scene);
+	/** Draws the batched UI mesh with an orthographic projection. */
+	void renderUI();
 
 	std::shared_ptr<Shader> ui_shader;
 };

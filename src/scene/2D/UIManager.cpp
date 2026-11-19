@@ -3,37 +3,35 @@
 #include <memory>
 
 #include "../../Application.h"
-#include "../../renders/GraphicsPipeline.h"
-#include "../../renders/Window.h"
 #include "../../renders/generic/Mesh.h"
+#include "UIGeometry.h"
 #include "UIObject.h"
 
 namespace bird {
 
 UIManager::UIManager()
-	: m_vertexCount(0), m_root(std::make_unique<UIObject>(0)) {}
+	: m_root(std::make_unique<UIObject>(0)),
+	  m_hovered(nullptr),
+	  m_pressed(nullptr),
+	  m_vertexCount(0),
+	  m_indexCount(0),
+	  m_shouldUpdateUI(true) {}
 UIManager::~UIManager() {}
 
 void UIManager::init() {
-	// We need to trick the mesh into thinking we have data
+	// Every buffer starts non-empty so that GLMesh binds all attribute
+	// locations (0 position, 1 colour, 2 texCoord); update() grows them.
+	const auto mode =
+		static_cast<BufferMode>(BUFFER_STAGED | BUFFER_DYNAMIC | BUFFER_ARRAY);
 	m_mesh = MeshBuilder()
 				 .setIndexBuffer(createBuffer<uint32_t>(
 					 static_cast<BufferMode>(BUFFER_STAGED | BUFFER_DYNAMIC |
 											 BUFFER_ELEMENT_ARRAY),
 					 1))
-				 .setVertexBuffer(createBuffer<float>(
-					 static_cast<BufferMode>(BUFFER_STAGED | BUFFER_DYNAMIC |
-											 BUFFER_ARRAY),
-					 1))
-				 .setTextureCoordBuffer(createBuffer<float, 2>(
-					 static_cast<BufferMode>(BUFFER_STAGED | BUFFER_DYNAMIC |
-											 BUFFER_ARRAY),
-					 1))
-				 // Colors as normals
-				 .setNormalBuffer(createBuffer<float>(
-					 static_cast<BufferMode>(BUFFER_STAGED | BUFFER_DYNAMIC |
-											 BUFFER_ARRAY),
-					 1))
+				 .setVertexBuffer(createBuffer<float>(mode, 1))
+				 .setTextureCoordBuffer(createBuffer<float, 2>(mode, 1))
+				 // The normal slot carries per-vertex RGB colour.
+				 .setNormalBuffer(createBuffer<float>(mode, 1))
 				 .build();
 }
 void UIManager::deinit() {}
@@ -45,17 +43,49 @@ void UIManager::process(float delta) {
 	}
 }
 
-void UIManager::processMouseUI(double mx, double my, int action) {
-	processMouseUI(m_root.get(), mx, my, action);
+UIObject* UIManager::findTopmostAt(UIObject* root, const Vector2& screenPoint) {
+	auto& children = root->getChildren();
+	for (auto it = children.rbegin(); it != children.rend(); ++it) {
+		if (UIObject* hit = findTopmostAt(it->get(), screenPoint)) {
+			return hit;
+		}
+	}
+	if (root->enabled() && root->getDrawableCount() > 0 &&
+		root->containsPoint(screenPoint)) {
+		return root;
+	}
+	return nullptr;
 }
-void UIManager::processMouseUI(UIObject* root, double mx, double my,
-							   int action) {
-	if (action == ACTION_NONE) root->onMove(mx, my);
-	if (action == ACTION_PRESS) root->onPress(mx, my);
-	if (action == ACTION_RELEASE) root->onRelease(mx, my);
 
-	for (int i = 0; i < root->getChildren().size(); i++) {
-		processMouseUI(root->getChildren()[i].get(), mx, my, action);
+void UIManager::processMouseUI(double mx, double my, int action) {
+	const Vector2 point(static_cast<float>(mx), static_cast<float>(my));
+	UIObject* hit = findTopmostAt(m_root.get(), point);
+
+	switch (action) {
+		case ACTION_NONE:
+			if (hit != m_hovered) {
+				if (m_hovered) m_hovered->onHover(false);
+				if (hit) hit->onHover(true);
+				m_hovered = hit;
+			}
+			if (UIObject* target = m_pressed ? m_pressed : m_hovered) {
+				target->onMove(point.x, point.y);
+			}
+			break;
+		case ACTION_PRESS:
+			if (hit) {
+				m_pressed = hit;
+				hit->onPress(point.x, point.y);
+			}
+			break;
+		case ACTION_RELEASE:
+			if (m_pressed) {
+				m_pressed->onRelease(point.x, point.y);
+				m_pressed = nullptr;
+			}
+			break;
+		default:
+			break;
 	}
 }
 
@@ -65,10 +95,10 @@ void UIManager::updateUI() {
 	m_textureCoords.clear();
 	m_colors.clear();
 	m_indices.clear();
-	for (int i = 0; i < m_root->getChildren().size(); i++) {
-		processTreeUI(m_root->getChildren()[i].get());
-	}
-	// send to gpu
+
+	processTreeUI(m_root.get(), Matrix3(1.0f));
+	m_indexCount = static_cast<uint32_t>(m_indices.size());
+	if (m_indexCount == 0) return;
 
 	m_mesh->getVertexBuffer()->update(m_vertices.data(), m_vertices.size(), 0);
 	m_mesh->getTextureCoordBuffer()->update(m_textureCoords.data(),
@@ -78,49 +108,42 @@ void UIManager::updateUI() {
 	m_mesh->updateMesh();
 }
 
-void UIManager::processTreeUI(UIObject* root) {
-	Vector3* baseVertices =
-		((Vector3*)GraphicsPipeline::s_quad_mesh->getVertexBuffer()
-			 ->m_rawBuffer->m_pData);
-	Vector2* baseTexCoords =
-		((Vector2*)GraphicsPipeline::s_quad_mesh->getTextureCoordBuffer()
-			 ->m_rawBuffer->m_pData);
+void UIManager::processTreeUI(UIObject* object,
+							  const Matrix3& parentWorldMatrix) {
+	object->updateWorldMatrix(parentWorldMatrix);
+	const Matrix3& world = object->getWorldMatrix();
 
-	// process current
-	for (int j = 0; j < root->getDrawableCount(); j++) {
-		UIDrawable* draw = &root->getDrawables()[j];
-		for (int i = 0; i < 4; i++) {
-			Matrix4 mat = Matrix4(1);
-			Vector3 vert = baseVertices[i];
+	for (int j = 0; j < object->getDrawableCount(); j++) {
+		const UIDrawable& draw = object->getDrawables()[j];
+		if (!draw.visible) continue;
 
-			vert = root->getTransformMatrix() * vert;
-			vert.x = (vert.x * draw->size.x) + draw->localOffset.x;
-			vert.y = (vert.y * draw->size.y) + draw->localOffset.y;
-
-			m_vertices.push_back(vert.x);
-			m_vertices.push_back(vert.y);
-			m_vertices.push_back(0);
-			m_textureCoords.push_back(baseTexCoords[i].x);
-			m_textureCoords.push_back(baseTexCoords[i].y);
-			m_colors.push_back(draw->color.x);
-			m_colors.push_back(draw->color.y);
-			m_colors.push_back(draw->color.z);
+		const auto corners =
+			ui::computeDrawableCorners(world, draw.localOffset, draw.size);
+		for (size_t i = 0; i < corners.size(); i++) {
+			m_vertices.insert(m_vertices.end(), {corners[i].x, corners[i].y, 0});
+			m_textureCoords.insert(
+				m_textureCoords.end(),
+				{ui::kUnitQuadCorners[i].x, ui::kUnitQuadCorners[i].y});
+			m_colors.insert(m_colors.end(),
+							{draw.color.x, draw.color.y, draw.color.z});
 		}
-
-		uint32_t i = m_vertexCount;
-		m_indices.insert(m_indices.end(),
-						 {i + 0, i + 1, i + 2, i + 2, i + 1, i + 3});
-
+		for (uint32_t index : ui::kQuadIndexPattern) {
+			m_indices.push_back(m_vertexCount + index);
+		}
 		m_vertexCount += 4;
 	}
-	// process children
-	for (int i = 0; i < root->getChildren().size(); i++) {
-		processTreeUI(root->getChildren()[i].get());
+
+	for (auto& child : object->getChildren()) {
+		processTreeUI(child.get(), world);
 	}
 }
 
 std::shared_ptr<Mesh> UIManager::getUIMesh() {
 	return m_mesh;
+}
+
+uint32_t UIManager::getIndexCount() const {
+	return m_indexCount;
 }
 
 UIObject* UIManager::getRoot() {

@@ -4,6 +4,8 @@
 
 #include "WorldObject.h"
 
+#include "Scene.h"
+
 namespace bird {
 
 WorldObject::WorldObject()
@@ -14,14 +16,23 @@ WorldObject::WorldObject()
 	  m_scale(1),
 	  m_transformMatrix(1),
 	  m_needsMatrixUpdate(true),
-	  m_components(),
+	  m_isInitiated(false),
 	  m_id(++s_uniqueIdentificationIndex) {}
 
-void WorldObject::_deinit() {
-	deinit();
+void WorldObject::init(Scene* parent) {
+	m_parent = parent;
+	for (int i = 0; i < m_components.size(); i++) {
+		m_components[i]->_init();
+		m_components[i]->init();
+	}
+	m_isInitiated = true;
+}
+
+void WorldObject::deinit() {
 	for (int i = 0; i < m_components.size(); i++) {
 		m_components[i]->deinit();
 	}
+	m_isInitiated = false;
 }
 
 const uint64_t& WorldObject::getID() const {
@@ -113,20 +124,31 @@ void WorldObject::setScale(Vector3 scale) {
 	m_scale = scale;
 }
 
-void WorldObject::addComponent(std::unique_ptr<Component> component) {
+std::vector<_own<Component>>& WorldObject::getComponents() {
+	return m_components;
+}
+
+void WorldObject::addComponent(_own<Component> component) {
 	Component* c = component.get();
-	m_components.emplace_back(std::move(component));
-	c->setParent(this);
-	c->init();
+	m_components.emplace_back(_mv(component));
+	c->setWorldObject(this);
+	if (m_isInitiated) {
+		c->_init();
+		c->init();
+	}
 }
 
 void WorldObject::removeComponent(Component* component) {
 	component->deinit();
 	m_components.erase(std::remove_if(m_components.begin(), m_components.end(),
-									  [&](std::unique_ptr<Component>& comp) {
+									  [&](_own<Component>& comp) {
 										  return (component == comp.get());
 									  }),
 					   m_components.begin());
+}
+
+Scene* WorldObject::getParent() {
+	return m_parent;
 }
 
 }  // namespace bird

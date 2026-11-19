@@ -87,7 +87,7 @@ std::unique_ptr<Buffer<T, t_attributeSize>> createBuffer(BufferMode mode,
 
 	switch (CURRENT_GRAPHICS_PIPELINE) {
 		case GRAPHICS_PIPELINE_OPENGL:
-			rb = std::make_unique<bird::gl::GLBuffer>(mode, size);
+			rb = std::make_unique<bird::gl::GLBuffer>(mode, size, sizeof(T));
 
 			break;
 		default:
@@ -106,7 +106,8 @@ std::unique_ptr<Buffer<T, t_attributeSize>> createBuffer(
 
 	switch (CURRENT_GRAPHICS_PIPELINE) {
 		case GRAPHICS_PIPELINE_OPENGL:
-			rb = std::make_unique<bird::gl::GLBuffer>(mode, pData.get(), size);
+			rb = std::make_unique<bird::gl::GLBuffer>(mode, pData.get(), size,
+													  sizeof(T));
 
 			break;
 		default:

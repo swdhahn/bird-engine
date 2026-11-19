@@ -25,6 +25,7 @@
 #include "../util/Input.h"
 #include "../util/Math.h"
 #include "../util/ResourceManager.h"
+#include "Object.h"
 #include "components/Component.h"
 
 namespace bird {
@@ -34,15 +35,17 @@ extern BIRD_API ResourceManager* RESOURCE_MANAGER;
 class Application;
 extern BIRD_API Application* APPLICATION;
 class Component;
+class Scene;
 
-class WorldObject {
+class WorldObject : public Object {
+	BIRD_OBJECT(WORLDOBJECT)
    public:
+	WorldObject(uint16_t type);
 	WorldObject();
 	virtual ~WorldObject() {};
 
-	virtual void init() = 0;
-	virtual void deinit() = 0;
-	void _deinit();
+	void init(Scene* parent);
+	void deinit();
 
 	const uint64_t& getID() const;
 	bool operator==(const WorldObject& e);
@@ -69,8 +72,11 @@ class WorldObject {
 	void updateTransformationMatrix();
 	bool needsMatrixUpdate() const;
 
-	void addComponent(std::unique_ptr<Component> component);
+	std::vector<_own<Component>>& getComponents();
+	void addComponent(_own<Component> component);
 	void removeComponent(Component* component);
+
+	Scene* getParent();
 
    protected:
 	// Unique id for world objects
@@ -82,7 +88,9 @@ class WorldObject {
 	Quaternion m_localRotation;
 	Matrix4 m_transformMatrix;
 
-	std::vector<std::unique_ptr<Component>> m_components;
+	Scene* m_parent;
+
+	std::vector<_own<Component>> m_components;
 
 	/**
 	 * Must make this variable true whenever any position or rotation is
@@ -90,6 +98,7 @@ class WorldObject {
 	 * rendering and Matrix related calculations.
 	 */
 	bool m_needsMatrixUpdate;
+	bool m_isInitiated;
 
    private:
 	inline static uint64_t s_uniqueIdentificationIndex = 0;

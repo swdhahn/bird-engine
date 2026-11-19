@@ -2,6 +2,7 @@
 
 #include "Application.h"
 #include "scene/Scene.h"
+#include "scene/components/Script.h"
 #include "util/ResourceManager.h"
 
 // --- Platform Specific Includes & Macros ---
@@ -100,24 +101,25 @@ int main(int argc, char** argv) {
 		std::cerr << "dlopen error: " << GetPlatformError() << std::endl;
 		exit(1);
 	}
-	bird::Scene* (*app_entry)();
+	bird::Script<bird::Scene>* (*app_entry)();
 	auto app_entry_raw = LIB_SYM(app_handle, "app_entry");
 	if (app_entry_raw != nullptr) {
-		app_entry = reinterpret_cast<bird::Scene* (*)()>(app_entry_raw);
+		app_entry =
+			reinterpret_cast<bird::Script<bird::Scene>* (*)()>(app_entry_raw);
 	} else {
-		std::cerr << "Could not locate any 'bird::Scene* app_entry();'"
+		std::cerr << "Could not locate any 'bird::Script* app_entry();'"
 				  << std::endl;
 		std::cerr << "dlsym error: " << GetPlatformError() << std::endl;
 		LIB_CLOSE(app_handle);
 		exit(1);
 	}
-	bird::Scene* scene = app_entry();
+	bird::Script<bird::Scene>* script = app_entry();
 
-	bird::Application app(*scene);
+	bird::Application app;
 	bird::ResourceManager::RESOURCE_PATH = directory_path;
 
 	try {
-		app.run();
+		app.init(script);
 	} catch (std::exception& e) {
 		std::cerr << e.what() << std::endl;
 		return EXIT_FAILURE;

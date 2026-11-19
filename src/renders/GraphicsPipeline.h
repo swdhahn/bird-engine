@@ -40,7 +40,7 @@ class GraphicsPipeline {
 
 	void initializeGraphicSpecifics();
 
-	virtual void renderRootScene(const Scene* scene) = 0;
+	virtual void renderRootScene(Scene* scene) = 0;
 
 	virtual std::string getName() const = 0;
 

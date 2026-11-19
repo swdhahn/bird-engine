@@ -38,11 +38,13 @@ void ScreenObject::setScale(Vector2 scale) {
 
 void ScreenObject::setTransformMatrix(Matrix3 transformMatrix) {
 	m_transformMatrix = transformMatrix;
-	m_needsMatrixUpdate = true;
+	// An explicit matrix supersedes the decomposed fields until they change.
+	m_needsMatrixUpdate = false;
 }
 
 void ScreenObject::updateTransformationMatrix() {
 	updateTransformMatrix(this, &m_transformMatrix);
+	m_needsMatrixUpdate = false;
 }
 bool ScreenObject::needsMatrixUpdate() const {
 	return m_needsMatrixUpdate;

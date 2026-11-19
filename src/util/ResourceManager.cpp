@@ -7,19 +7,26 @@
 namespace bird {
 
 ResourceManager::ResourceManager() {
-	m_resources = new std::unordered_map<std::string,
-										 std::shared_ptr<Resource>>[CUSTOM + 1];
+	m_resources = new std::unordered_map<
+		std::string, std::shared_ptr<Resource>>[ASSET_TYPE_CUSTOM + 1];
 }
 
 ResourceManager::~ResourceManager() {
 	delete m_resources;
 }
 
-void ResourceManager::init() {}
+void ResourceManager::init() {
+	m_defaultShader = loadShader(
+		ShaderBuilder()
+			.attachShaderFile("assets/shaders/default.vert", VERTEX)
+			.attachShaderFile("assets/shaders/default.frag", FRAGMENT));
+}
 
 std::shared_ptr<Texture> ResourceManager::loadTexture(std::string path) {
-	if (m_resources[TEXTURE].find(path) != m_resources[TEXTURE].end()) {
-		return std::static_pointer_cast<Texture>(m_resources[TEXTURE].at(path));
+	if (m_resources[ASSET_TYPE_TEXTURE].find(path) !=
+		m_resources[ASSET_TYPE_TEXTURE].end()) {
+		return std::static_pointer_cast<Texture>(
+			m_resources[ASSET_TYPE_TEXTURE].at(path));
 	}
 
 	std::fstream file(RESOURCE_PATH + path + ".bird",
@@ -54,7 +61,7 @@ std::shared_ptr<Texture> ResourceManager::loadTexture(std::string path) {
 
 	std::shared_ptr<Texture> tex =
 		TextureBuilder(data, width, height, form).build();
-	addResource(path, tex, TEXTURE);
+	addResource(path, tex, ASSET_TYPE_TEXTURE);
 	return tex;
 }
 
@@ -141,6 +148,7 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 
 		bird::MeshBuilder mb = bird::MeshBuilder();
 
+		std::cout << vertexBuffer.get()->getBufferSize() << std::endl;
 		mb.setIndexBuffer(std::move(indexBuffer))
 			.setVertexBuffer(std::move(vertexBuffer))
 			.setNormalBuffer(std::move(normalBuffer))
@@ -149,6 +157,8 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 		// Load Material
 		std::shared_ptr<Material> mat =
 			loadMaterial(path + std::to_string(materialIndex) + ".mat");
+
+		mat->setShader(m_defaultShader);
 
 		mb.setMaterial(mat);
 		meshes.data()[i] = mb.build();
@@ -163,9 +173,10 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 }
 
 std::shared_ptr<Material> ResourceManager::loadMaterial(std::string path) {
-	if (m_resources[MATERIAL].find(path) != m_resources[MATERIAL].end()) {
+	if (m_resources[ASSET_TYPE_MATERIAL].find(path) !=
+		m_resources[ASSET_TYPE_MATERIAL].end()) {
 		return std::static_pointer_cast<Material>(
-			m_resources[MATERIAL].at(path));
+			m_resources[ASSET_TYPE_MATERIAL].at(path));
 	}
 
 	// load material from file
@@ -210,14 +221,15 @@ std::shared_ptr<Material> ResourceManager::loadMaterial(std::string path) {
 
 	file.close();
 
-	addResource(path, mat, MATERIAL);
+	addResource(path, mat, ASSET_TYPE_MATERIAL);
 
 	return mat;
 }
 
 std::shared_ptr<Shader> ResourceManager::loadShader(ShaderBuilder& builder) {
 	std::shared_ptr<Shader> shader = builder.create();
-	addResource(builder.m_shaderFiles.data()[0].first, shader, SHADER);
+	addResource(builder.m_shaderFiles.data()[0].first, shader,
+				ASSET_TYPE_SHADER);
 	return shader;
 }
 
@@ -228,7 +240,7 @@ void ResourceManager::loadCustom(std::string path) {}
 void ResourceManager::addResource(std::string path,
 								  std::shared_ptr<Resource> resource,
 								  AssetType type) {
-	if (type == MESH) {
+	if (type == ASSET_TYPE_MESH) {
 		// throw RuntimeException("Error: Cannot add mesh to resource manager
 		// using addResource function. ");
 		std::cout << "Error: Cannot add mesh to resource manager using "
@@ -244,6 +256,10 @@ void ResourceManager::addMesh(std::string path,
 							  std::vector<std::shared_ptr<Mesh>> meshes) {
 	m_meshes.insert(std::pair<std::string, std::vector<std::shared_ptr<Mesh>>>(
 		path, meshes));
+}
+
+std::shared_ptr<Shader> ResourceManager::getDefaultShader() {
+	return m_defaultShader;
 }
 
 }  // namespace bird

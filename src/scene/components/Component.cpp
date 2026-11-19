@@ -4,12 +4,16 @@ namespace bird {
 
 Component::Component() {}
 
-WorldObject* Component::getParent() {
-	return m_parent;
+void Component::_init() {}
+
+void Component::_deinit() {}
+
+WorldObject* Component::world_object() {
+	return m_object;
 }
 
-void Component::setParent(WorldObject* parent) {
-	m_parent = parent;
+void Component::setWorldObject(WorldObject* parent) {
+	m_object = parent;
 }
 
 }  // namespace bird

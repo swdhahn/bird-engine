@@ -29,16 +29,26 @@ class Component {
 	Component();
 	virtual ~Component() {}
 
+	// Always called before init(). This is mostly used for internal
+	// functionality. Only subclasses of Script class actually use this. You may
+	// use this if you're using the Script base class.
+	virtual void _init();
+	// Always called after deinit(). This is mostly used for internal
+	// functionality. Only subclasses of Script class actually use this. You may
+	// use this if you're using the Script base class.
+	virtual void _deinit();
 	virtual void init() = 0;
 	virtual void deinit() = 0;
 
-	virtual void process(float delta) = 0;
+	// WorldObject this component is attached to
+	WorldObject* world_object();
+	void setWorldObject(WorldObject* parent);
 
-	WorldObject* getParent();
-	void setParent(WorldObject* parent);
+	template <typename T>
+	T* objectAs();
 
    protected:
-	WorldObject* m_parent;
+	WorldObject* m_object;
 };
 
 }  // namespace bird

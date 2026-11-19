@@ -13,8 +13,9 @@ namespace bird::gl {
 
 class GLBuffer : public RawBuffer {
    public:
-	GLBuffer(BufferMode bufferMode, size_t size);
-	GLBuffer(BufferMode bufferMode, void* pData, size_t size);
+	GLBuffer(BufferMode bufferMode, size_t size, uint16_t dataSize);
+	GLBuffer(BufferMode bufferMode, void* pData, size_t size,
+			 uint16_t dataSize);
 	~GLBuffer();
 
 	void initialize() override;

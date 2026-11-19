@@ -5,6 +5,7 @@
 #ifndef BIRD_MATH_H
 #define BIRD_MATH_H
 
+#include <algorithm>
 #define PI 3.141592
 
 #include <stdint.h>
@@ -66,6 +67,11 @@ bool contains(const Vector2& point, const Vector4& bounds);
  */
 Matrix4 createPerspectiveMatrix(uint32_t width, uint32_t height, float fov,
 								float near, float far);
+
+template <typename T>
+T lerp(const T& from, const T& to, float deltaTime) {
+	return from + (to - from) * std::clamp(deltaTime, 0.0f, 1.0f);
+}
 
 std::ostream& operator<<(std::ostream& out, const Vector2& s);
 std::ostream& operator<<(std::ostream& out, const Vector3& s);

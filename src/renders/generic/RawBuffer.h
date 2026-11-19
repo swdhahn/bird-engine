@@ -25,8 +25,8 @@ enum BufferMode {
 
 class RawBuffer {
    public:
-	RawBuffer(BufferMode mode, size_t size);
-	RawBuffer(BufferMode mode, void* pData, size_t size);
+	RawBuffer(BufferMode mode, size_t size, uint16_t dataSize);
+	RawBuffer(BufferMode mode, void* pData, size_t size, uint16_t dataSize);
 	virtual ~RawBuffer();
 
 	virtual void initialize() = 0;

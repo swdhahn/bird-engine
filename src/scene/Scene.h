@@ -5,45 +5,40 @@
 #ifndef BIRD_SCENE_H
 #define BIRD_SCENE_H
 
+#include <memory>
 #include <vector>
+
 #include "WorldObject.h"
-#include "Entity.h"
 
 namespace bird {
 
-    class OptimizationSet{};
+class OptimizationSet {};
 
-    class Scene : public WorldObject {
-    public:
-        Scene();
+class Scene : public WorldObject {
+	BIRD_OBJECT(SCENE)
+   public:
+	Scene();
 
-        virtual void init() = 0;
-        virtual void deinit() = 0;
+	void addChild(_own<WorldObject> worldObject);
+	void removeChild(WorldObject* worldObject);
 
-        void addEntity(Entity* entity);
-        void removeEntity(Entity* entity);
+	std::vector<_own<WorldObject>>& getChildren();
+	std::vector<Scene*>& getChildrenScenes();
 
-        void addChild(Scene* scene);
-        void removeChild(Scene* scene);
+   protected:
+	Scene* m_parent = nullptr;
+	std::vector<_own<WorldObject>> m_children;
+	std::vector<Scene*> m_childrenScenes;
 
-        std::vector<Scene*> getChildren() const;
-        std::vector<Entity*> getEntities() const;
-    protected:
-        Scene* m_parent = nullptr;
-        std::vector<Scene*> m_children;
-        std::vector<Entity*> m_entities;
+   private:
+	/**
+	 * This will be implemented in the future: But, it will let you define what
+	 * specific type of optimization you would want for this scene. i.e. terrain
+	 * lod, Oct tree, portals and rooms, etc.
+	 */
+	OptimizationSet* m_optimizationSet = nullptr;
+};
 
-    private:
-        /**
-         * This will be implemented in the future: But, it will let you define what specific type of
-         * optimization you would want for this scene. i.e. terrain lod, Oct tree, portals and rooms, etc.
-         */
-        OptimizationSet* m_optimizationSet = nullptr;
+}  // namespace bird
 
-
-
-    };
-
-} // bird
-
-#endif //BIRD_SCENE_H
+#endif	// BIRD_SCENE_H

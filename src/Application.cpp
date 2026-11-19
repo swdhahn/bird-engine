@@ -7,33 +7,41 @@
 #include "renders/Window.h"
 #include "renders/opengl/GLPipeline.h"
 #include "scene/2D/UIManager.h"
+#include "scene/Scene.h"
+#include "scene/components/Component.h"
+#include "scene/components/ProcessScript.h"
+#include "scene/components/Script.h"
+
 namespace bird {
 
 Input* INPUT = nullptr;
 ResourceManager* RESOURCE_MANAGER = nullptr;
 Application* APPLICATION = nullptr;
 
-Application::Application(Scene& scene) : m_scene(&scene) {}
+Application::Application() {}
 
 Application::~Application() {}
 
-void Application::init() {
+void Application::init(Script<Scene>* script) {
 	m_graphicsPipeline = new gl::GLPipeline();
 	m_graphicsPipeline->init();
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	RESOURCE_MANAGER = new ResourceManager();
+	RESOURCE_MANAGER->init();
 	APPLICATION = this;
 
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	m_uiManager = new UIManager();
 	m_uiManager->init();
 
-	m_scene->init();
+	m_scene = new Scene();
+	m_scene->addComponent(std::unique_ptr<Script<Scene>>(script));
+	m_scene->init(nullptr);
+
+	run();
 }
 
 void Application::run() {
-	init();
-
 	double lastTime = Window::getGLFWTime();
 	float delta = 0.0f;
 	uint16_t fps = 0;
@@ -42,11 +50,20 @@ void Application::run() {
 	while (!m_graphicsPipeline->getWindow()->shouldWindowClose()) {
 		delta = (Window::getGLFWTime() - lastTime);
 		lastTime = Window::getGLFWTime();
-		m_graphicsPipeline->getCamera()->process(delta);
+
 		if (m_graphicsPipeline->getCamera()->needsMatrixUpdate()) {
 			m_graphicsPipeline->getCamera()->updateTransformationMatrix();
 		}
+
+		// PROCESS SECTION
+		m_uiManager->process(delta);
+		for (int i = 0; i < m_processableScripts.size(); i++) {
+			m_processableScripts[i]->process(delta);
+		}
+
 		processScene(m_scene, delta);
+		// PROCESS SECTION END
+
 		m_graphicsPipeline->renderRootScene(m_scene);
 		fps++;
 		if (secondTime + 1.0 < Window::getGLFWTime()) {
@@ -62,16 +79,23 @@ void Application::run() {
 }
 
 void Application::processScene(Scene* scene, float delta) {
-	m_uiManager->process(delta);
-	for (auto& entity : scene->getEntities()) {
-		entity->process(delta);
-		if (entity->needsMatrixUpdate()) {
-			entity->updateTransformationMatrix();
+	for (auto& obj : scene->getChildren()) {
+		if (obj->needsMatrixUpdate()) {
+			obj->updateTransformationMatrix();
 		}
 	}
-	for (auto& child : scene->getChildren()) {
-		processScene(child, delta);
+	for (auto& obj : scene->getChildrenScenes()) {
+		processScene(obj, delta);
 	}
+}
+
+void Application::addProcessableScript(ProcessScriptComponent* script) {
+	m_processableScripts.push_back(script);
+}
+void Application::removeProcessableScript(ProcessScriptComponent* script) {
+	m_processableScripts.erase(std::remove(m_processableScripts.begin(),
+										   m_processableScripts.end(), script),
+							   m_processableScripts.end());
 }
 
 void Application::deinit() {

@@ -36,6 +36,7 @@ void GLPipeline::init() {
 
 	glEnable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
+
 	glEnable(GL_DEBUG_OUTPUT);
 
 	ui_shader = ShaderBuilder()
@@ -56,23 +57,13 @@ void GLPipeline::init() {
 	m_framebuffers.emplace_back(builder.build());
 }
 
-void GLPipeline::renderRootScene(const bird::Scene* scene) {
+void GLPipeline::renderRootScene(Scene* scene) {
 	glEnable(GL_DEPTH_TEST);
 
 	m_framebuffers.at(0).get()->bind(nullptr);
 
 	glClearColor(0, 0, 0, 1);
 	renderScene(scene);
-
-	glDisable(GL_DEPTH_TEST);
-
-	((GLShader*)ui_shader.get())->bind();
-	m_globalUBO->update((GlobalUBOData*)&m_orthoMatrix, sizeof(Matrix4), 0);
-
-	GLMesh* ui_mesh = (GLMesh*)APPLICATION->getUIManager()->getUIMesh().get();
-	glBindVertexArray(ui_mesh->getVAO());
-	glDrawElements(GL_TRIANGLES, ui_mesh->getIndexBuffer()->getBufferSize(),
-				   GL_UNSIGNED_INT, 0);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -89,9 +80,27 @@ void GLPipeline::renderRootScene(const bird::Scene* scene) {
 		glActiveTexture(GL_TEXTURE0 + i);
 		glBindTexture(GL_TEXTURE_2D, 0);  // Unbind each texture
 	}
+
+	// The UI is drawn after post-processing so that FXAA and colour grading
+	// leave the interface untouched.
+	renderUI();
 }
 
-void GLPipeline::renderScene(const Scene* scene) {
+void GLPipeline::renderUI() {
+	UIManager* uiManager = APPLICATION->getUIManager();
+	const uint32_t indexCount = uiManager->getIndexCount();
+	if (indexCount == 0) return;
+
+	((GLShader*)ui_shader.get())->bind();
+	m_globalUBO->update((GlobalUBOData*)&m_orthoMatrix, sizeof(Matrix4), 0);
+
+	GLMesh* uiMesh = (GLMesh*)uiManager->getUIMesh().get();
+	glBindVertexArray(uiMesh->getVAO());
+	glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
+	glBindVertexArray(0);
+}
+
+void GLPipeline::renderScene(Scene* scene) {
 	// cull entities here
 
 	// render entities
@@ -111,7 +120,7 @@ void GLPipeline::renderScene(const Scene* scene) {
 	WorldObject* obj = nullptr;
 	for (int i = 0; i < m_meshes.size(); i++) {
 		mesh = m_meshes[i];
-		obj = mesh->getParent();
+		obj = mesh->world_object();
 		for (int j = 0; j < mesh->getMeshes().size(); j++) {
 			GLMesh* m = (GLMesh*)mesh->getMeshes()[j].get();
 			const std::shared_ptr<Material> mat =
@@ -155,9 +164,9 @@ void GLPipeline::renderScene(const Scene* scene) {
 				GL_UNSIGNED_INT, 0);
 		}
 	}
-	for (int i = 0; i < scene->getChildren().size(); i++) {
+	for (int i = 0; i < scene->getChildrenScenes().size(); i++) {
 		// cull scene here
-		renderScene(scene->getChildren()[i]);
+		renderScene(scene->getChildrenScenes()[i]);
 	}
 }
 

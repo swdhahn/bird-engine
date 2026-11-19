@@ -6,7 +6,7 @@
 #define BIRD_CAMERA_H
 
 #include "../util/Math.h"
-#include "Entity.h"
+#include "WorldObject.h"
 
 namespace bird {
 
@@ -17,10 +17,13 @@ class WorldEnvironment {
 	WorldEnvironment() : clearColor(0, 0, 0) {}
 };
 
-class Camera : public Entity {
-   public:
+class Camera : public WorldObject {
+	BIRD_OBJECT(CAMERA)
+
 	Camera(uint32_t width, uint32_t height);
 	virtual ~Camera();
+
+	void enable();
 
 	const Matrix4& getPerspectiveMatrix() const;
 	void setWorldEnvironment(WorldEnvironment env);

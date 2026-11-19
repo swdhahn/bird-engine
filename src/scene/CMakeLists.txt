@@ -1,11 +1,10 @@
 add_library(
   scene OBJECT
+  Object.h
   Scene.cpp
   Scene.h
   WorldObject.cpp
   WorldObject.h
-  Entity.cpp
-  Entity.h
   Camera.cpp
   Camera.h
   Light.cpp

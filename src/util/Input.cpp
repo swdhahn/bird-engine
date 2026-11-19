@@ -42,7 +42,8 @@ std::string Action::getName() {
 	return m_name;
 }
 
-Input::Input(Window* window) : m_window(window) {
+Input::Input(Window* window)
+	: m_window(window), m_actions(std::vector<bird::Action>()) {
 	glfwSetCursorPosCallback(window->getGLFWWindow(), cursor_position_callback);
 	glfwSetMouseButtonCallback(window->getGLFWWindow(), mouse_button_callback);
 	glfwSetKeyCallback(window->getGLFWWindow(), key_callback);

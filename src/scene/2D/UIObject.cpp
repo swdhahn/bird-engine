@@ -2,6 +2,7 @@
 
 #include "../Application.h"
 #include "ScreenObject.h"
+#include "UIGeometry.h"
 #include "UIManager.h"
 
 namespace bird {
@@ -12,8 +13,25 @@ UIObject::UIObject(uint8_t drawableCount)
 	  m_enabled(true),
 	  m_bounds(0, 0),
 	  m_drawableCount(drawableCount),
-	  m_drawables(std::make_unique<UIDrawable[]>(drawableCount)) {}
+	  m_drawables(std::make_unique<UIDrawable[]>(drawableCount)),
+	  m_theme(defaultUITheme()),
+	  m_worldMatrix(1.0f) {}
 UIObject::~UIObject() {}
+
+void UIObject::updateWorldMatrix(const Matrix3& parentWorldMatrix) {
+	if (needsMatrixUpdate()) {
+		updateTransformationMatrix();
+	}
+	m_worldMatrix = parentWorldMatrix * m_transformMatrix;
+}
+
+const Matrix3& UIObject::getWorldMatrix() const {
+	return m_worldMatrix;
+}
+
+bool UIObject::containsPoint(const Vector2& screenPoint) const {
+	return ui::containsScreenPoint(m_worldMatrix, screenPoint);
+}
 
 bool UIObject::enabled() const {
 	return m_enabled;
