@@ -21,11 +21,12 @@ struct ScopedIsolateEntry {
 };
 }  // namespace
 
-DartScriptComponent::DartScriptComponent(BirdDartInitFn onInit,
-										 BirdDartProcessFn onProcess,
-										 BirdDartDeinitFn onDeinit)
+DartScriptComponent::DartScriptComponent(
+	BirdDartInitFn onInit, BirdDartProcessFn onProcess,
+	BirdDartPhysicsProcessFn onPhysicsProcess, BirdDartDeinitFn onDeinit)
 	: m_onInit(onInit),
 	  m_onProcess(onProcess),
+	  m_onPhysicsProcess(onPhysicsProcess),
 	  m_onDeinit(onDeinit),
 	  m_isolate(Dart_CurrentIsolate()) {}
 
@@ -40,6 +41,13 @@ void DartScriptComponent::process(float delta) {
 	if (m_onProcess) {
 		ScopedIsolateEntry guard(m_isolate);
 		m_onProcess(static_cast<void*>(world_object()), delta);
+	}
+}
+
+void DartScriptComponent::physicsProcess(float fixedDelta) {
+	if (m_onPhysicsProcess) {
+		ScopedIsolateEntry guard(m_isolate);
+		m_onPhysicsProcess(static_cast<void*>(world_object()), fixedDelta);
 	}
 }
 
@@ -69,8 +77,9 @@ extern "C" {
 
 BIRD_DART_C_API void* bird_DartScriptComponent_new(
 	BirdDartInitFn onInit, BirdDartProcessFn onProcess,
-	BirdDartDeinitFn onDeinit) {
-	return new bird::DartScriptComponent(onInit, onProcess, onDeinit);
+	BirdDartPhysicsProcessFn onPhysicsProcess, BirdDartDeinitFn onDeinit) {
+	return new bird::DartScriptComponent(onInit, onProcess, onPhysicsProcess,
+										 onDeinit);
 }
 
 }  // extern "C"
