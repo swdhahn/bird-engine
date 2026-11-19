@@ -6,6 +6,10 @@
 #include "../GLRenderState.h"
 #include "../GLRenderTargets.h"
 
+namespace bird {
+class ResourceManager;
+}
+
 namespace bird::gl {
 
 /**
@@ -14,7 +18,11 @@ namespace bird::gl {
  */
 class GLPostProcessPass {
    public:
-	GLPostProcessPass();
+	/**
+	 * Loads the pass's shader programs.
+	 * @param resources Shared cache through which the programs load.
+	 */
+	explicit GLPostProcessPass(ResourceManager& resources);
 
 	/**
 	 * @param screenWidth Default framebuffer width in pixels.

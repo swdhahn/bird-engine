@@ -58,35 +58,40 @@ class FrameBuffer {
 };
 
 /**
- * Fluent builder for creating offscreen FrameBuffer instances.
+ * Fluent builder for creating offscreen FrameBuffer instances. Every setter
+ * returns the builder for chaining; build() selects the active backend.
+ * @throws std::invalid_argument from setDepthAttachment() for a non-depth
+ *         texture.
  */
 class FrameBufferBuilder {
    public:
 	FrameBufferBuilder();
 
 	/** Sets explicit framebuffer dimensions in pixels. */
-	void setSize(uint32_t width, uint32_t height);
+	FrameBufferBuilder& setSize(uint32_t width, uint32_t height);
 
 	/** Scales current dimensions by a multiplier (e.g. 0.5f for half-res bloom). */
-	void scaleSize(float factor);
+	FrameBufferBuilder& scaleSize(float factor);
 
 	/** Adds a color texture attachment target. */
-	void addTextureAttachment(std::shared_ptr<Texture> textureAttachments);
+	FrameBufferBuilder& addTextureAttachment(
+		std::shared_ptr<Texture> textureAttachments);
 
 	/**
 	 * Attaches a sampleable depth texture (FORMAT_DEPTH24_STENCIL8 or
 	 * FORMAT_DEPTH32F) in place of a depth renderbuffer.
 	 */
-	void setDepthAttachment(std::shared_ptr<Texture> depthAttachment);
+	FrameBufferBuilder& setDepthAttachment(
+		std::shared_ptr<Texture> depthAttachment);
 
 	/** Binds a post-processing shader associated with this framebuffer. */
-	void setShader(std::shared_ptr<Shader> shader);
+	FrameBufferBuilder& setShader(std::shared_ptr<Shader> shader);
 
 	/** Appends FrameBufferOptions bitmask flags (e.g. FRAMEBUFFER_OPT_DEPTH). */
-	void addOpts(uint8_t opts);
+	FrameBufferBuilder& addOpts(uint8_t opts);
 
 	/** Instantiates the backend FrameBuffer. */
-	std::unique_ptr<FrameBuffer> build();
+	std::unique_ptr<FrameBuffer> build() const;
 
    private:
 	std::vector<std::shared_ptr<Texture>> m_textureAttachments;

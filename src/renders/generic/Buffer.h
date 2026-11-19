@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <variant>
 #include <stdexcept>
 
@@ -38,7 +39,7 @@ class Buffer {
 	 */
 	void initialize(std::unique_ptr<T[]> pData, size_t size) {
 		m_pData = std::move(pData);
-		m_rawBuffer->initialize((void*)pData.get(), size);
+		m_rawBuffer->initialize((void*)m_pData.get(), size);
 	}
 
 	/**
@@ -105,49 +106,99 @@ template <typename T, uint8_t t_attributeSize>
 Buffer<T, t_attributeSize>::~Buffer() {}
 
 /**
- * Factory creating a typed GPU buffer for the active graphics backend.
+ * Fluent builder for typed GPU buffers.
+ *
+ * Upload timing depends on the buffer's role:
+ * - Uniform buffers (BUFFER_UNIFORM) upload during build() and receive their
+ *   binding point, so the result is immediately usable.
+ * - Vertex and index streams stay CPU-side until the Mesh receiving them
+ *   uploads them, because attribute setup requires the mesh's vertex array
+ *   object to be bound.
  *
  * @tparam T Buffer element type.
- * @param mode Buffer usage and binding mode flags.
- * @param size Initial capacity in element count.
+ * @tparam t_attributeSize Component count per vertex attribute.
  */
 template <typename T, uint8_t t_attributeSize = 3>
-std::unique_ptr<Buffer<T, t_attributeSize>> createBuffer(BufferMode mode,
-														 size_t size) {
-	std::unique_ptr<RawBuffer> rb = nullptr;
+class BufferBuilder {
+   public:
+	/**
+	 * @param mode BufferMode flags, for example BUFFER_ARRAY | BUFFER_STAGED.
+	 */
+	explicit BufferBuilder(uint32_t mode)
+		: m_mode(static_cast<BufferMode>(mode)) {}
 
-	switch (CURRENT_GRAPHICS_PIPELINE) {
-		case GRAPHICS_PIPELINE_OPENGL:
-			rb = std::make_unique<bird::gl::GLBuffer>(mode, size, sizeof(T));
-			break;
-		default:
-			throw std::runtime_error(
-				"No other graphics pipelines currently support shaders...");
+	/**
+	 * Supplies initial contents; ownership passes to the buffer.
+	 * @param pData Host elements.
+	 * @param count Number of T elements in pData.
+	 */
+	BufferBuilder& data(std::unique_ptr<T[]> pData, size_t count) {
+		m_pData = std::move(pData);
+		m_count = count;
+		return *this;
 	}
 
-	return std::make_unique<bird::Buffer<T, t_attributeSize>>(std::move(rb));
-}
-
-/**
- * Factory creating a typed GPU buffer initialized with host memory.
- */
-template <typename T, uint8_t t_attributeSize = 3>
-std::unique_ptr<Buffer<T, t_attributeSize>> createBuffer(
-	BufferMode mode, std::unique_ptr<T[]> pData, size_t size) {
-	std::unique_ptr<RawBuffer> rb = nullptr;
-
-	switch (CURRENT_GRAPHICS_PIPELINE) {
-		case GRAPHICS_PIPELINE_OPENGL:
-			rb = std::make_unique<bird::gl::GLBuffer>(mode, pData.get(), size,
-													  sizeof(T));
-			break;
-		default:
-			throw std::runtime_error(
-				"No other graphics pipelines currently support shaders...");
+	/**
+	 * Reserves storage without initial contents.
+	 * @param count Number of T elements.
+	 */
+	BufferBuilder& capacity(size_t count) {
+		m_pData.reset();
+		m_count = count;
+		return *this;
 	}
-	return std::make_unique<bird::Buffer<T, t_attributeSize>>(std::move(pData),
-															  std::move(rb));
-}
+
+	/**
+	 * Sets the uniform block binding index.
+	 * @param bindingPoint Index matching the shader's binding qualifier.
+	 * @throws std::logic_error when the mode lacks BUFFER_UNIFORM.
+	 */
+	BufferBuilder& bindingPoint(uint32_t bindingPoint) {
+		if ((m_mode & BUFFER_UNIFORM) == 0) {
+			throw std::logic_error(
+				"BufferBuilder: a binding point requires BUFFER_UNIFORM.");
+		}
+		m_bindingPoint = bindingPoint;
+		return *this;
+	}
+
+	/**
+	 * Creates the buffer for the active backend, consuming the staged data.
+	 * @return The buffer; uploaded already when it is a uniform buffer.
+	 * @throws std::runtime_error when the backend lacks buffer support.
+	 */
+	std::unique_ptr<Buffer<T, t_attributeSize>> build() {
+		std::unique_ptr<RawBuffer> raw;
+		switch (CURRENT_GRAPHICS_PIPELINE) {
+			case GRAPHICS_PIPELINE_OPENGL:
+				raw = m_pData ? std::make_unique<gl::GLBuffer>(
+									m_mode, m_pData.get(), m_count, sizeof(T))
+							  : std::make_unique<gl::GLBuffer>(m_mode, m_count,
+															   sizeof(T));
+				break;
+			default:
+				throw std::runtime_error(
+					"BufferBuilder: the active graphics pipeline lacks buffer "
+					"support.");
+		}
+		auto buffer =
+			m_pData
+				? std::make_unique<Buffer<T, t_attributeSize>>(
+					  std::move(m_pData), std::move(raw))
+				: std::make_unique<Buffer<T, t_attributeSize>>(std::move(raw));
+		if ((m_mode & BUFFER_UNIFORM) != 0) {
+			if (m_bindingPoint) buffer->setBindingPoint(*m_bindingPoint);
+			buffer->initialize();
+		}
+		return buffer;
+	}
+
+   private:
+	BufferMode m_mode;
+	std::unique_ptr<T[]> m_pData;
+	size_t m_count = 0;
+	std::optional<uint32_t> m_bindingPoint;
+};
 
 }  // namespace bird
 

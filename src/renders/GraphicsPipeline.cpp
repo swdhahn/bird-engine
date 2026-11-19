@@ -36,11 +36,10 @@ GraphicsPipeline::~GraphicsPipeline() {
 void GraphicsPipeline::initializeGraphicSpecifics() {
 	std::unique_ptr<GlobalUBOData[]> globalUBOData =
 		std::make_unique<GlobalUBOData[]>(1);
-	m_globalUBO = createBuffer<GlobalUBOData>(
-		static_cast<BufferMode>(BUFFER_UNIFORM | BUFFER_STAGED),
-		std::move(globalUBOData), 1);
-	m_globalUBO->setBindingPoint(UBO_BINDING_GLOBAL);
-	m_globalUBO->initialize();
+	m_globalUBO = BufferBuilder<GlobalUBOData>(BUFFER_UNIFORM | BUFFER_STAGED)
+					  .data(std::move(globalUBOData), 1)
+					  .bindingPoint(UBO_BINDING_GLOBAL)
+					  .build();
 
 	const float vertices[] = {
 		-1.0f, 1.0f,  0.0f,	 // 0: Top-Left
@@ -71,18 +70,19 @@ void GraphicsPipeline::initializeGraphicSpecifics() {
 		std::make_unique<uint32_t[]>(sizeof(uint32_t) * 6);
 	memcpy(ind.get(), indices, sizeof(uint32_t) * 6);
 
-	std::unique_ptr<bird::Buffer<float>> vertexBuffer = createBuffer<float>(
-		static_cast<bird::BufferMode>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY),
-		std::move(vert), 3 * 4);
+	std::unique_ptr<bird::Buffer<float>> vertexBuffer =
+		BufferBuilder<float>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY)
+			.data(std::move(vert), 3 * 4)
+			.build();
 	std::unique_ptr<bird::Buffer<float, 2>> texCoordBuffer =
-		createBuffer<float, 2>(static_cast<bird::BufferMode>(
-								   bird::BUFFER_STAGED | bird::BUFFER_ARRAY),
-							   std::move(tex), 2 * 4);
+		BufferBuilder<float, 2>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY)
+			.data(std::move(tex), 2 * 4)
+			.build();
 	std::unique_ptr<bird::Buffer<uint32_t>> indicesBuffer =
-		createBuffer<uint32_t>(
-			static_cast<bird::BufferMode>(bird::BUFFER_STAGED |
-										  bird::BUFFER_ELEMENT_ARRAY),
-			std::move(ind), 6);
+		BufferBuilder<uint32_t>(bird::BUFFER_STAGED |
+								bird::BUFFER_ELEMENT_ARRAY)
+			.data(std::move(ind), 6)
+			.build();
 	s_quad_mesh = MeshBuilder()
 					  .setIndexBuffer(std::move(indicesBuffer))
 					  .setVertexBuffer(std::move(vertexBuffer))

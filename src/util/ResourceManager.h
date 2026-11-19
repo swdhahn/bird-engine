@@ -59,7 +59,7 @@ class ResourceManager {
 	 * @param path File path to the image or .bird texture asset.
 	 * @return Shared pointer to the GPU Texture.
 	 */
-	std::shared_ptr<Texture> loadTexture(std::string path);
+	std::shared_ptr<Texture> loadTexture(const std::string& path);
 
 	/**
 	 * Loads a texture holding color data authored in sRGB (albedo, emissive),
@@ -68,24 +68,37 @@ class ResourceManager {
 	 * @param path File path to the baked .bird texture asset.
 	 * @return Shared pointer to the GPU Texture, or nullptr when missing.
 	 */
-	std::shared_ptr<Texture> loadColorTexture(std::string path);
+	std::shared_ptr<Texture> loadColorTexture(const std::string& path);
 
 	/**
 	 * Loads a 3D model, decomposing it into individual meshes and caching them.
 	 * @param path File path to the 3D model (.obj, .glb, .fbx).
 	 * @return Vector of shared Mesh instances.
 	 */
-	std::vector<std::shared_ptr<Mesh>> loadMesh(std::string path);
+	std::vector<std::shared_ptr<Mesh>> loadMesh(const std::string& path);
 
 	/**
-	 * Compiles or retrieves a cached shader pipeline from builder configuration.
+	 * Compiles a shader program, or returns the cached program with the same
+	 * ordered stage files.
+	 * @param builder Stage configuration; see ShaderBuilder::cacheKey().
+	 * @return Shared program.
+	 * @throws std::logic_error when the builder holds no stage.
 	 */
-	std::shared_ptr<Shader> loadShader(ShaderBuilder& builder);
+	std::shared_ptr<Shader> loadShader(const ShaderBuilder& builder);
+
+	/**
+	 * Loads a vertex/fragment program; equivalent to the builder overload.
+	 * @param vertexPath Vertex stage path.
+	 * @param fragmentPath Fragment stage path.
+	 * @return Shared program.
+	 */
+	std::shared_ptr<Shader> loadShader(const std::string& vertexPath,
+									   const std::string& fragmentPath);
 
 	/**
 	 * Loads material parameters and texture maps from disk.
 	 */
-	std::shared_ptr<Material> loadMaterial(std::string path);
+	std::shared_ptr<Material> loadMaterial(const std::string& path);
 
 	/**
 	 * Loads a font baked by BuildTools from <path>.bird; cached per path.
@@ -93,7 +106,7 @@ class ResourceManager {
 	 * @return The loaded font, or nullptr when the baked file is missing.
 	 * @throws std::runtime_error when the baked file is truncated.
 	 */
-	std::shared_ptr<Font> loadFont(std::string path);
+	std::shared_ptr<Font> loadFont(const std::string& path);
 
 	void loadSound(std::string path);
 	void loadCustom(std::string path);

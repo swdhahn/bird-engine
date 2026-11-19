@@ -11,6 +11,10 @@
 #include "../GLRenderState.h"
 #include "../GLShader.h"
 
+namespace bird {
+class ResourceManager;
+}
+
 namespace bird::gl {
 
 /**
@@ -20,8 +24,12 @@ namespace bird::gl {
  */
 class GLShadowPass {
    public:
-	/** @param settings Atlas sizes; fixed for the pass's lifetime. */
-	explicit GLShadowPass(const ShadowSettings& settings);
+	/**
+	 * Allocates the atlases and loads the caster program.
+	 * @param resources Shared cache through which the program loads.
+	 * @param settings Atlas sizes; fixed for the pass's lifetime.
+	 */
+	GLShadowPass(ResourceManager& resources, const ShadowSettings& settings);
 
 	/**
 	 * Uploads the plan's GPU block and renders every planned view.

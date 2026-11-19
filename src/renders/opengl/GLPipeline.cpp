@@ -43,37 +43,33 @@ void GLPipeline::init() {
 
 	glEnable(GL_DEBUG_OUTPUT);
 
-	ui_shader = ShaderBuilder()
-					.attachShaderFile("assets/shaders/ui.vert", VERTEX)
-					.attachShaderFile("assets/shaders/ui.frag", FRAGMENT)
-					.create();
+	if (RESOURCE_MANAGER == nullptr) {
+		throw std::logic_error(
+			"GLPipeline::init: construct the ResourceManager first.");
+	}
+	ResourceManager& resources = *RESOURCE_MANAGER;
+	ui_shader = resources.loadShader("assets/shaders/ui.vert",
+									 "assets/shaders/ui.frag");
 
 	m_uiRenderer = std::make_unique<GLUIRenderer>();
-	m_debugLineShader =
-		ShaderBuilder()
-			.attachShaderFile("assets/shaders/debug_line.vert", VERTEX)
-			.attachShaderFile("assets/shaders/debug_line.frag", FRAGMENT)
-			.create();
+	m_debugLineShader = resources.loadShader("assets/shaders/debug_line.vert",
+											 "assets/shaders/debug_line.frag");
 	m_debugRenderer = std::make_unique<GLDebugRenderer>();
-	m_postProcessShader =
-		ShaderBuilder()
-			.attachShaderFile("assets/shaders/passthrough.vert", VERTEX)
-			.attachShaderFile("assets/shaders/fxaa.frag", FRAGMENT)
-			.create();
+	m_postProcessShader = resources.loadShader(
+		"assets/shaders/passthrough.vert", "assets/shaders/fxaa.frag");
 
 	auto lights = std::make_unique<LightsUBOData[]>(1);
-	m_lightsBlock = createBuffer<LightsUBOData>(
-		static_cast<BufferMode>(BUFFER_UNIFORM | BUFFER_STAGED |
-								BUFFER_DYNAMIC),
-		std::move(lights), 1);
-	m_lightsBlock->setBindingPoint(UBO_BINDING_LIGHTS);
-	m_lightsBlock->initialize();
+	m_lightsBlock = BufferBuilder<LightsUBOData>(BUFFER_UNIFORM |
+												 BUFFER_STAGED | BUFFER_DYNAMIC)
+						.data(std::move(lights), 1)
+						.bindingPoint(UBO_BINDING_LIGHTS)
+						.build();
 
-	m_shadowPass = std::make_unique<GLShadowPass>(ShadowSettings{});
-	m_gBufferPass = std::make_unique<GLGBufferPass>();
-	m_lightingPass = std::make_unique<GLLightingPass>();
-	m_forwardPass = std::make_unique<GLForwardPass>();
-	m_postProcessPass = std::make_unique<GLPostProcessPass>();
+	m_shadowPass = std::make_unique<GLShadowPass>(resources, ShadowSettings{});
+	m_gBufferPass = std::make_unique<GLGBufferPass>(resources);
+	m_lightingPass = std::make_unique<GLLightingPass>(resources);
+	m_forwardPass = std::make_unique<GLForwardPass>(resources);
+	m_postProcessPass = std::make_unique<GLPostProcessPass>(resources);
 	createRenderTargets();
 }
 

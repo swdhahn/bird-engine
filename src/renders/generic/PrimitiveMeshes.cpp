@@ -71,12 +71,14 @@ std::shared_ptr<Mesh> buildPositionMesh(const PrimitiveGeometry& geometry) {
 	std::memcpy(indices.get(), geometry.indices.data(),
 				geometry.indices.size() * sizeof(uint32_t));
 	return MeshBuilder()
-		.setVertexBuffer(createBuffer<float>(
-			static_cast<BufferMode>(BUFFER_STAGED | BUFFER_ARRAY),
-			std::move(positions), geometry.positions.size()))
-		.setIndexBuffer(createBuffer<uint32_t>(
-			static_cast<BufferMode>(BUFFER_STAGED | BUFFER_ELEMENT_ARRAY),
-			std::move(indices), geometry.indices.size()))
+		.setVertexBuffer(
+			BufferBuilder<float>(BUFFER_STAGED | BUFFER_ARRAY)
+				.data(std::move(positions), geometry.positions.size())
+				.build())
+		.setIndexBuffer(
+			BufferBuilder<uint32_t>(BUFFER_STAGED | BUFFER_ELEMENT_ARRAY)
+				.data(std::move(indices), geometry.indices.size())
+				.build())
 		.build();
 }
 

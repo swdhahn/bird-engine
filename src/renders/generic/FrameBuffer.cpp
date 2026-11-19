@@ -34,39 +34,47 @@ std::shared_ptr<Shader> FrameBuffer::getShader() {
 	return m_shader;
 }
 
-void FrameBufferBuilder::addTextureAttachment(
+FrameBufferBuilder& FrameBufferBuilder::addTextureAttachment(
 	std::shared_ptr<Texture> textureAttachment) {
 	m_textureAttachments.emplace_back(textureAttachment);
+	return *this;
 }
 
-void FrameBufferBuilder::setDepthAttachment(
+FrameBufferBuilder& FrameBufferBuilder::setDepthAttachment(
 	std::shared_ptr<Texture> depthAttachment) {
 	if (depthAttachment && !isDepthFormat(depthAttachment->getFormat())) {
 		throw std::invalid_argument(
 			"FrameBufferBuilder: depth attachment requires a depth format.");
 	}
 	m_depthAttachment = std::move(depthAttachment);
+	return *this;
 }
 
-void FrameBufferBuilder::setShader(std::shared_ptr<Shader> shader) {
+FrameBufferBuilder& FrameBufferBuilder::setShader(
+	std::shared_ptr<Shader> shader) {
 	m_shader = shader;
+	return *this;
 }
 
-void FrameBufferBuilder::setSize(uint32_t width, uint32_t height) {
+FrameBufferBuilder& FrameBufferBuilder::setSize(uint32_t width,
+												uint32_t height) {
 	m_width = width;
 	m_height = height;
+	return *this;
 }
 
-void FrameBufferBuilder::scaleSize(float factor) {
+FrameBufferBuilder& FrameBufferBuilder::scaleSize(float factor) {
 	m_width = std::max(1u, static_cast<uint32_t>(m_width * factor));
 	m_height = std::max(1u, static_cast<uint32_t>(m_height * factor));
+	return *this;
 }
 
-void FrameBufferBuilder::addOpts(uint8_t opts) {
+FrameBufferBuilder& FrameBufferBuilder::addOpts(uint8_t opts) {
 	m_opts |= opts;
+	return *this;
 }
 
-std::unique_ptr<FrameBuffer> FrameBufferBuilder::build() {
+std::unique_ptr<FrameBuffer> FrameBufferBuilder::build() const {
 	std::unique_ptr<FrameBuffer> ptr = nullptr;
 
 	switch (CURRENT_GRAPHICS_PIPELINE) {

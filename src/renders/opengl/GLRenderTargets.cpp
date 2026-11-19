@@ -6,7 +6,7 @@ namespace {
 
 std::shared_ptr<Texture> makeTarget(uint32_t width, uint32_t height,
 									TextureFormat format, bool srgb = false) {
-	TextureBuilder builder(nullptr, width, height, format);
+	TextureBuilder builder(width, height, format);
 	builder.clampToEdge();
 	if (srgb) builder.srgb();
 	return builder.build();

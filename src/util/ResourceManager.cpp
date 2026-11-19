@@ -16,17 +16,16 @@ ResourceManager::~ResourceManager() {
 }
 
 void ResourceManager::init() {
-	m_defaultShader = loadShader(
-		ShaderBuilder()
-			.attachShaderFile("assets/shaders/default.vert", VERTEX)
-			.attachShaderFile("assets/shaders/default.frag", FRAGMENT));
+	m_defaultShader = loadShader("assets/shaders/default.vert",
+								 "assets/shaders/default.frag");
 }
 
-std::shared_ptr<Texture> ResourceManager::loadTexture(std::string path) {
+std::shared_ptr<Texture> ResourceManager::loadTexture(const std::string& path) {
 	return loadTextureWithColorSpace(path, false);
 }
 
-std::shared_ptr<Texture> ResourceManager::loadColorTexture(std::string path) {
+std::shared_ptr<Texture> ResourceManager::loadColorTexture(
+	const std::string& path) {
 	return loadTextureWithColorSpace(path, true);
 }
 
@@ -76,7 +75,7 @@ std::shared_ptr<Texture> ResourceManager::loadTextureWithColorSpace(
 	return tex;
 }
 
-std::shared_ptr<Font> ResourceManager::loadFont(std::string path) {
+std::shared_ptr<Font> ResourceManager::loadFont(const std::string& path) {
 	auto& fonts = m_resources[ASSET_TYPE_FONT];
 	if (fonts.find(path) != fonts.end()) {
 		return std::static_pointer_cast<Font>(fonts.at(path));
@@ -124,7 +123,8 @@ std::shared_ptr<Font> ResourceManager::loadFont(std::string path) {
 	return font;
 }
 
-std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
+std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(
+	const std::string& path) {
 	if (m_meshes.find(path) != m_meshes.end()) {
 		return m_meshes.at(path);
 	}
@@ -198,9 +198,9 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 			file.read(reinterpret_cast<char*>(values.get()),
 					  floatCount * sizeof(float));
 			if (extra == 0 && floatsPer == 4 && count == vertexCount) {
-				tangents = createBuffer<float, 4>(
-					static_cast<BufferMode>(BUFFER_STAGED | BUFFER_ARRAY),
-					std::move(values), floatCount);
+				tangents = BufferBuilder<float, 4>(BUFFER_STAGED | BUFFER_ARRAY)
+							   .data(std::move(values), floatCount)
+							   .build();
 			}
 		}
 		if (!file) {
@@ -208,24 +208,24 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 		}
 
 		std::unique_ptr<bird::Buffer<uint32_t>> indexBuffer =
-			createBuffer<uint32_t>(
-				static_cast<bird::BufferMode>(bird::BUFFER_STAGED |
-											  bird::BUFFER_ELEMENT_ARRAY),
-				std::move(indices), indexCount);
+			BufferBuilder<uint32_t>(bird::BUFFER_STAGED |
+									bird::BUFFER_ELEMENT_ARRAY)
+				.data(std::move(indices), indexCount)
+				.build();
 		std::unique_ptr<bird::Buffer<float>> vertexBuffer =
-			createBuffer<float>(static_cast<bird::BufferMode>(
-									bird::BUFFER_STAGED | bird::BUFFER_ARRAY),
-								std::move(vertices), vertexCount * vertexSize);
+			BufferBuilder<float>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY)
+				.data(std::move(vertices), vertexCount * vertexSize)
+				.build();
 		std::unique_ptr<bird::Buffer<float>> normalBuffer =
-			createBuffer<float>(static_cast<bird::BufferMode>(
-									bird::BUFFER_STAGED | bird::BUFFER_ARRAY),
-								std::move(normals), normalCount * normalSize);
+			BufferBuilder<float>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY)
+				.data(std::move(normals), normalCount * normalSize)
+				.build();
 
 		std::unique_ptr<bird::Buffer<float, 2>> textureCoordBuffer =
-			createBuffer<float, 2>(
-				static_cast<bird::BufferMode>(bird::BUFFER_STAGED |
-											  bird::BUFFER_ARRAY),
-				std::move(textureCoords), textureCoordCount * textureCoordSize);
+			BufferBuilder<float, 2>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY)
+				.data(std::move(textureCoords),
+					  textureCoordCount * textureCoordSize)
+				.build();
 
 		bird::MeshBuilder mb = bird::MeshBuilder();
 
@@ -251,7 +251,8 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {
 	return meshes;
 }
 
-std::shared_ptr<Material> ResourceManager::loadMaterial(std::string path) {
+std::shared_ptr<Material> ResourceManager::loadMaterial(
+	const std::string& path) {
 	if (m_resources[ASSET_TYPE_MATERIAL].find(path) !=
 		m_resources[ASSET_TYPE_MATERIAL].end()) {
 		return std::static_pointer_cast<Material>(
@@ -312,20 +313,23 @@ std::shared_ptr<Material> ResourceManager::loadMaterial(std::string path) {
 	return mat;
 }
 
-std::shared_ptr<Shader> ResourceManager::loadShader(ShaderBuilder& builder) {
-	// Programs are keyed by every attached stage, since one vertex stage is
-	// commonly paired with several fragment stages.
-	std::string cacheKey;
-	for (const auto& stage : builder.m_shaderFiles) {
-		cacheKey += stage.first + "|";
-	}
+std::shared_ptr<Shader> ResourceManager::loadShader(
+	const ShaderBuilder& builder) {
+	const std::string cacheKey = builder.cacheKey();
 	auto& shaders = m_resources[ASSET_TYPE_SHADER];
-	if (shaders.find(cacheKey) != shaders.end()) {
-		return std::static_pointer_cast<Shader>(shaders.at(cacheKey));
+	if (auto cached = shaders.find(cacheKey); cached != shaders.end()) {
+		return std::static_pointer_cast<Shader>(cached->second);
 	}
-	std::shared_ptr<Shader> shader = builder.create();
+	std::shared_ptr<Shader> shader = builder.build();
 	addResource(cacheKey, shader, ASSET_TYPE_SHADER);
 	return shader;
+}
+
+std::shared_ptr<Shader> ResourceManager::loadShader(
+	const std::string& vertexPath, const std::string& fragmentPath) {
+	return loadShader(ShaderBuilder()
+						  .attachShaderFile(vertexPath, VERTEX)
+						  .attachShaderFile(fragmentPath, FRAGMENT));
 }
 
 void ResourceManager::loadSound(std::string path) {}

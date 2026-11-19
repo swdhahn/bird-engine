@@ -19,6 +19,10 @@ TextureBuilder::TextureBuilder(uint8_t* pData, uint32_t width, uint32_t height,
 							   TextureFormat format)
 	: m_pData(pData), m_width(width), m_height(height), m_format(format) {}
 
+TextureBuilder::TextureBuilder(uint32_t width, uint32_t height,
+							   TextureFormat format)
+	: TextureBuilder(nullptr, width, height, format) {}
+
 TextureBuilder& TextureBuilder::generateMipMaps() {
 	m_generateMipMaps = true;
 	return *this;
@@ -162,26 +166,6 @@ uint32_t Texture::getWidth() {
 }
 uint32_t Texture::getHeight() {
 	return m_height;
-}
-
-TextureBuilder Texture::create(const std::string& path) {
-	int32_t width, height, channels;
-	uint8_t* pixels =
-		stbi_load(path.c_str(), &width, &height, &channels, STBI_rgb_alpha);
-	if (pixels == nullptr) {
-		throw std::runtime_error("Texture::create: cannot load " + path);
-	}
-	// STBI_rgb_alpha forces four channels regardless of the source layout.
-	const size_t byteCount = static_cast<size_t>(width) * height * 4;
-	uint8_t* nPixels = new uint8_t[byteCount];
-	memcpy(nPixels, pixels, byteCount);
-	stbi_image_free(pixels);
-	return create(nPixels, width, height, FORMAT_8RGBA).generateMipMaps();
-}
-
-TextureBuilder Texture::create(uint8_t* data, uint32_t width, uint32_t height,
-							   TextureFormat type) {
-	return TextureBuilder(data, width, height, type);
 }
 
 }  // namespace bird

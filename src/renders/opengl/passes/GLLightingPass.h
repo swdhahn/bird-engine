@@ -8,6 +8,10 @@
 #include "../GLRenderState.h"
 #include "../GLRenderTargets.h"
 
+namespace bird {
+class ResourceManager;
+}
+
 namespace bird::gl {
 
 /**
@@ -22,7 +26,11 @@ namespace bird::gl {
  */
 class GLLightingPass {
    public:
-	GLLightingPass();
+	/**
+	 * Loads the pass's shader programs.
+	 * @param resources Shared cache through which the programs load.
+	 */
+	explicit GLLightingPass(ResourceManager& resources);
 
 	/**
 	 * @param lights Frame lights, with shadow indices already assigned.

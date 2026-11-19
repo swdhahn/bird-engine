@@ -4,6 +4,7 @@
 
 #include <cmath>
 
+#include "../../../util/ResourceManager.h"
 #include "../../generic/PrimitiveMeshes.h"
 #include "../GLDrawCommands.h"
 
@@ -23,17 +24,12 @@ Matrix4 lightVolumeTransform(const LightSnapshot& light) {
 					  Vector3(light.range));
 }
 
-GLLightingPass::GLLightingPass() {
+GLLightingPass::GLLightingPass(ResourceManager& resources) {
 	m_directionalShader =
-		ShaderBuilder()
-			.attachShaderFile("assets/shaders/passthrough.vert", VERTEX)
-			.attachShaderFile("assets/shaders/light_directional.frag", FRAGMENT)
-			.create();
-	m_volumeShader =
-		ShaderBuilder()
-			.attachShaderFile("assets/shaders/light_volume.vert", VERTEX)
-			.attachShaderFile("assets/shaders/light_volume.frag", FRAGMENT)
-			.create();
+		resources.loadShader("assets/shaders/passthrough.vert",
+							 "assets/shaders/light_directional.frag");
+	m_volumeShader = resources.loadShader("assets/shaders/light_volume.vert",
+										  "assets/shaders/light_volume.frag");
 	m_sphere = buildPositionMesh(generateLightSphere(16, 12));
 	m_cone = buildPositionMesh(generateLightCone(24));
 }

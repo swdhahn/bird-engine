@@ -8,6 +8,10 @@
 #include "../GLRenderState.h"
 #include "../GLRenderTargets.h"
 
+namespace bird {
+class ResourceManager;
+}
+
 namespace bird::gl {
 
 /**
@@ -16,7 +20,11 @@ namespace bird::gl {
  */
 class GLGBufferPass {
    public:
-	GLGBufferPass();
+	/**
+	 * Loads the pass's shader programs.
+	 * @param resources Shared cache through which the programs load.
+	 */
+	explicit GLGBufferPass(ResourceManager& resources);
 
 	/**
 	 * @param items Deferred bucket, sorted by material then depth.

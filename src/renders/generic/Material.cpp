@@ -148,11 +148,11 @@ Buffer<MaterialUBOData>* Material::acquireUniformBuffer() {
 	if (!m_uniformBuffer) {
 		auto initial = std::make_unique<MaterialUBOData[]>(1);
 		initial[0] = buildGpuData();
-		m_uniformBuffer = createBuffer<MaterialUBOData>(
-			static_cast<BufferMode>(BUFFER_UNIFORM | BUFFER_STAGED),
-			std::move(initial), 1);
-		m_uniformBuffer->setBindingPoint(UBO_BINDING_MATERIAL);
-		m_uniformBuffer->initialize();
+		m_uniformBuffer =
+			BufferBuilder<MaterialUBOData>(BUFFER_UNIFORM | BUFFER_STAGED)
+				.data(std::move(initial), 1)
+				.bindingPoint(UBO_BINDING_MATERIAL)
+				.build();
 		m_gpuDirty = false;
 	} else if (m_gpuDirty) {
 		MaterialUBOData data = buildGpuData();

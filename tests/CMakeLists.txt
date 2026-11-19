@@ -3,7 +3,7 @@ add_executable(Bird_unit_tests
   UITextEditTest.cpp UIWidgetTest.cpp UIDrawListTest.cpp UIPopupTest.cpp
   UIInputsV2Test.cpp UITextAreaTest.cpp UIMenuTest.cpp UIListTreeTest.cpp
   UIColorTest.cpp UIRichInputsTest.cpp PhysicsTest.cpp
-  MaterialTest.cpp RenderQueueTest.cpp ShadowTest.cpp)
+  MaterialTest.cpp RenderQueueTest.cpp ShadowTest.cpp ResourceConventionTest.cpp)
 target_include_directories(Bird_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(Bird_unit_tests PRIVATE Bird_core GTest::gtest_main)
 

@@ -2,15 +2,14 @@
 
 #include <GL/glew.h>
 
+#include "../../../util/ResourceManager.h"
 #include "../GLDrawCommands.h"
 
 namespace bird::gl {
 
-GLGBufferPass::GLGBufferPass() {
-	m_shader = ShaderBuilder()
-				   .attachShaderFile("assets/shaders/mesh.vert", VERTEX)
-				   .attachShaderFile("assets/shaders/gbuffer.frag", FRAGMENT)
-				   .create();
+GLGBufferPass::GLGBufferPass(ResourceManager& resources) {
+	m_shader = resources.loadShader("assets/shaders/mesh.vert",
+									"assets/shaders/gbuffer.frag");
 }
 
 void GLGBufferPass::execute(const std::vector<RenderItem>& items,

@@ -2,16 +2,15 @@
 
 #include <GL/glew.h>
 
+#include "../../../util/ResourceManager.h"
 #include "../GLDrawCommands.h"
 
 namespace bird::gl {
 
-GLPostProcessPass::GLPostProcessPass() {
+GLPostProcessPass::GLPostProcessPass(ResourceManager& resources) {
 	m_tonemapShader =
-		ShaderBuilder()
-			.attachShaderFile("assets/shaders/passthrough.vert", VERTEX)
-			.attachShaderFile("assets/shaders/tonemap.frag", FRAGMENT)
-			.create();
+		resources.loadShader("assets/shaders/passthrough.vert",
+							 "assets/shaders/tonemap.frag");
 }
 
 void GLPostProcessPass::execute(GLRenderTargets& targets, uint32_t screenWidth,

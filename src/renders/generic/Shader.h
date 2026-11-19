@@ -25,12 +25,13 @@ class Shader;
 
 /**
  * Fluent builder for linking multi-stage GPU shader programs.
+ *
+ * Shader stages are disk assets, so programs are normally obtained through
+ * ResourceManager::loadShader, which caches them by cacheKey(). Calling
+ * build() directly yields an uncached program.
  */
 class ShaderBuilder {
    public:
-	/** Compiles and links the configured shader files into a GPU Shader program. */
-	std::unique_ptr<Shader> create();
-
 	/**
 	 * Attaches a shader stage file to be compiled into the program pipeline.
 	 * @param fileName Path to the shader source file (or baked .bird shader).
@@ -39,6 +40,21 @@ class ShaderBuilder {
 	ShaderBuilder& attachShaderFile(std::string fileName,
 									const ShaderPipeline shaderStage);
 
+	/**
+	 * Identifies the program by its ordered stage paths.
+	 * @return Every stage path, each followed by '|'.
+	 */
+	std::string cacheKey() const;
+
+	/**
+	 * Compiles and links the attached stages using the active backend.
+	 * @return The linked program.
+	 * @throws std::logic_error when no stage is attached.
+	 * @throws std::runtime_error when the backend lacks shader support.
+	 */
+	std::shared_ptr<Shader> build() const;
+
+   private:
 	std::vector<std::pair<std::string, ShaderPipeline>> m_shaderFiles;
 };
 

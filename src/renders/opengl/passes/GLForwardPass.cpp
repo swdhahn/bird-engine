@@ -2,15 +2,14 @@
 
 #include <GL/glew.h>
 
+#include "../../../util/ResourceManager.h"
 #include "../GLDrawCommands.h"
 
 namespace bird::gl {
 
-GLForwardPass::GLForwardPass() {
-	m_shader = ShaderBuilder()
-				   .attachShaderFile("assets/shaders/mesh.vert", VERTEX)
-				   .attachShaderFile("assets/shaders/forward.frag", FRAGMENT)
-				   .create();
+GLForwardPass::GLForwardPass(ResourceManager& resources) {
+	m_shader = resources.loadShader("assets/shaders/mesh.vert",
+									"assets/shaders/forward.frag");
 }
 
 void GLForwardPass::execute(const RenderQueue& queue, GLRenderTargets& targets,

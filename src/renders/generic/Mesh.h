@@ -67,13 +67,12 @@ class Mesh : public Resource {
 	AABB m_localBounds;
 };
 
+/**
+ * Fluent builder assembling a Mesh from vertex streams built in code.
+ * Model files on disk load through ResourceManager::loadMesh instead.
+ */
 class MeshBuilder {
    public:
-	/**
-	 * This creates the mesh object.
-	 * @return - You can call build() when
-	 * you are ready to create the mesh.
-	 */
 	MeshBuilder();
 	~MeshBuilder();
 
@@ -86,8 +85,9 @@ class MeshBuilder {
 	MeshBuilder& setMaterial(std::shared_ptr<Material> material);
 
 	/**
-	 * This creates the mesh object and returns it.
-	 * @return - the new Mesh object
+	 * Creates the mesh for the active backend and uploads its streams.
+	 * @return The new mesh.
+	 * @throws std::runtime_error when the backend lacks mesh support.
 	 */
 	std::shared_ptr<Mesh> build();
 

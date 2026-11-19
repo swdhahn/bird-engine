@@ -2,6 +2,7 @@
 
 #include <GL/glew.h>
 
+#include "../../../util/ResourceManager.h"
 #include "../GLDrawCommands.h"
 
 namespace bird::gl {
@@ -9,7 +10,7 @@ namespace bird::gl {
 namespace {
 
 std::shared_ptr<Texture> makeAtlas(uint32_t size) {
-	return TextureBuilder(nullptr, size, size, FORMAT_DEPTH32F)
+	return TextureBuilder(size, size, FORMAT_DEPTH32F)
 		.clampToEdge()
 		.depthCompare()
 		.build();
@@ -17,7 +18,8 @@ std::shared_ptr<Texture> makeAtlas(uint32_t size) {
 
 }  // namespace
 
-GLShadowPass::GLShadowPass(const ShadowSettings& settings)
+GLShadowPass::GLShadowPass(ResourceManager& resources,
+						   const ShadowSettings& settings)
 	: m_settings(settings) {
 	m_directionalDepth = makeAtlas(settings.directionalAtlasSize);
 	m_localDepth = makeAtlas(settings.localAtlasSize);
@@ -29,19 +31,15 @@ GLShadowPass::GLShadowPass(const ShadowSettings& settings)
 		settings.localAtlasSize, settings.localAtlasSize,
 		std::vector<std::shared_ptr<Texture>>{}, m_localDepth, nullptr,
 		FRAMEBUFFER_OPT_NONE);
-	m_depthShader =
-		ShaderBuilder()
-			.attachShaderFile("assets/shaders/shadow_depth.vert", VERTEX)
-			.attachShaderFile("assets/shaders/shadow_depth.frag", FRAGMENT)
-			.create();
+	m_depthShader = resources.loadShader("assets/shaders/shadow_depth.vert",
+										 "assets/shaders/shadow_depth.frag");
 
 	auto initial = std::make_unique<ShadowUBOData[]>(1);
-	m_shadowBlock = createBuffer<ShadowUBOData>(
-		static_cast<BufferMode>(BUFFER_UNIFORM | BUFFER_STAGED |
-								BUFFER_DYNAMIC),
-		std::move(initial), 1);
-	m_shadowBlock->setBindingPoint(UBO_BINDING_SHADOWS);
-	m_shadowBlock->initialize();
+	m_shadowBlock = BufferBuilder<ShadowUBOData>(BUFFER_UNIFORM |
+												 BUFFER_STAGED | BUFFER_DYNAMIC)
+						.data(std::move(initial), 1)
+						.bindingPoint(UBO_BINDING_SHADOWS)
+						.build();
 }
 
 void GLShadowPass::execute(const ShadowPlan& plan,

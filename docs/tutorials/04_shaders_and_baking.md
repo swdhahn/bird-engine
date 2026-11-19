@@ -111,7 +111,7 @@ Engine passes select their own shaders: a material describes a surface,
 and the renderer chooses the G-buffer or forward program from the
 material's domain and blend mode (see
 [Rendering Pipeline](../architecture/rendering_pipeline.md)). Custom
-programs load through `ShaderBuilder` for passes of your own:
+programs load through `ResourceManager::loadShader` for passes of your own:
 
 ```cpp
 #include <renders/generic/Material.h>
@@ -119,12 +119,10 @@ programs load through `ShaderBuilder` for passes of your own:
 #include <scene/components/MeshComponent.h>
 #include <util/ResourceManager.h>
 
-// 1. Build and load a custom shader program (cached per stage list).
+// 1. Load a custom shader program (cached per ordered stage list). Programs
+//    with more stages pass a bird::ShaderBuilder to the same function.
 auto customShader = resource_manager()->loadShader(
-    bird::ShaderBuilder()
-        .attachShaderFile("assets/shaders/custom.vert", bird::VERTEX)
-        .attachShaderFile("assets/shaders/custom.frag", bird::FRAGMENT)
-);
+    "assets/shaders/custom.vert", "assets/shaders/custom.frag");
 
 // 2. Create and configure a PBR material. Color textures load as sRGB.
 auto wood = bird::Material::create();

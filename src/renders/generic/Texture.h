@@ -57,12 +57,30 @@ constexpr bool isFloatColorFormat(uint32_t format) {
 class Texture;
 
 /**
- * Fluent builder for configuring and uploading 2D GPU textures.
+ * Fluent builder for configuring and uploading 2D GPU textures created in
+ * code. Image files on disk load through ResourceManager::loadTexture or
+ * loadColorTexture instead, which cache by path.
  */
 class TextureBuilder {
    public:
+	/**
+	 * Describes a texture initialized from pixel memory.
+	 * @param pData Pixel bytes matching the format; ownership passes to the
+	 *        texture. May be nullptr for uninitialized storage.
+	 * @param width Width in pixels.
+	 * @param height Height in pixels.
+	 * @param format Storage format.
+	 */
 	TextureBuilder(uint8_t* pData, uint32_t width, uint32_t height,
 				   TextureFormat format);
+
+	/**
+	 * Describes an uninitialized texture, such as a render target.
+	 * @param width Width in pixels.
+	 * @param height Height in pixels.
+	 * @param format Storage format.
+	 */
+	TextureBuilder(uint32_t width, uint32_t height, TextureFormat format);
 
 	/** Enables automatic mipmap level generation on GPU upload. */
 	TextureBuilder& generateMipMaps();
@@ -114,13 +132,6 @@ class Texture : public Resource {
 
 	void read() override;
 	void write() override;
-
-	/** Creates a builder loading an image from disk. */
-	static TextureBuilder create(const std::string& path);
-
-	/** Creates a builder from in-memory raw pixel data. */
-	static TextureBuilder create(uint8_t* data, uint32_t width, uint32_t height,
-								 TextureFormat format);
 
 	const TextureFormat& getFormat();
 	uint32_t getWidth();
