@@ -33,6 +33,17 @@ target_link_libraries(BuildTools PRIVATE BirdBake)
 # --- NEW: Dart API Generator Target ---
 
 # 1. Find LLVM and Clang (Requires libclang-dev / llvm-dev installed on host)
+# Homebrew's llvm is keg-only (not symlinked into /opt/homebrew), so point
+# CMake at it explicitly when LLVM_DIR/Clang_DIR aren't already set.
+if(APPLE AND NOT LLVM_DIR)
+  execute_process(COMMAND brew --prefix llvm
+      OUTPUT_VARIABLE LLVM_BREW_PREFIX
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET)
+  if(LLVM_BREW_PREFIX)
+    list(APPEND CMAKE_PREFIX_PATH "${LLVM_BREW_PREFIX}")
+  endif()
+endif()
 find_package(LLVM REQUIRED CONFIG)
 find_package(Clang REQUIRED CONFIG)
 

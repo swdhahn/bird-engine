@@ -13,26 +13,47 @@ This guide covers everything you need to build Bird Engine and its asset baking 
 
 ### Platform Dependencies
 
-#### Linux (Ubuntu / Debian / Arch / Fedora)
-On Linux, Bird Engine requires X11 development headers, OpenGL, and LLVM/Clang (`libclang`) for the Dart FFI binding generator:
+#### Windows
+Requires Visual Studio 2019 or 2022 with the "Desktop development with C++" workload installed (this provides the MSVC compiler, CMake, and the Windows SDK). LLVM/Clang (`libclang`) is needed for the Dart FFI binding generator; the easiest way to get it is via [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/) or the [official LLVM installer](https://github.com/llvm/llvm-project/releases):
+```powershell
+winget install LLVM.LLVM
+```
+If CMake can't locate it automatically, point it at the install with `-DLLVM_DIR=<path>\lib\cmake\llvm -DClang_DIR=<path>\lib\cmake\clang` when configuring.
+
+#### macOS
+Requires the Xcode Command Line Tools (for the system compiler, linker, and frameworks), [Homebrew](https://brew.sh/), CMake, and LLVM — Apple's Clang does not ship `libclang`/`libclang-cpp` dev headers, which the Dart FFI binding generator (`BuildTools`) needs:
 ```bash
-# Ubuntu / Debian
+xcode-select --install
+brew install cmake llvm
+```
+Homebrew's `llvm` is keg-only (not symlinked onto your `PATH`), but `libs/CMakeLists.txt`/`src/build-tools/CMakeLists.txt` locate it automatically via `brew --prefix llvm`. If you have multiple LLVM installs or Homebrew in a non-standard prefix, you can still override it explicitly:
+```bash
+cmake -B build -DLLVM_DIR="$(brew --prefix llvm)/lib/cmake/llvm" -DClang_DIR="$(brew --prefix llvm)/lib/cmake/clang"
+```
+> [!NOTE]
+> On Apple Silicon (arm64) Macs, `libs/CMakeLists.txt` builds Assimp against the system `zlib` instead of Assimp's bundled `contrib/zlib` snapshot, since that snapshot's legacy `fdopen()` shim collides with the declaration in the macOS SDK's `<stdio.h>` under newer Clang/SDK versions. No action is needed — this is handled automatically based on `CMAKE_SYSTEM_PROCESSOR`.
+
+#### Linux (Debian / Ubuntu)
+```bash
 sudo apt-get install build-essential cmake libx11-dev libxrandr-dev libxinerama-dev \
     libxcursor-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxxf86vm-dev \
     libclang-dev llvm-dev
+```
 
-# Arch Linux
+#### Linux (Arch)
+```bash
 sudo pacman -S base-devel cmake libx11 libxrandr libxinerama libxcursor libxi mesa clang llvm
 ```
 
-#### macOS
-Requires Xcode Command Line Tools:
+#### Linux (Fedora)
 ```bash
-xcode-select --install
+sudo dnf groupinstall "Development Tools"
+sudo dnf install cmake libX11-devel libXrandr-devel libXinerama-devel \
+    libXcursor-devel libXi-devel mesa-libGL-devel mesa-libGLU-devel \
+    libXxf86vm-devel clang-devel llvm-devel
 ```
 
-#### Windows
-Requires Visual Studio 2019 or 2022 with the "Desktop development with C++" workload installed.
+On all Linux distributions, Bird Engine requires X11 development headers, OpenGL, and LLVM/Clang (`libclang`) for the Dart FFI binding generator, as shown above.
 
 ---
 
