@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.23)
+cmake_minimum_required(VERSION 3.5)
 
 project(GenerateLibraries)
 set(CMAKE_CXX_STANDARD 17)
@@ -10,19 +10,20 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 set(DEPS_INSTALL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/install")
 
+
 if(MSVC)
-    # Visual Studio / MSVC specific
-    set(LIB_EXT ".lib")
-    set(LIB_PREFIX "")      # MSVC often outputs "volk.lib"
-    set(BUILD_SUBDIR "/$<CONFIG>") # Handles /Debug or /Release subfolders
-    set(COMPILER_WARNING_FLAGS "") # Clear GCC flags for MSVC
-    message(STATUS "Configuring for MSVC (Windows)")
+	# Visual Studio / MSVC specific
+	set(LIB_EXT ".lib")
+	set(LIB_PREFIX "")      # MSVC often outputs "volk.lib"
+	set(BUILD_SUBDIR "/$<CONFIG>") # Handles /Debug or /Release subfolders
+	set(COMPILER_WARNING_FLAGS "") # Clear GCC flags for MSVC
+	message(STATUS "Configuring for MSVC (Windows)")
 else()
-    # Linux / Mac / Unix / MinGW
-    set(LIB_EXT ".a")
-    set(LIB_PREFIX "lib")
-    set(BUILD_SUBDIR "")
-    set(COMPILER_WARNING_FLAGS "-Werror -Wdeprecated-declarations")
+	# Linux / Mac / Unix / MinGW
+	set(LIB_EXT ".a")
+	set(LIB_PREFIX "lib")
+	set(BUILD_SUBDIR "")
+	set(COMPILER_WARNING_FLAGS "-DCMAKE_CXX_FLAGS=-Wno-error -Wdeprecated-declarations")
 endif()
 
 # ==============================================================================
@@ -30,55 +31,55 @@ endif()
 # ==============================================================================
 # Detect OS
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(DART_OS "windows")
+	set(DART_OS "windows")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    set(DART_OS "macos")
+	set(DART_OS "macos")
 else()
-    set(DART_OS "linux")
+	set(DART_OS "linux")
 endif()
 
 # Detect Architecture
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|aarch64|arm64")
-    set(DART_ARCH "arm64")
+	set(DART_ARCH "arm64")
 else()
-    set(DART_ARCH "x64")
+	set(DART_ARCH "x64")
 endif()
 
 set(DART_SDK_VERSION "3.8.2")
 set(DART_SDK_URL "https://storage.googleapis.com/dart-archive/channels/stable/release/${DART_SDK_VERSION}/sdk/dartsdk-${DART_OS}-${DART_ARCH}-release.zip")
 
 ExternalProject_Add(
-  DART_SDK
-  URL ${DART_SDK_URL}
-  PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/DART_SDK
-  # No build or configure steps required for pre-compiled binaries
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ""
-  # Copy the extracted dart-sdk folder to our install directory
-  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR> ${DEPS_INSTALL_DIR}/dart-sdk
+		DART_SDK
+		URL ${DART_SDK_URL}
+		PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/DART_SDK
+		# No build or configure steps required for pre-compiled binaries
+		CONFIGURE_COMMAND ""
+		BUILD_COMMAND ""
+		# Copy the extracted dart-sdk folder to our install directory
+		INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR> ${DEPS_INSTALL_DIR}/dart-sdk
 )
 
 # ==============================================================================
 # DART SHARED LIBRARY (Embedded Dart VM matching Dart 3.8.2)
 # ==============================================================================
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(DART_DLL_PLATFORM "win")
+	set(DART_DLL_PLATFORM "win")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    set(DART_DLL_PLATFORM "macos")
+	set(DART_DLL_PLATFORM "macos")
 else()
-    set(DART_DLL_PLATFORM "linux")
+	set(DART_DLL_PLATFORM "linux")
 endif()
 
 set(DART_SHARED_LIB_VERSION "0.2.0")
 set(DART_SHARED_LIB_URL "https://github.com/fuzzybinary/dart_shared_library/releases/download/${DART_SHARED_LIB_VERSION}/lib-${DART_DLL_PLATFORM}.zip")
 
 ExternalProject_Add(
-  DART_SHARED_LIB
-  URL ${DART_SHARED_LIB_URL}
-  PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/DART_SHARED_LIB
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ""
-  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR> ${DEPS_INSTALL_DIR}/dart_shared_library
+		DART_SHARED_LIB
+		URL ${DART_SHARED_LIB_URL}
+		PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/DART_SHARED_LIB
+		CONFIGURE_COMMAND ""
+		BUILD_COMMAND ""
+		INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR> ${DEPS_INSTALL_DIR}/dart_shared_library
 )
 
 # ==============================================================================
@@ -86,139 +87,142 @@ ExternalProject_Add(
 # ==============================================================================
 
 ExternalProject_Add(
-  GLM
-  URL "https://github.com/g-truc/glm/archive/refs/tags/0.9.9.8.tar.gz"
-  PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/GLM
-  BUILD_COMMAND ""
-  INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR>/glm
-                  ${DEPS_INSTALL_DIR}/include/glm)
+		GLM
+		URL "https://github.com/g-truc/glm/archive/refs/tags/0.9.9.8.tar.gz"
+		PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/GLM
+		BUILD_COMMAND ""
+		CONFIGURE_COMMAND ""
+		CMAKE_ARGS -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+		INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR>/glm
+																		${DEPS_INSTALL_DIR}/include/glm)
 
 set(GLFW_APPLE_FLAG "")
 if(APPLE)
-    set(GLFW_APPLE_FLAG "-DCMAKE_C_FLAGS=-fblocks")
+	set(GLFW_APPLE_FLAG "-DCMAKE_C_FLAGS=-fblocks")
 endif()
 ExternalProject_Add(
-  GLFW
-  URL "https://github.com/glfw/glfw/archive/refs/tags/3.3.8.tar.gz"
-  PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/GLFW
-  CMAKE_ARGS -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_DOCS=OFF
-             -DGLFW_BUILD_TESTS=OFF ${GLFW_APPLE_FLAG}
-             "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}")
+		GLFW
+		URL "https://github.com/glfw/glfw/archive/refs/tags/3.3.8.tar.gz"
+		PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/GLFW
+		CMAKE_ARGS -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_DOCS=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+													-DGLFW_BUILD_TESTS=OFF ${GLFW_APPLE_FLAG}
+													"-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}")
 
 ExternalProject_Add(
-  GLEW
-  URL "https://github.com/Perlmint/glew-cmake/archive/refs/tags/glew-cmake-2.2.0.tar.gz"
-  PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/GLEW
-  CMAKE_ARGS -DONLY_LIBS=ON -Dglew-cmake_BUILD_SHARED=OFF "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}")
+		GLEW
+		URL "https://github.com/Perlmint/glew-cmake/archive/refs/tags/glew-cmake-2.2.0.tar.gz"
+		PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/GLEW
+		CMAKE_ARGS -DONLY_LIBS=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -Dglew-cmake_BUILD_SHARED=OFF "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}")
 
 ExternalProject_Add(
-  ASSIMP
-  URL "https://github.com/assimp/assimp/archive/refs/tags/v5.3.1.tar.gz"
-  PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/ASSIMP
-  CMAKE_ARGS -DASSIMP_BUILD_TESTS=OFF 
-             -DBUILD_SHARED_LIBS=OFF 
-             -DASSIMP_BUILD_ZLIB=ON 
-             -DASSIMP_WARNINGS_AS_ERRORS=OFF 
-             -DASSIMP_INSTALL_PDB=OFF
-             "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}" 
-             ${COMPILER_WARNING_FLAGS})
+		ASSIMP
+		URL "https://github.com/assimp/assimp/archive/refs/tags/v5.3.1.tar.gz"
+		PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/ASSIMP
+		CMAKE_ARGS -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DASSIMP_BUILD_TESTS=OFF
+													-DBUILD_SHARED_LIBS=OFF
+													-DASSIMP_BUILD_ZLIB=ON
+													-DASSIMP_WARNINGS_AS_ERRORS=OFF
+													-DASSIMP_INSTALL_PDB=OFF
+													"-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}"
+													${COMPILER_WARNING_FLAGS})
 
 ExternalProject_Add(
-        VULKAN
-        URL "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.3.266.tar.gz"
-        PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/VULKAN
-        BUILD_COMMAND ""
-        INSTALL_COMMAND
-        ${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR>/include
-        ${DEPS_INSTALL_DIR}/include)
+								VULKAN
+								URL "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.3.266.tar.gz"
+								PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/VULKAN
+								BUILD_COMMAND ""
+								CONFIGURE_COMMAND ""
+								INSTALL_COMMAND
+								${CMAKE_COMMAND} -E copy_directory <SOURCE_DIR>/include
+								${DEPS_INSTALL_DIR}/include)
 
 ExternalProject_Add(
-  VOLK
-  URL "https://github.com/zeux/volk/archive/refs/tags/1.3.250.tar.gz"
-  PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/VOLK
-  CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}" -DVOLK_INSTALL=ON "-DCMAKE_C_FLAGS=-I${DEPS_INSTALL_DIR}/include"
-  DEPENDS VULKAN
-  INSTALL_COMMAND
-    ${CMAKE_COMMAND} -E copy <BINARY_DIR>${BUILD_SUBDIR}/${LIB_PREFIX}volk${LIB_EXT}
-    ${DEPS_INSTALL_DIR}/lib/${LIB_PREFIX}volk${LIB_EXT}
-  COMMAND ${CMAKE_COMMAND} -E copy <SOURCE_DIR>/volk.h
-          ${DEPS_INSTALL_DIR}/include/volk.h)
+		VOLK
+		URL "https://github.com/zeux/volk/archive/refs/tags/1.3.250.tar.gz"
+		PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/VOLK
+		CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}" -DVOLK_INSTALL=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5 "-DCMAKE_C_FLAGS=-I${DEPS_INSTALL_DIR}/include"
+		DEPENDS VULKAN
+		INSTALL_COMMAND
+				${CMAKE_COMMAND} -E copy <BINARY_DIR>${BUILD_SUBDIR}/${LIB_PREFIX}volk${LIB_EXT}
+				${DEPS_INSTALL_DIR}/lib/${LIB_PREFIX}volk${LIB_EXT}
+		COMMAND ${CMAKE_COMMAND} -E copy <SOURCE_DIR>/volk.h
+										${DEPS_INSTALL_DIR}/include/volk.h)
 
 ExternalProject_Add(
-  SPIRV_CROSS
-  URL "https://github.com/KhronosGroup/SPIRV-Cross/archive/refs/tags/MoltenVK-1.1.5.tar.gz"
-  PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/SPIRV_CROSS
-  CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}"
-             -DSPIRV_CROSS_ENABLE_TESTS=OFF -DSPIRV_CROSS_CLI=OFF)
+		SPIRV_CROSS
+		URL "https://github.com/KhronosGroup/SPIRV-Cross/archive/refs/tags/MoltenVK-1.1.5.tar.gz"
+		PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/SPIRV_CROSS
+		CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}" -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+													-DSPIRV_CROSS_ENABLE_TESTS=OFF -DSPIRV_CROSS_CLI=OFF)
 
 # --- Shaderc Setup ---
 set(SHADERC_EXTRA_ARGS "")
 if(MSVC)
-    # Ensure Shaderc links against the Dynamic Runtime DLL
-    set(SHADERC_EXTRA_ARGS "-DSHADERC_ENABLE_SHARED_CRT=ON")
+	# Ensure Shaderc links against the Dynamic Runtime DLL
+	set(SHADERC_EXTRA_ARGS "-DSHADERC_ENABLE_SHARED_CRT=ON")
 endif()
 ExternalProject_Add(
-  SHADERC
-  URL "https://github.com/google/shaderc/archive/refs/tags/v2025.4.tar.gz"
-  PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/SHADERC
-  CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}"
-             -DSHADERC_SKIP_TESTS=TRUE
-             -DSHADERC_SKIP_EXAMPLES=TRUE
-             -DSHADERC_SKIP_COPYRIGHT_CHECK=TRUE
-             -DSHADERC_ENABLE_GLSLANG_COMBINED=ON
-             -DSHADERC_ENABLE_SPIRV_TOOLS_COMBINED=ON
-             -DZLIB_USE_STATIC_LIBS=OFF
-             ${SHADERC_EXTRA_ARGS})
+		SHADERC
+		URL "https://github.com/google/shaderc/archive/refs/tags/v2025.4.tar.gz"
+		PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/SHADERC
+		CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}" -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+													-DSHADERC_SKIP_TESTS=TRUE
+													-DSHADERC_SKIP_EXAMPLES=TRUE
+													-DSHADERC_SKIP_COPYRIGHT_CHECK=TRUE
+													-DSHADERC_ENABLE_GLSLANG_COMBINED=ON
+													-DSHADERC_ENABLE_SPIRV_TOOLS_COMBINED=ON
+													-DZLIB_USE_STATIC_LIBS=OFF
+													${SHADERC_EXTRA_ARGS})
 
 ExternalProject_Add_Step(
-  SHADERC git-deps
-  DEPENDERS configure
-  DEPENDEES patch
-  WORKING_DIRECTORY <SOURCE_DIR>
-  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/SHADERC/src/SHADERC/utils/git-sync-deps
-  COMMENT "Downloading Dependencies")
+		SHADERC git-deps
+		DEPENDERS configure
+		DEPENDEES patch
+		WORKING_DIRECTORY <SOURCE_DIR>
+		COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/SHADERC/src/SHADERC/utils/git-sync-deps
+		COMMENT "Downloading Dependencies")
 
 # --- Jolt Setup ---
 set(JOLT_EXTRA_ARGS "")
 if(MSVC)
-    # Force Jolt to use /MD (Dynamic) to match your main project
-    set(JOLT_EXTRA_ARGS "-DUSE_STATIC_MSVC_RUNTIME_LIBRARY=OFF")
+	# Force Jolt to use /MD (Dynamic) to match your main project
+	set(JOLT_EXTRA_ARGS "-DUSE_STATIC_MSVC_RUNTIME_LIBRARY=OFF")
 endif()
 ExternalProject_Add(
-  JOLT
-  URL "https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v5.4.0.tar.gz"
-  PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/JOLT
-  SOURCE_SUBDIR Build
-  CMAKE_ARGS -DCROSS_PLATFORM_DETERMINISTIC=ON -DTARGET_UNIT_TESTS=OFF -DTARGET_HELLO_WORLD=OFF -DTARGET_PERFORMANCE_TEST=OFF -DTARGET_SAMPLES=OFF -DTARGET_VIEWER=OFF ${JOLT_EXTRA_ARGS} -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-             # Release: matches the JPH_* definitions Jolt exports to Debug and
-             # Release consumers (profiler, debug renderer), so layouts agree.
-             -DCMAKE_BUILD_TYPE=Release
-             # RTTI: engine classes derive from Jolt interfaces (debug renderer)
-             # and use dynamic_cast, so typeinfo must exist in the library.
-             -DCPP_RTTI_ENABLED=ON
-             "-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}")
+		JOLT
+		URL "https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v5.4.0.tar.gz"
+		PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/JOLT
+		SOURCE_SUBDIR Build
+		CMAKE_ARGS -DCROSS_PLATFORM_DETERMINISTIC=ON -DTARGET_UNIT_TESTS=OFF -DTARGET_HELLO_WORLD=OFF -DTARGET_PERFORMANCE_TEST=OFF -DTARGET_SAMPLES=OFF -DTARGET_VIEWER=OFF ${JOLT_EXTRA_ARGS} -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+													# Release: matches the JPH_* definitions Jolt exports to Debug and
+													# Release consumers (profiler, debug renderer), so layouts agree.
+													-DCMAKE_BUILD_TYPE=Release
+													# RTTI: engine classes derive from Jolt interfaces (debug renderer)
+													# and use dynamic_cast, so typeinfo must exist in the library.
+													-DCPP_RTTI_ENABLED=ON
+													"-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}")
 
 
 
 
 if(APPLE)
-    # 1. Identify the target name (Standard GLEW uses 'libglew_static' or 'glew_s')
-    set(TARGET_TO_FIX "libglew_static")
+	# 1. Identify the target name (Standard GLEW uses 'libglew_static' or 'glew_s')
+	set(TARGET_TO_FIX "libglew_static")
 
-    # 2. Check if target exists (safety check)
-    if(TARGET ${TARGET_TO_FIX})
-        # 3. Get the current list of interface libraries
-        get_target_property(CURRENT_LIBS ${TARGET_TO_FIX} INTERFACE_LINK_LIBRARIES)
+	# 2. Check if target exists (safety check)
+	if(TARGET ${TARGET_TO_FIX})
+		# 3. Get the current list of interface libraries
+		get_target_property(CURRENT_LIBS ${TARGET_TO_FIX} INTERFACE_LINK_LIBRARIES)
 
-        if(CURRENT_LIBS)
-            # 4. Remove AGL framework from the list
-            list(FILTER CURRENT_LIBS EXCLUDE REGEX "AGL\\.framework")
+		if(CURRENT_LIBS)
+			# 4. Remove AGL framework from the list
+			list(FILTER CURRENT_LIBS EXCLUDE REGEX "AGL\\.framework")
 
-            # 5. Write the cleaned list back to the target
-            set_target_properties(${TARGET_TO_FIX} PROPERTIES
-                    INTERFACE_LINK_LIBRARIES "${CURRENT_LIBS}"
-            )
-            message(STATUS "Fixed GLEW: Removed deprecated AGL dependency from ${TARGET_TO_FIX}")
-        endif()
-    endif()
+			# 5. Write the cleaned list back to the target
+			set_target_properties(${TARGET_TO_FIX} PROPERTIES
+																				INTERFACE_LINK_LIBRARIES "${CURRENT_LIBS}"
+												)
+			message(STATUS "Fixed GLEW: Removed deprecated AGL dependency from ${TARGET_TO_FIX}")
+		endif()
+	endif()
 endif()
