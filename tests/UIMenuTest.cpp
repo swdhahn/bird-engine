@@ -131,3 +131,15 @@ TEST(UIMenuBar, ClickOpensHoverSwitchesKeysMove) {
 	EXPECT_EQ(bar->getOpenMenu(), UIMenuBar::kNone);
 	EXPECT_EQ(h.ui.getPopupCount(), 0u);
 }
+
+TEST(UIContextMenu, WorksOnNonInteractiveDescendants) {
+	// Gallery layout: an interactive panel containing a plain page.
+	UIHarness h;
+	auto* panel = h.root()->add<UIPanel>();
+	panel->setSize({300, 300});
+	auto* page = panel->add<UIObject>();
+	page->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
+	page->setContextMenu({UIMenuItem::action("Reset", [] {})});
+	h.rightClick(h.at(page));
+	EXPECT_NE(topPanel(h), nullptr);
+}

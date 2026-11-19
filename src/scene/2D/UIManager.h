@@ -121,6 +121,8 @@ class UIManager {
 	/** Calls node->tick(dt) every frame until it returns false. */
 	void animate(UIObject* node);
 
+	/** Deepest node under a point that has a context menu, or null. */
+	UIObject* findContextMenuTarget(Vector2 position) const;
 	/** Topmost interactive node under a point, honouring the modal. */
 	UIObject* hitTest(Vector2 position) const;
 	/** Topmost interactive, enabled, visible node of a subtree. */

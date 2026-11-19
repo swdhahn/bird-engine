@@ -2,14 +2,20 @@
 #include <scene/2D/UIButton.h>
 #include <scene/2D/UICheckBox.h>
 #include <scene/2D/UIDialog.h>
+#include <scene/2D/UIDropdown.h>
 #include <scene/2D/UILabel.h>
+#include <scene/2D/UIMenuBar.h>
+#include <scene/2D/UINumberField.h>
 #include <scene/2D/UIPanel.h>
 #include <scene/2D/UIProgressBar.h>
+#include <scene/2D/UIRadioGroup.h>
 #include <scene/2D/UIScrollView.h>
 #include <scene/2D/UISlider.h>
 #include <scene/2D/UIStack.h>
 #include <scene/2D/UITabView.h>
+#include <scene/2D/UITextArea.h>
 #include <scene/2D/UITextBox.h>
+#include <scene/2D/UIToggle.h>
 #include <scene/2D/UIWindow.h>
 #include <scene/2D/UIManager.h>
 #include <scene/Camera.h>
@@ -121,8 +127,18 @@ void buildLayoutTab(UIObject* page) {
 	column->setAlign(UIAlign::Stretch);
 	column->setGap(8.0f);
 
+	page->setContextMenu(
+		{UIMenuItem::action("Reset layout", [] {}),
+		 UIMenuItem::toggle("Show guides", true),
+		 UIMenuItem::separator(),
+		 UIMenuItem::submenu("Align", {UIMenuItem::action("Left", [] {}),
+									   UIMenuItem::action("Center", [] {}),
+									   UIMenuItem::action("Right", [] {})}),
+		 UIMenuItem::action("Delete", [] {}).disabled()});
+	column->add<UILabel>("Right-click this page for a context menu")
+		->setColor(Vector4(0.55f, 0.75f, 1.0f, 1.0f));
+
 	const std::pair<const char*, UIJustify> modes[] = {
-		{"Start", UIJustify::Start},
 		{"Center", UIJustify::Center},
 		{"End", UIJustify::End},
 		{"SpaceBetween", UIJustify::SpaceBetween}};
@@ -146,6 +162,94 @@ void buildLayoutTab(UIObject* page) {
 		box->setHeight(UISizeRule::fixed(20.0f));
 		box->setBackground(Vector4(0.2f, 0.7f, 0.45f, 0.6f));
 	}
+
+	// Cross-axis anchors inside a horizontal stack, plus an Absolute badge.
+	column->add<UILabel>("cross-axis anchors + absolute badge")
+		->setColor(Vector4(0.6f, 0.62f, 0.66f, 1.0f));
+	auto* anchored = column->add<UIStack>(UIAxis::Horizontal);
+	anchored->setHeight(UISizeRule::fixed(56.0f));
+	anchored->setPadding(UIInsets::all(4.0f));
+	const Vector2 anchors[] = {UIAlignment::TopLeft, UIAlignment::CenterLeft,
+							   UIAlignment::BottomLeft};
+	for (const Vector2& anchor : anchors) {
+		auto* box = anchored->add<UIPanel>();
+		box->setSize(Vector2(48.0f, 16.0f));
+		box->setAnchor(anchor).setPivot(anchor);
+		box->setBackground(Vector4(0.8f, 0.5f, 0.1f, 0.7f));
+	}
+	auto* tall = anchored->add<UIPanel>();
+	tall->setWidth(UISizeRule::fixed(48.0f));
+	tall->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomLeft);
+	tall->setBackground(Vector4(0.8f, 0.5f, 0.1f, 0.4f));
+	auto* badge = anchored->add<UILabel>("NEW");
+	badge->setLayoutMode(UILayoutMode::Absolute);
+	badge->setAnchor(UIAlignment::TopRight).setPivot(UIAlignment::TopRight);
+	badge->setColor(Vector4(1.0f, 0.4f, 0.4f, 1.0f));
+}
+
+void buildChoicesTab(UIObject* page) {
+	auto* column = page->add<UIStack>(UIAxis::Vertical);
+	column->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
+	column->setAlign(UIAlign::Stretch);
+	column->setGap(10.0f);
+	auto* status = column->add<UILabel>("Pick some settings");
+	status->setColor(Vector4(0.55f, 0.75f, 1.0f, 1.0f));
+
+	auto* quality = row(column, "Quality")->add<UIDropdown>(
+		std::vector<std::string>{"Low", "Medium", "High", "Ultra"});
+	quality->setWidth(UISizeRule::fill());
+	quality->setSelectedIndex(2);
+	quality->setOnChanged([status, quality](size_t) {
+		status->setText("Quality: " + quality->getSelectedText());
+	});
+
+	std::vector<std::string> resolutions;
+	for (int w : {640, 800, 1024, 1152, 1280, 1366, 1440, 1600, 1680, 1920,
+				  2048, 2560, 3440, 3840}) {
+		resolutions.push_back(std::to_string(w) + " px wide");
+	}
+	auto* resolution = row(column, "Width")->add<UIDropdown>(resolutions);
+	resolution->setWidth(UISizeRule::fill());
+	resolution->setPlaceholder("Choose a resolution");
+
+	auto* modes = column->add<UIRadioGroup>(UIAxis::Horizontal);
+	modes->setGap(14.0f);
+	modes->addOption("Windowed");
+	modes->addOption("Borderless");
+	modes->addOption("Fullscreen");
+	modes->setSelected(0);
+
+	column->add<UIToggle>("V-Sync", true)->setOnChanged([status](bool on) {
+		status->setText(on ? "V-Sync on" : "V-Sync off");
+	});
+
+	auto* fov = row(column, "FOV")->add<UINumberField>(60.0, 120.0, 90.0);
+	fov->setTooltip("Arrows, wheel, or drag the steppers");
+	auto* sensitivity = row(column, "Mouse")->add<UINumberField>(0.1, 5.0, 1.0);
+	sensitivity->setStep(0.1).setPrecision(2);
+}
+
+void buildTextTab(UIObject* page) {
+	auto* column = page->add<UIStack>(UIAxis::Vertical);
+	column->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
+	column->setAlign(UIAlign::Stretch);
+	column->setGap(10.0f);
+	auto* password = row(column, "Password")->add<UITextBox>("hunter2");
+	password->setPassword(true);
+	password->setWidth(UISizeRule::fill());
+
+	auto* count = column->add<UILabel>("");
+	count->setColor(Vector4(0.6f, 0.62f, 0.66f, 1.0f));
+	auto* notes = column->add<UITextArea>(
+		"Multi-line text area. Long lines wrap at word boundaries, Enter "
+		"inserts a newline and Ctrl+Enter submits.\n\nUp and Down keep the "
+		"caret's column; PageUp, PageDown and the mouse wheel scroll.\n\n"
+		"Line 6\nLine 7\nLine 8\nLine 9\nLine 10");
+	notes->setVisibleLines(9);
+	notes->setOnChanged([count](const std::string& text) {
+		count->setText(std::to_string(text.size()) + " characters");
+	});
+	count->setText(std::to_string(notes->getText().size()) + " characters");
 }
 
 void buildScrollTab(UIObject* page) {
@@ -163,11 +267,13 @@ void buildScrollTab(UIObject* page) {
 }
 
 void openGalleryWindow(UIManager* ui) {
-	auto* window = ui->getRoot()->add<UIWindow>("UI Gallery", Vector2(440, 420));
-	window->setOffset(Vector2(40.0f, 130.0f));
+	auto* window = ui->getRoot()->add<UIWindow>("UI Gallery", Vector2(500, 470));
+	window->setOffset(Vector2(40.0f, 120.0f));
 	auto* tabs = window->getContent()->add<UITabView>();
 	tabs->setAnchors(UIAlignment::TopLeft, UIAlignment::BottomRight);
 	buildControlsTab(ui, tabs->addTab<UIObject>("Controls"));
+	buildChoicesTab(tabs->addTab<UIObject>("Choices"));
+	buildTextTab(tabs->addTab<UIObject>("Text"));
 	buildLayoutTab(tabs->addTab<UIObject>("Layout"));
 	buildScrollTab(tabs->addTab<UIObject>("Scroll"));
 }
@@ -178,7 +284,31 @@ void buildGallery(bird::UIManager* ui) {
 	using namespace bird;
 	auto* title = ui->getRoot()->add<UILabel>("Bird Engine");
 	title->setFontSize(56.0f);
-	title->setOffset(Vector2(40.0f, 40.0f));
+	title->setOffset(Vector2(40.0f, 44.0f));
+
+	// Menu bar stretched across the top edge.
+	auto* bar = ui->getRoot()->add<UIMenuBar>();
+	bar->setAnchors(UIAlignment::TopLeft, UIAlignment::TopRight);
+	bar->addMenu("File", {UIMenuItem::action("New scene", [] {}, "Ctrl+N"),
+						  UIMenuItem::action("Open...", [] {}, "Ctrl+O"),
+						  UIMenuItem::submenu("Open recent",
+											  {UIMenuItem::action("village.scene", [] {}),
+											   UIMenuItem::action("dungeon.scene", [] {})}),
+						  UIMenuItem::separator(),
+						  UIMenuItem::action("Save", [] {}, "Ctrl+S"),
+						  UIMenuItem::action("Export", [] {}).disabled()});
+	bar->addMenu("View", {UIMenuItem::toggle("Show grid", true),
+						  UIMenuItem::toggle("Wireframe", false),
+						  UIMenuItem::separator(),
+						  UIMenuItem::action("UI Gallery", [ui] {
+							  gallery::openGalleryWindow(ui);
+						  })});
+	bar->addMenu("Help", {UIMenuItem::action("About", [ui] {
+						  auto about = std::make_unique<UIDialog>(
+							  "Bird Engine", "GUI framework v2 demo.");
+						  about->addButton("Close");
+						  ui->pushModal(std::move(about));
+					  })});
 
 	// Anchored to the bottom-right corner; follows window resizes.
 	auto* reopen = ui->getRoot()->add<UIButton>("Open UI Gallery");

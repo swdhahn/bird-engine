@@ -20,7 +20,9 @@ UINumberField::UINumberField(double min, double max, double value)
 	UIInsets padding = getPadding();
 	padding.right += kStepperWidth;	 // steppers live in the right padding
 	setPadding(padding);
-	m_value = snap(value);
+	// Clamp only: snapping waits for setStep, so the default step cannot
+	// shift the requested value (e.g. 1.0 from a 0.1 minimum).
+	m_value = std::clamp(value, min, max);
 	refreshText();
 }
 

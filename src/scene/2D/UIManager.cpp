@@ -196,6 +196,25 @@ UIObject* UIManager::hitTest(Vector2 position) const {
 	return findTopmostAt(m_root.get(), position);
 }
 
+namespace {
+/** Deepest visible node under a point that has a context menu. */
+UIObject* deepestWithMenu(UIObject* node, const Vector2& point) {
+	if (!node->isVisible()) return nullptr;
+	auto& children = node->getChildren();
+	for (auto it = children.rbegin(); it != children.rend(); ++it) {
+		if (UIObject* found = deepestWithMenu(it->get(), point)) return found;
+	}
+	return node->getContextMenu() && node->containsPoint(point) ? node : nullptr;
+}
+}  // namespace
+
+UIObject* UIManager::findContextMenuTarget(Vector2 position) const {
+	// Context menus may live on non-interactive containers (pages, stacks),
+	// so search by geometry rather than walking up from the hit node.
+	if (UIObject* modal = getTopModal()) return deepestWithMenu(modal, position);
+	return deepestWithMenu(m_root.get(), position);
+}
+
 template <typename Handler>
 UIObject* UIManager::bubble(UIObject* node, Handler handler) {
 	for (; node; node = node->getParent()) {
@@ -250,12 +269,10 @@ void UIManager::mouseButton(UIMouseButton button, bool pressed,
 		}
 		setHovered(hit);
 		if (button == UIMouseButton::Right) {
-			for (UIObject* n = hit; n; n = n->getParent()) {
-				if (n->getContextMenu()) {
-					showContextMenu(n->getContextMenu(), position, n);
-					flushRemovals();
-					return;
-				}
+			if (UIObject* target = findContextMenuTarget(position)) {
+				showContextMenu(target->getContextMenu(), position, target);
+				flushRemovals();
+				return;
 			}
 		}
 		// Focus the nearest focusable ancestor; clicking elsewhere blurs.

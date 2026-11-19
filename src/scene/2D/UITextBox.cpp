@@ -214,6 +214,15 @@ void UITextBox::draw(UIDrawList& list) {
 	if (!font()) return;
 
 	const UIRect inner{getPadding().start(), contentSize()};
+	// Scroll can be computed before layout (zero width); settle it here:
+	// unfocused boxes show their start, focused ones never over-scroll.
+	if (!isFocused()) {
+		m_scrollX = 0.0f;
+	} else {
+		const float textWidth = font()->measureLine(displayText(), fontSize()).x;
+		m_scrollX = std::clamp(m_scrollX, 0.0f,
+							   std::max(textWidth - inner.size.x + 1.0f, 0.0f));
+	}
 	list.pushClip(inner);
 	const float textX = inner.position.x - m_scrollX;
 	const float lineHeight = font()->getLineHeight(fontSize());

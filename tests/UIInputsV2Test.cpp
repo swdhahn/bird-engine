@@ -167,3 +167,10 @@ TEST(UINumberField, WheelAndSteppersAndScrub) {
 TEST(UINumberField, RejectsEmptyRange) {
 	EXPECT_THROW(UINumberField(5.0, 5.0), std::invalid_argument);
 }
+
+TEST(UINumberField, InitialValueIsNotSnappedByTheDefaultStep) {
+	UINumberField field(0.1, 5.0, 1.0);
+	field.setStep(0.1).setPrecision(2);
+	EXPECT_DOUBLE_EQ(field.getValue(), 1.0);
+	EXPECT_EQ(field.getText(), "1.00");
+}
