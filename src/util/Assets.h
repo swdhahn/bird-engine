@@ -17,9 +17,8 @@ namespace bird {
 #define LETTER_OFFSET 26 + 26 + 2 + 1 + 10
 
 /**
- * The type of asset that is being loaded.
+ * Manages serialized asset indexing and incremental asset map metadata.
  */
-
 class AssetsLoader {
    public:
 	AssetsLoader() = default;
@@ -28,7 +27,7 @@ class AssetsLoader {
 	void init();
 
 	/**
-	 * Write loaded assets to the filesystem.
+	 * Flushes tracked asset metadata and binary records to the filesystem.
 	 */
 	void writeAssets();
 
@@ -36,38 +35,29 @@ class AssetsLoader {
 
    private:
 	/**
-	 * Create a map of assets. Where each file
-	 * has a structure but in binary such as:
-	 * each asset has a pair of (uint8_t, uint64_t, uint8_t)
-	 * where the uint8_t is the type of asset and
-	 * the uint64_t is the id of the asset. The last
-	 * uint8_t is the hashcode of the asset.
-	 *
-	 * We begin reading each pair of (uint8_t, uint64_t),
-	 * there will be no spaces between the pairs and size
-	 * will be strictly enforced.
-	 *
-	 * Files will be saved as a .bird file where the file
-	 * name is the id of the asset.
+	 * Constructs the asset map mapping asset IDs to file offsets and hashcodes.
 	 */
 	void createAssetMap();
 
 	/**
-	 * We load the current map into memory and check against
-	 * the loaded assets to see if there are any new assets.
-	 * We have to be careful here in case the user has deleted
-	 * or changed any assets without the program's knowing. This
-	 * could completely break the assets.
+	 * Compares the cached asset map against filesystem timestamps and hashes
+	 * to detect stale or missing assets.
 	 */
 	void updateAssetMap();
 	void loadAssetMap();
 };
 
+/**
+ * Global convenience wrappers for asset loading via the active ResourceManager.
+ */
 namespace Assets {
+/** Loads a texture via bird::RESOURCE_MANAGER. */
 std::shared_ptr<Texture> loadTexture(std::string path);
+/** Loads a model mesh collection via bird::RESOURCE_MANAGER. */
 std::vector<std::shared_ptr<Mesh>> loadMesh(std::string path);
 void loadSound(std::string path);
 void loadShader(std::string path);
+/** Loads a material definition via bird::RESOURCE_MANAGER. */
 std::shared_ptr<Material> loadMaterial(std::string path);
 void loadCustom(std::string path);
 

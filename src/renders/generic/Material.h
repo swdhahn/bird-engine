@@ -12,13 +12,20 @@
 
 namespace bird {
 
+/**
+ * Surface shading parameters and texture bindings.
+ *
+ * Encapsulates Phong/Blinn-Phong illumination attributes (diffuse, specular,
+ * ambient, shininess), emission, opacity, and texture maps. Linked to a
+ * Shader pipeline and applied to meshes during draw submission.
+ */
 class Material : public Resource {
    public:
 	Material();
 	~Material() = default;
 
-	void read();
-	void write();
+	void read() override;
+	void write() override;
 
 	Material& setDiffuseColor(const Vector3& color);
 	Material& setSpecularColor(const Vector3& color);
@@ -30,12 +37,12 @@ class Material : public Resource {
 	Material& setReflectivity(const float& reflectivity);
 
 	/**
-	 * Adds a texture to the material. Textures are bound in the order they are
-	 * added.
-	 * @param texture
-	 * @return
+	 * Binds a texture sampler to the material.
+	 * Textures are bound sequentially starting at texture slot 0.
 	 */
 	Material& addTexture(std::shared_ptr<Texture> texture);
+
+	/** Assigns the shader used to render geometry with this material. */
 	Material& setShader(std::shared_ptr<Shader> shader);
 
 	const Vector3& getDiffuseColor() const;

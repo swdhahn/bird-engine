@@ -20,18 +20,71 @@ namespace bird {
 
 class UIManager;
 
+/**
+ * Central engine orchestrator.
+ *
+ * Manages the lifecycle of core engine systems: graphics pipeline, window
+ * event handling, input system, asset/resource manager, 2D UI manager,
+ * and the active scene hierarchy. Runs the main frame loop and coordinates
+ * per-frame script ticking and scene rendering.
+ */
 class Application {
    public:
 	Application();
 	~Application();
 
+	/**
+	 * Initializes engine systems and enters the main loop.
+	 *
+	 * Instantiates the default graphics pipeline (OpenGL), initializes windowing,
+	 * input callbacks, resource cache, and 2D UI manager. Creates the root Scene,
+	 * attaches the provided entry script, and begins the frame loop in run().
+	 *
+	 * @param script User application entry script; ownership is transferred
+	 *               to the root Scene.
+	 */
 	void init(Script<Scene>* script);
+
+	/**
+	 * Tears down engine systems and releases allocated resources.
+	 */
 	void deinit();
 
+	/**
+	 * Executes the continuous engine frame loop.
+	 *
+	 * Each frame:
+	 * 1. Computes delta time from the window clock.
+	 * 2. Updates camera matrices if dirty.
+	 * 3. Ticks UIManager layout, animations, and modals.
+	 * 4. Calls process(delta) on all registered ProcessScript instances.
+	 * 5. Recursively updates dirty scene transform matrices via processScene().
+	 * 6. Renders the active scene and overlays UI via the graphics pipeline.
+	 * 7. Ticks the input manager and polls platform window events.
+	 */
 	void run();
+
+	/**
+	 * Recursively traverses a scene hierarchy to resolve dirty transforms.
+	 *
+	 * Any WorldObject with a dirty transform (needsMatrixUpdate() == true)
+	 * has its world-space transformation matrix recalculated before rendering.
+	 *
+	 * @param scene The root or sub-scene to process.
+	 * @param delta Elapsed time since the previous frame in seconds.
+	 */
 	void processScene(Scene* scene, float delta);
 
+	/**
+	 * Registers a script to receive per-frame process(delta) callbacks.
+	 * Called automatically by ProcessScriptComponent::_init().
+	 */
 	void addProcessableScript(ProcessScriptComponent* script);
+
+	/**
+	 * Unregisters a script from per-frame updates.
+	 * Called automatically by ProcessScriptComponent::_deinit().
+	 */
 	void removeProcessableScript(ProcessScriptComponent* script);
 
 	void setCamera(Camera* camera);

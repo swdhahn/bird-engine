@@ -21,17 +21,11 @@
 #include "../renders/generic/Texture.h"
 #include "Resource.h"
 
-/*
- * This Resource class includes textures, models, sounds,
- * shaders, and materials.
- *
- * The Resource class is responsible for loading and
- * unloading assets. Also storing assets in an optimized
- * way for both file storage and memory storage.
- */
-
 namespace bird {
 
+/**
+ * Discriminator identifying the category of a loaded engine asset.
+ */
 enum AssetType {
 	ASSET_TYPE_TEXTURE,
 	ASSET_TYPE_SCENE,
@@ -40,44 +34,79 @@ enum AssetType {
 	ASSET_TYPE_MATERIAL,
 	ASSET_TYPE_FONT,
 	ASSET_TYPE_CUSTOM,
-	// The above are included in the m_resources variable in the ResourceManager
-	// class.
 	ASSET_TYPE_MESH
 };
 
+/**
+ * Central asset cache and resource management subsystem.
+ *
+ * Provides thread-safe / centralized loading and lifetime caching for textures,
+ * 3D meshes, materials, fonts, and shaders. Deduplicates resource loads by
+ * canonical file path. Resolves relative asset paths against RESOURCE_PATH.
+ */
 class ResourceManager {
    public:
 	ResourceManager();
 	~ResourceManager();
 
+	/** Initializes internal resource cache maps. */
 	void init();
 
+	/**
+	 * Loads a 2D image texture from disk, caching the result.
+	 * @param path File path to the image or .bird texture asset.
+	 * @return Shared pointer to the GPU Texture.
+	 */
 	std::shared_ptr<Texture> loadTexture(std::string path);
+
+	/**
+	 * Loads a 3D model, decomposing it into individual meshes and caching them.
+	 * @param path File path to the 3D model (.obj, .glb, .fbx).
+	 * @return Vector of shared Mesh instances.
+	 */
 	std::vector<std::shared_ptr<Mesh>> loadMesh(std::string path);
+
+	/**
+	 * Compiles or retrieves a cached shader pipeline from builder configuration.
+	 */
 	std::shared_ptr<Shader> loadShader(ShaderBuilder& builder);
+
+	/**
+	 * Loads material parameters and texture maps from disk.
+	 */
 	std::shared_ptr<Material> loadMaterial(std::string path);
+
 	/**
 	 * Loads a font baked by BuildTools from <path>.bird; cached per path.
-	 * @param path - source font path, e.g. "assets/fonts/DejaVuSans.ttf".
-	 * @return the font, or nullptr when the baked file is missing.
+	 * @param path Source font path, e.g. "assets/fonts/DejaVuSans.ttf".
+	 * @return The loaded font, or nullptr when the baked file is missing.
 	 * @throws std::runtime_error when the baked file is truncated.
 	 */
 	std::shared_ptr<Font> loadFont(std::string path);
+
 	void loadSound(std::string path);
 	void loadCustom(std::string path);
 
 	/**
-	 * Add a resource to the resource manager.
-	 *
-	 * @param path The path to the resource. Acts as a name.
-	 * @param resource The resource to add.
-	 * @param type The type of resource.
+	 * Adds an instantiated resource manually to the cache under a specific key.
+	 * @param path Asset identifier or path key.
+	 * @param resource Shared resource instance.
+	 * @param type Asset classification.
 	 */
 	void addResource(std::string path, std::shared_ptr<Resource> resource,
 					 AssetType type);
+
+	/**
+	 * Registers a pre-loaded mesh collection under the given path key.
+	 */
 	void addMesh(std::string path, std::vector<std::shared_ptr<Mesh>> meshes);
 
+	/**
+	 * Returns the default fallback standard surface shader.
+	 */
 	std::shared_ptr<Shader> getDefaultShader();
+
+	/** Root working directory prepended to relative asset paths. */
 	static inline std::string RESOURCE_PATH = "";
 
    private:

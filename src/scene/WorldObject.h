@@ -37,6 +37,14 @@ extern BIRD_API Application* APPLICATION;
 class Component;
 class Scene;
 
+/**
+ * 3D spatial entity in the scene graph.
+ *
+ * Encapsulates position, rotation (quaternion), and scale in both world and
+ * local coordinate spaces. Manages a cached 4x4 model matrix with dirty-flag
+ * optimization (m_needsMatrixUpdate). Hosts a collection of owned Component
+ * instances and delegates lifecycle events (init/deinit) to them.
+ */
 class WorldObject : public Object {
 	BIRD_OBJECT(WORLDOBJECT)
    public:
@@ -44,15 +52,46 @@ class WorldObject : public Object {
 	WorldObject();
 	virtual ~WorldObject() {};
 
+	/**
+	 * Associates this entity with a parent Scene and initializes its components.
+	 *
+	 * Calls _init() and init() on all currently attached components.
+	 * @param parent Scene containing this object (or nullptr if root).
+	 */
 	void init(Scene* parent);
+
+	/**
+	 * Deinitializes components and breaks association with the parent Scene.
+	 */
 	void deinit();
 
 	const uint64_t& getID() const;
 	bool operator==(const WorldObject& e);
 
+	/**
+	 * Translates the object along world axes and marks the transform dirty.
+	 * @param delta Translation vector in world coordinates.
+	 */
 	void translate(const Vector3& delta);
+
+	/**
+	 * Translates the object relative to its current orientation and marks dirty.
+	 * @param delta Translation vector in local object coordinates.
+	 */
 	void translateLocal(const Vector3& delta);
+
+	/**
+	 * Rotates the object around a world-space axis and marks the transform dirty.
+	 * @param axis World axis to rotate around.
+	 * @param angle Rotation angle in radians.
+	 */
 	void rotate(const Vector3& axis, const float& angle);
+
+	/**
+	 * Rotates the object around a local axis and marks the transform dirty.
+	 * @param axis Local object axis to rotate around.
+	 * @param angle Rotation angle in radians.
+	 */
 	void rotateLocal(const Vector3& axis, const float& angle);
 
 	const Vector3& getWorldPosition() const;
@@ -69,17 +108,36 @@ class WorldObject : public Object {
 
 	void setTransformMatrix(Matrix4 transformMatrix);
 
+	/**
+	 * Recomputes the 4x4 transformation matrix from translation, rotation,
+	 * and scale, and clears the dirty flag (m_needsMatrixUpdate = false).
+	 */
 	void updateTransformationMatrix();
+
+	/**
+	 * Returns true if position, rotation, or scale changed since the last update.
+	 */
 	bool needsMatrixUpdate() const;
 
 	std::vector<_own<Component>>& getComponents();
+
+	/**
+	 * Attaches a component, transferring ownership to this WorldObject.
+	 *
+	 * If this object is already initialized, the component's _init() and
+	 * init() hooks are invoked immediately.
+	 */
 	void addComponent(_own<Component> component);
+
+	/**
+	 * Deinitializes and removes an attached component.
+	 */
 	void removeComponent(Component* component);
 
 	Scene* getParent();
 
    protected:
-	// Unique id for world objects
+	// Unique identifier assigned sequentially upon construction
 	uint64_t m_id;
 	Vector3 m_worldPosition;
 	Vector3 m_localPosition;
@@ -93,9 +151,8 @@ class WorldObject : public Object {
 	std::vector<_own<Component>> m_components;
 
 	/**
-	 * Must make this variable true whenever any position or rotation is
-	 * changed. This way, the rotation and position changes will occur during
-	 * rendering and Matrix related calculations.
+	 * True whenever position, rotation, or scale changes. Checked during
+	 * Application::processScene() before submitting draw calls.
 	 */
 	bool m_needsMatrixUpdate;
 	bool m_isInitiated;

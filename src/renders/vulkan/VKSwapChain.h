@@ -5,6 +5,9 @@
 #ifndef BIRD_VKSWAPCHAIN_H
 #define BIRD_VKSWAPCHAIN_H
 
+#include <vector>
+#include <volk.h>
+
 #include "VKConstants.h"
 #include "VKPhysicalDevice.h"
 #include "VKLogicalDevice.h"
@@ -12,19 +15,31 @@
 
 namespace bird::vk {
 
+    /**
+     * Details queried from a physical device surface for swapchain negotiation.
+     */
     struct SwapChainSupportDetails {
         VkSurfaceCapabilitiesKHR capabilities;
         std::vector<VkSurfaceFormatKHR> formats;
         std::vector<VkPresentModeKHR> presentModes;
     };
 
+    /**
+     * Vulkan presentation swap chain manager.
+     *
+     * Negotiates swapchain surface formats, presentation modes (preferring Mailbox,
+     * falling back to FIFO), extent resolution, and creates image views and
+     * depth/color attachments. Handles recreation on window resize.
+     */
     class VKSwapChain {
     public:
         VKSwapChain(const VKPhysicalDevice* physicalDevice, const VKLogicalDevice* device, const VKInstance* instance, const Window* window);
         ~VKSwapChain();
 
+        /** Recreates the swapchain when window dimensions change or framebuffer is invalidated. */
         void recreateSwapChain();
 
+        /** Queries supported surface capabilities, color formats, and presentation modes. */
         static SwapChainSupportDetails querySwapChainSupport(const VkPhysicalDevice& device, const VkSurfaceKHR& surface);
 
         const VkSwapchainKHR& getSwapChain() const;
@@ -49,7 +64,6 @@ namespace bird::vk {
         static VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
         static VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, const Window* window);
 
-        /** Probs gonna have to move these to different file */
         VkFormat findDepthFormat();
         VkFormat findSupportedFormat(const std::vector<VkFormat> &candidates, VkImageTiling tiling,
                             VkFormatFeatureFlags features);
@@ -59,12 +73,9 @@ namespace bird::vk {
         uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
         VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
 
-        /***/
-
         const VKLogicalDevice* m_pLogicalDevice = nullptr;
         const VKPhysicalDevice* m_pPhysicalDevice = nullptr;
         const Window* m_pWindow = nullptr;
-
 
         VkSwapchainKHR m_swapChain;
         VkFormat m_swapChainImageFormat;
@@ -82,7 +93,6 @@ namespace bird::vk {
         std::vector<VkImageView> m_swapChainImageViews;
     };
 
-} // bird
-
+} // namespace bird::vk
 
 #endif //BIRD_VKSWAPCHAIN_H

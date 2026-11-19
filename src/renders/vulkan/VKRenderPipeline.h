@@ -7,6 +7,9 @@
 
 namespace bird::vk {
 
+    /**
+     * Manages a Vulkan VkPipeline state object (PSO) and pipeline layout.
+     */
     class VKRenderPipeline {
     public:
         VKRenderPipeline();
@@ -15,6 +18,6 @@ namespace bird::vk {
         void createRenderPass();
     };
 
-} // bird
+} // namespace bird::vk
 
 #endif //BIRD_VKRENDERPIPELINE_H

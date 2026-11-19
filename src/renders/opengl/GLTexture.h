@@ -9,13 +9,22 @@
 
 namespace bird::gl {
 
+/**
+ * OpenGL 2D texture implementation.
+ *
+ * Wraps a native OpenGL texture object (GL_TEXTURE_2D) with filtering,
+ * mipmapping, and active texture unit binding.
+ */
 class GLTexture : public Texture {
    public:
 	GLTexture(uint8_t* pData, uint32_t width, uint32_t height,
 			  TextureFormat format, uint32_t textureID);
 	~GLTexture() override;
 
+	/** Binds this texture to the active OpenGL texture target. */
 	void bind();
+
+	/** Unbinds GL_TEXTURE_2D from the active texture unit. */
 	void unbind();
 
 	uint32_t getTextureID();

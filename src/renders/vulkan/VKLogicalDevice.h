@@ -9,13 +9,21 @@
 
 #include "VKConstants.h"
 #include "VKPhysicalDevice.h"
+
 namespace bird::vk {
 
+/**
+ * Vulkan logical device interface.
+ *
+ * Manages device-level resource creation and exposes command and presentation
+ * queues (VkQueue).
+ */
 class VKLogicalDevice {
    public:
 	explicit VKLogicalDevice(VKPhysicalDevice* physicalDevice);
 	~VKLogicalDevice();
 
+	/** Instantiates VkDevice and retrieves queue handles for graphics and presentation. */
 	void createLogicalDevice(VKPhysicalDevice* physicalDevice);
 
 	[[nodiscard]] const VkDevice& getDevice() const;

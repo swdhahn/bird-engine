@@ -1,12 +1,21 @@
+#ifndef BIRD_COMPONENT_IMPL_H
+#define BIRD_COMPONENT_IMPL_H
+
 #include <cassert>
+#include <type_traits>
 
 #include "Component.h"
 
 namespace bird {
 
+/**
+ * Template implementation for Component::objectAs<T>().
+ *
+ * Enforces compile-time type inheritance from Object, checks validity of
+ * host pointer, and verifies matching runtime OBJ_TYPES.
+ */
 template <typename T>
 T* Component::objectAs() {
-	// 1. Compile-time check: Is T actually an Object?
 	static_assert(std::is_base_of<Object, T>::value,
 				  "T must derive from Object");
 
@@ -21,3 +30,5 @@ T* Component::objectAs() {
 }
 
 }  // namespace bird
+
+#endif // BIRD_COMPONENT_IMPL_H

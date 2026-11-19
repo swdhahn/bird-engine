@@ -19,6 +19,9 @@
 
 namespace bird {
 
+/**
+ * Texture pixel formats and generation flags.
+ */
 enum TextureFormat {
 	FORMAT_HAS_MIPMAPS = 1,
 	FORMAT_8G = 1 << 1,
@@ -29,15 +32,24 @@ enum TextureFormat {
 
 class Texture;
 
+/**
+ * Fluent builder for configuring and uploading 2D GPU textures.
+ */
 class TextureBuilder {
    public:
 	TextureBuilder(uint8_t* pData, uint32_t width, uint32_t height,
 				   TextureFormat format);
 
+	/** Enables automatic mipmap level generation on GPU upload. */
 	TextureBuilder& generateMipMaps();
+
+	/** Sets minification/magnification filter to bilinear interpolation. */
 	TextureBuilder& filterLinear();
+
+	/** Sets minification/magnification filter to nearest-neighbor (pixelated). */
 	TextureBuilder& filterNearest();
 
+	/** Instantiates and uploads the GPU texture using the active backend. */
 	std::shared_ptr<Texture> build();
 
    private:
@@ -55,11 +67,10 @@ class TextureBuilder {
 };
 
 /**
- * Todo: Add functions that edit textures?
+ * 2D GPU texture resource.
  *
- * Texture is a class that holds a pointer to the texture data itself and the
- * width and height of an image.
- *
+ * Owns raw pixel memory and dimensions. Implements Resource serialization
+ * for reading/writing cached .bird textures.
  */
 class Texture : public Resource {
    public:
@@ -67,10 +78,13 @@ class Texture : public Resource {
 					 TextureFormat format);
 	virtual ~Texture();
 
-	void read();
-	void write();
+	void read() override;
+	void write() override;
 
+	/** Creates a builder loading an image from disk. */
 	static TextureBuilder create(const std::string& path);
+
+	/** Creates a builder from in-memory raw pixel data. */
 	static TextureBuilder create(uint8_t* data, uint32_t width, uint32_t height,
 								 TextureFormat format);
 

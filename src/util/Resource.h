@@ -7,16 +7,21 @@
 
 namespace bird {
 
-    class Resource {
-    public:
-        Resource();
-        virtual ~Resource();
+/**
+ * Base class for engine assets supporting binary serialization and deserialization.
+ */
+class Resource {
+public:
+    Resource();
+    virtual ~Resource();
 
-        virtual void read() = 0;
-        virtual void write() = 0;
+    /** Deserializes asset data from disk or memory stream. */
+    virtual void read() = 0;
 
-    };
+    /** Serializes asset data into disk or memory stream. */
+    virtual void write() = 0;
+};
 
-}
+}  // namespace bird
 
 #endif //BIRD_RESOURCE_H

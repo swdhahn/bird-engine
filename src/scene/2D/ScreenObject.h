@@ -5,9 +5,12 @@
 
 namespace bird {
 
-// extern Input* INPUT;
-// extern ResourceManager* RESOURCE_MANAGER;
-
+/**
+ * 2D spatial screen entity base class.
+ *
+ * Encapsulates 2D position, rotation, scale, and a cached 3x3 affine
+ * transformation matrix with dirty-flag optimization (m_needsMatrixUpdate).
+ */
 class ScreenObject {
    public:
 	ScreenObject();
@@ -26,7 +29,14 @@ class ScreenObject {
 
 	void setTransformMatrix(Matrix3 transformMatrix);
 
+	/**
+	 * Recomputes the 3x3 2D affine transformation matrix and clears dirty flag.
+	 */
 	void updateTransformationMatrix();
+
+	/**
+	 * Returns true if position, rotation, or scale changed since the last update.
+	 */
 	bool needsMatrixUpdate() const;
 
    protected:
