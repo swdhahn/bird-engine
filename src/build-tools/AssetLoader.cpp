@@ -14,10 +14,21 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../util/stb_image.h"
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "../util/stb_truetype.h"
 
 namespace bird {
 
-enum AssetType { TEXTURE, MODEL, SCENE, SOUND, SHADER, MATERIAL, CUSTOM };
+enum AssetType {
+	TEXTURE,
+	MODEL,
+	SCENE,
+	SOUND,
+	SHADER,
+	MATERIAL,
+	FONT,
+	CUSTOM
+};
 
 std::vector<std::vector<const char*>> supportedFileTypes{
 	{".png", ".jpg", ".jpeg", ".tga", ".bmp", ".psd", ".gif", ".hdr", ".pic",
@@ -27,6 +38,7 @@ std::vector<std::vector<const char*>> supportedFileTypes{
 	{".wav", ".mp3", ".ogg"},								 // Sounds
 	{".vert", ".frag", ".geom", ".comp", ".tesc", ".tese"},	 // Shaders
 	{".mtl", ".pbr"},										 // Materials
+	{".ttf", ".otf"},										 // Fonts
 	{".bird_custom"}										 // Other
 };	//*/
 
@@ -89,6 +101,9 @@ void AssetLoader::init(std::string assetPath) {
 				break;
 			case MATERIAL:
 				loadMaterial(filePath);
+				break;
+			case FONT:
+				loadFont(filePath);
 				break;
 			case CUSTOM:
 				loadCustom(filePath);
@@ -435,6 +450,84 @@ void AssetLoader::writeImage(uint32_t width, uint32_t height, uint32_t channels,
 	file.close();
 
 	std::cout << "Image saved." << std::endl;
+}
+
+namespace {
+constexpr float kFontBakedPixelHeight = 32.0f;
+constexpr uint32_t kFontAtlasSize = 512;
+constexpr uint32_t kFontFirstCodepoint = 32;  // space
+constexpr uint32_t kFontGlyphCount = 95;	  // through '~'
+constexpr uint32_t kFontWhiteBlockSize = 4;	  // reserved bottom rows
+}  // namespace
+
+void AssetLoader::loadFont(const std::string& path) {
+	if (std::filesystem::exists(path + ".bird")) {
+		return;
+	}
+	std::cout << "Compiling Font: " << path << std::endl;
+
+	const std::string ttf = readFile(path);
+	const auto* ttfData = reinterpret_cast<const unsigned char*>(ttf.data());
+	stbtt_fontinfo info;
+	if (ttf.empty() ||
+		!stbtt_InitFont(&info, ttfData, stbtt_GetFontOffsetForIndex(ttfData, 0))) {
+		throw std::runtime_error("Unable to parse font: " + path);
+	}
+
+	std::vector<uint8_t> atlas(kFontAtlasSize * kFontAtlasSize, 0);
+	std::vector<stbtt_packedchar> packed(kFontGlyphCount);
+
+	// Pack glyphs above the reserved rows so that a white block remains free.
+	stbtt_pack_context pack;
+	if (!stbtt_PackBegin(&pack, atlas.data(), kFontAtlasSize,
+						 kFontAtlasSize - kFontWhiteBlockSize, kFontAtlasSize,
+						 1, nullptr)) {
+		throw std::runtime_error("Unable to begin font packing: " + path);
+	}
+	const int packResult = stbtt_PackFontRange(
+		&pack, ttfData, 0, kFontBakedPixelHeight, kFontFirstCodepoint,
+		kFontGlyphCount, packed.data());
+	stbtt_PackEnd(&pack);
+	if (!packResult) {
+		throw std::runtime_error("Font atlas too small for glyphs: " + path);
+	}
+
+	const uint32_t whiteRow = kFontAtlasSize - kFontWhiteBlockSize;
+	for (uint32_t y = whiteRow; y < kFontAtlasSize; y++) {
+		std::memset(&atlas[y * kFontAtlasSize], 0xFF, kFontWhiteBlockSize);
+	}
+
+	int ascent = 0, descent = 0, lineGap = 0;
+	stbtt_GetFontVMetrics(&info, &ascent, &descent, &lineGap);
+	const float scale = stbtt_ScaleForPixelHeight(&info, kFontBakedPixelHeight);
+
+	format::FontHeader header{};
+	header.version = format::FONT_FORMAT_VERSION;
+	header.bakedPixelHeight = kFontBakedPixelHeight;
+	header.ascent = ascent * scale;
+	header.descent = descent * scale;
+	header.lineGap = lineGap * scale;
+	header.atlasWidth = kFontAtlasSize;
+	header.atlasHeight = kFontAtlasSize;
+	header.firstCodepoint = kFontFirstCodepoint;
+	header.glyphCount = kFontGlyphCount;
+	header.whiteTexelX = kFontWhiteBlockSize / 2;
+	header.whiteTexelY = whiteRow + kFontWhiteBlockSize / 2;
+
+	std::vector<format::FontGlyph> glyphs(kFontGlyphCount);
+	for (uint32_t i = 0; i < kFontGlyphCount; i++) {
+		const stbtt_packedchar& pc = packed[i];
+		glyphs[i] = {pc.x0, pc.y0, pc.x1, pc.y1, pc.xoff, pc.yoff, pc.xadvance};
+	}
+
+	std::fstream file(path + ".bird", std::ios::out | std::ios::binary);
+	file.write(reinterpret_cast<const char*>(&header), sizeof(header));
+	file.write(reinterpret_cast<const char*>(glyphs.data()),
+			   glyphs.size() * sizeof(format::FontGlyph));
+	file.write(reinterpret_cast<const char*>(atlas.data()), atlas.size());
+	file.close();
+
+	std::cout << "Font saved." << std::endl;
 }
 
 void AssetLoader::loadSound(const std::string& path) {

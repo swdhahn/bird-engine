@@ -82,6 +82,7 @@ class MainScript : public bird::Script<bird::Scene> {
 		auto button = bird::_own_mk<bird::UIButton>();
 		button->setScale(bird::Vector2(200, 100));
 		button->setPosition(bird::Vector2(600, 400));
+		button->setText("Click me");
 		button->setOnClick([] { std::cout << "Button clicked" << std::endl; });
 
 		bird::APPLICATION->getUIManager()->getRoot()->addChild(

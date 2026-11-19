@@ -8,6 +8,7 @@
 
 namespace bird {
 class Mesh;
+class Font;
 
 extern Input* INPUT;
 
@@ -16,7 +17,17 @@ class UIManager {
 	UIManager();
 	~UIManager();
 
-	void init();
+	/** Font baked by BuildTools and passed to init() by Application. */
+	static constexpr const char* kDefaultFontPath =
+		"assets/fonts/DejaVuSans.ttf";
+
+	/**
+	 * Creates GPU buffers and adopts the UI font, whose atlas also supplies
+	 * the white texel for solid quads.
+	 * @param font - required; see kDefaultFontPath.
+	 * @throws std::invalid_argument when font is nullptr.
+	 */
+	void init(std::shared_ptr<Font> font);
 	void deinit();
 
 	/** Rebuilds the batched UI mesh when the tree has been marked dirty. */
@@ -30,12 +41,13 @@ class UIManager {
 	void setUpdateUIFlag();
 
 	std::shared_ptr<Mesh> getUIMesh();
+	const std::shared_ptr<Font>& getFont() const;
 	/** @return the number of indices currently valid in the UI mesh. */
 	uint32_t getIndexCount() const;
 	UIObject* getRoot();
 
 	/**
-	 * Finds the top-most enabled, drawable object under a point. Later
+	 * Finds the top-most enabled, interactive, drawable object under a point. Later
 	 * siblings and children render above earlier ones, so the search runs
 	 * in reverse draw order.
 	 * @return the hit object, or nullptr.
@@ -44,10 +56,11 @@ class UIManager {
 
    private:
 	void updateUI();
-	void processTreeUI(UIObject* object, const Matrix3& parentWorldMatrix);
+	void processTreeUI(UIObject* object, const Matrix3& parentBasis);
 	std::unique_ptr<UIObject> m_root;
 
 	std::shared_ptr<Mesh> m_mesh;
+	std::shared_ptr<Font> m_font;
 	std::vector<float> m_vertices;
 	std::vector<float> m_textureCoords;
 	std::vector<float> m_colors;

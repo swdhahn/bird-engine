@@ -12,7 +12,7 @@ find_package(SPIRV-Tools CONFIG REQUIRED)
 
 # --- Existing BuildTools Target ---
 add_executable(BuildTools build-tools.cpp AssetLoader.cpp AssetLoader.h
-                         ../util/stb_image.h)
+                         ../util/stb_image.h ../util/stb_truetype.h)
 target_link_libraries(BuildTools ${ASSIMP_LIBRARIES}
       shaderc::shaderc_combined
       ${SPIRV_LIBRARIES}

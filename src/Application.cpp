@@ -32,7 +32,7 @@ void Application::init(Script<Scene>* script) {
 
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	m_uiManager = new UIManager();
-	m_uiManager->init();
+	m_uiManager->init(RESOURCE_MANAGER->loadFont(UIManager::kDefaultFontPath));
 
 	m_scene = new Scene();
 	m_scene->addComponent(std::unique_ptr<Script<Scene>>(script));

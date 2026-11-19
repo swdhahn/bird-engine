@@ -22,6 +22,25 @@ inline const std::array<Vector2, 4> kUnitQuadCorners{
 inline constexpr std::array<uint32_t, 6> kQuadIndexPattern{0, 1, 2, 2, 1, 3};
 
 /**
+ * Builds the transform a UI object passes on to its children: translation
+ * and rotation only, so that child positions stay in pixels regardless of
+ * the parent's size.
+ * @param position - offset from the parent's origin, in pixels.
+ * @param rotation - rotation in radians.
+ */
+inline Matrix3 makeBasis(const Vector2& position, float rotation) {
+	const float c = std::cos(rotation);
+	const float s = std::sin(rotation);
+	return Matrix3(c, s, 0.0f, -s, c, 0.0f, position.x, position.y, 1.0f);
+}
+
+/** @return a matrix scaling the unit quad to the given pixel size. */
+inline Matrix3 makeScale(const Vector2& scale) {
+	return Matrix3(scale.x, 0.0f, 0.0f, 0.0f, scale.y, 0.0f, 0.0f, 0.0f,
+				   1.0f);
+}
+
+/**
  * Computes the screen-space corners of a drawable.
  * @param worldMatrix - object-to-screen transform; translation in column 2.
  * @param localOffset - drawable offset within the object's unit space.

@@ -10,6 +10,7 @@
 
 #include "../../Application.h"
 #include "../../scene/2D/UIManager.h"
+#include "../generic/Font.h"
 #include "../generic/FrameBuffer.h"
 #include "GLFrameBuffer.h"
 #include "GLMesh.h"
@@ -94,10 +95,18 @@ void GLPipeline::renderUI() {
 	((GLShader*)ui_shader.get())->bind();
 	m_globalUBO->update((GlobalUBOData*)&m_orthoMatrix, sizeof(Matrix4), 0);
 
+	glActiveTexture(GL_TEXTURE0);
+	((GLTexture*)uiManager->getFont()->getAtlas().get())->bind();
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
 	GLMesh* uiMesh = (GLMesh*)uiManager->getUIMesh().get();
 	glBindVertexArray(uiMesh->getVAO());
 	glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
 	glBindVertexArray(0);
+
+	glDisable(GL_BLEND);
+	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void GLPipeline::renderScene(Scene* scene) {

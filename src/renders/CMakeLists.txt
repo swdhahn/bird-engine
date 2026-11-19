@@ -7,6 +7,8 @@ add_library(
   GraphicsConstants.h
   generic/Texture.cpp
   generic/Texture.h
+  generic/Font.cpp
+  generic/Font.h
   generic/Buffer.h
   generic/RawBuffer.h
   generic/RawBuffer.cpp

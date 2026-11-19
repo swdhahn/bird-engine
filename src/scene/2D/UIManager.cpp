@@ -1,8 +1,10 @@
 #include "UIManager.h"
 
 #include <memory>
+#include <stdexcept>
 
 #include "../../Application.h"
+#include "../../renders/generic/Font.h"
 #include "../../renders/generic/Mesh.h"
 #include "UIGeometry.h"
 #include "UIObject.h"
@@ -18,7 +20,14 @@ UIManager::UIManager()
 	  m_shouldUpdateUI(true) {}
 UIManager::~UIManager() {}
 
-void UIManager::init() {
+void UIManager::init(std::shared_ptr<Font> font) {
+	if (!font) {
+		throw std::invalid_argument(
+			"UIManager: font missing; run BuildTools to bake " +
+			std::string(kDefaultFontPath));
+	}
+	m_font = std::move(font);
+
 	// Every buffer starts non-empty so that GLMesh binds all attribute
 	// locations (0 position, 1 colour, 2 texCoord); update() grows them.
 	const auto mode =
@@ -50,7 +59,8 @@ UIObject* UIManager::findTopmostAt(UIObject* root, const Vector2& screenPoint) {
 			return hit;
 		}
 	}
-	if (root->enabled() && root->getDrawableCount() > 0 &&
+	if (root->enabled() && root->interactive() &&
+		root->getDrawableCount() > 0 &&
 		root->containsPoint(screenPoint)) {
 		return root;
 	}
@@ -108,10 +118,11 @@ void UIManager::updateUI() {
 	m_mesh->updateMesh();
 }
 
-void UIManager::processTreeUI(UIObject* object,
-							  const Matrix3& parentWorldMatrix) {
-	object->updateWorldMatrix(parentWorldMatrix);
+void UIManager::processTreeUI(UIObject* object, const Matrix3& parentBasis) {
+	object->layout();
+	object->updateWorldMatrix(parentBasis);
 	const Matrix3& world = object->getWorldMatrix();
+	const Vector2 whiteUV = m_font->getWhiteUV();
 
 	for (int j = 0; j < object->getDrawableCount(); j++) {
 		const UIDrawable& draw = object->getDrawables()[j];
@@ -121,9 +132,11 @@ void UIManager::processTreeUI(UIObject* object,
 			ui::computeDrawableCorners(world, draw.localOffset, draw.size);
 		for (size_t i = 0; i < corners.size(); i++) {
 			m_vertices.insert(m_vertices.end(), {corners[i].x, corners[i].y, 0});
-			m_textureCoords.insert(
-				m_textureCoords.end(),
-				{ui::kUnitQuadCorners[i].x, ui::kUnitQuadCorners[i].y});
+			const Vector2 uv =
+				draw.textured ? glm::mix(draw.uvMin, draw.uvMax,
+										 ui::kUnitQuadCorners[i])
+							  : whiteUV;
+			m_textureCoords.insert(m_textureCoords.end(), {uv.x, uv.y});
 			m_colors.insert(m_colors.end(),
 							{draw.color.x, draw.color.y, draw.color.z});
 		}
@@ -134,12 +147,16 @@ void UIManager::processTreeUI(UIObject* object,
 	}
 
 	for (auto& child : object->getChildren()) {
-		processTreeUI(child.get(), world);
+		processTreeUI(child.get(), object->getChildBasis());
 	}
 }
 
 std::shared_ptr<Mesh> UIManager::getUIMesh() {
 	return m_mesh;
+}
+
+const std::shared_ptr<Font>& UIManager::getFont() const {
+	return m_font;
 }
 
 uint32_t UIManager::getIndexCount() const {

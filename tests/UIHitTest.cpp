@@ -2,6 +2,8 @@
 
 #include <memory>
 
+#include "FakeFont.h"
+#include "scene/2D/UILabel.h"
 #include "scene/2D/UIManager.h"
 #include "scene/2D/UIObject.h"
 
@@ -28,10 +30,10 @@ UIObject* addQuad(UIObject* parent, Vector2 position, Vector2 size) {
 }
 
 /** Recomputes world matrices the way UIManager::updateUI does. */
-void layout(UIObject* object, const Matrix3& parentWorld = Matrix3(1.0f)) {
-	object->updateWorldMatrix(parentWorld);
+void layout(UIObject* object, const Matrix3& parentBasis = Matrix3(1.0f)) {
+	object->updateWorldMatrix(parentBasis);
 	for (auto& child : object->getChildren()) {
-		layout(child.get(), object->getWorldMatrix());
+		layout(child.get(), object->getChildBasis());
 	}
 }
 
@@ -61,11 +63,31 @@ TEST(UIHitTest, LaterSiblingWinsOverlap) {
 
 TEST(UIHitTest, ChildWinsOverParentAndUsesParentTransform) {
 	UIObject root(0);
-	UIObject* panel = addQuad(&root, {100, 100}, {1, 1});
+	UIObject* panel = addQuad(&root, {100, 100}, {200, 200});
 	UIObject* inner = addQuad(panel, {10, 10}, {20, 20});
-	panel->setScale({1, 1});
 	layout(&root);
 	// Inner occupies screen [110, 130] because it is offset by the panel.
 	EXPECT_EQ(UIManager::findTopmostAt(&root, {120, 120}), inner);
 	EXPECT_EQ(UIManager::findTopmostAt(&root, {15, 15}), nullptr);
+}
+
+TEST(UIHitTest, ParentScaleIsNotInherited) {
+	UIObject root(0);
+	UIObject* panel = addQuad(&root, {100, 100}, {200, 200});
+	addQuad(panel, {10, 10}, {20, 20});
+	layout(&root);
+	// Inner stays 20x20 pixels; (135, 135) therefore hits the panel only.
+	EXPECT_EQ(UIManager::findTopmostAt(&root, {135, 135}), panel);
+}
+
+TEST(UIHitTest, NonInteractiveObjectsArePassedThrough) {
+	UIObject root(0);
+	UIObject* button = addQuad(&root, {0, 0}, {100, 100});
+	auto caption = std::make_unique<bird::UILabel>("AAAAAAAAAAAAAAAAAAAA");
+	caption->rebuildGlyphs(bird::test::makeFakeFont());
+	ASSERT_GT(caption->getDrawableCount(), 0u);
+	button->getChildren().push_back(std::move(caption));
+	layout(&root);
+	// The caption covers (50, 5) but is not interactive, so the button wins.
+	EXPECT_EQ(UIManager::findTopmostAt(&root, {50, 5}), button);
 }

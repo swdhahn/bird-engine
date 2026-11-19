@@ -7,22 +7,31 @@
 
 namespace bird {
 
-UIObject::UIObject(uint8_t drawableCount)
+UIObject::UIObject(size_t drawableCount)
 	: ScreenObject(),
-	  m_children(0),
-	  m_enabled(true),
-	  m_bounds(0, 0),
-	  m_drawableCount(drawableCount),
-	  m_drawables(std::make_unique<UIDrawable[]>(drawableCount)),
+	  m_drawables(drawableCount),
 	  m_theme(defaultUITheme()),
-	  m_worldMatrix(1.0f) {}
+	  m_worldMatrix(1.0f),
+	  m_childBasis(1.0f),
+	  m_bounds(0, 0),
+	  m_enabled(true),
+	  m_interactive(true) {}
 UIObject::~UIObject() {}
 
-void UIObject::updateWorldMatrix(const Matrix3& parentWorldMatrix) {
+void UIObject::updateWorldMatrix(const Matrix3& parentBasis) {
 	if (needsMatrixUpdate()) {
 		updateTransformationMatrix();
 	}
-	m_worldMatrix = parentWorldMatrix * m_transformMatrix;
+	m_childBasis = parentBasis * ui::makeBasis(m_position, m_rotation);
+	m_worldMatrix = m_childBasis * ui::makeScale(m_scale);
+}
+
+const Matrix3& UIObject::getChildBasis() const {
+	return m_childBasis;
+}
+
+bool UIObject::interactive() const {
+	return m_interactive;
 }
 
 const Matrix3& UIObject::getWorldMatrix() const {
@@ -42,11 +51,11 @@ Vector2 UIObject::getBounds() const {
 }
 
 UIDrawable* UIObject::getDrawables() {
-	return m_drawables.get();
+	return m_drawables.data();
 }
 
-uint8_t UIObject::getDrawableCount() {
-	return m_drawableCount;
+size_t UIObject::getDrawableCount() const {
+	return m_drawables.size();
 }
 
 std::vector<std::unique_ptr<UIObject>>& UIObject::getChildren() {

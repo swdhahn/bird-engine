@@ -42,6 +42,12 @@ class AssetLoader {
 	void loadSound(const std::string& path);
 	void loadShader(const std::string& path);
 	void loadMaterial(const std::string& path);
+	/**
+	 * Bakes printable ASCII glyphs of a TrueType font into a .bird atlas.
+	 * @param path - path to a .ttf or .otf file.
+	 * @throws std::runtime_error when the font cannot be read or packed.
+	 */
+	void loadFont(const std::string& path);
 	void loadCustom(const std::string& path);
 
 	void writeImage(uint32_t width, uint32_t height, uint32_t channels,

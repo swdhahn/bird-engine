@@ -15,6 +15,7 @@
 
 #include "../renders/GraphicsConstants.h"
 #include "../renders/generic/Buffer.h"
+#include "../renders/generic/Font.h"
 #include "../renders/generic/Mesh.h"
 #include "../renders/generic/Shader.h"
 #include "../renders/generic/Texture.h"
@@ -37,6 +38,7 @@ enum AssetType {
 	ASSET_TYPE_SOUND,
 	ASSET_TYPE_SHADER,
 	ASSET_TYPE_MATERIAL,
+	ASSET_TYPE_FONT,
 	ASSET_TYPE_CUSTOM,
 	// The above are included in the m_resources variable in the ResourceManager
 	// class.
@@ -54,6 +56,13 @@ class ResourceManager {
 	std::vector<std::shared_ptr<Mesh>> loadMesh(std::string path);
 	std::shared_ptr<Shader> loadShader(ShaderBuilder& builder);
 	std::shared_ptr<Material> loadMaterial(std::string path);
+	/**
+	 * Loads a font baked by BuildTools from <path>.bird; cached per path.
+	 * @param path - source font path, e.g. "assets/fonts/DejaVuSans.ttf".
+	 * @return the font, or nullptr when the baked file is missing.
+	 * @throws std::runtime_error when the baked file is truncated.
+	 */
+	std::shared_ptr<Font> loadFont(std::string path);
 	void loadSound(std::string path);
 	void loadCustom(std::string path);
 

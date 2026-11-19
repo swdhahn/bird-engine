@@ -12,7 +12,7 @@ ResourceManager::ResourceManager() {
 }
 
 ResourceManager::~ResourceManager() {
-	delete m_resources;
+	delete[] m_resources;
 }
 
 void ResourceManager::init() {
@@ -63,6 +63,53 @@ std::shared_ptr<Texture> ResourceManager::loadTexture(std::string path) {
 		TextureBuilder(data, width, height, form).build();
 	addResource(path, tex, ASSET_TYPE_TEXTURE);
 	return tex;
+}
+
+std::shared_ptr<Font> ResourceManager::loadFont(std::string path) {
+	auto& fonts = m_resources[ASSET_TYPE_FONT];
+	if (fonts.find(path) != fonts.end()) {
+		return std::static_pointer_cast<Font>(fonts.at(path));
+	}
+
+	std::fstream file(RESOURCE_PATH + path + ".bird",
+					  std::ios::in | std::ios::binary);
+	if (!file.is_open()) {
+		std::cerr << "Error loading font. File does not exist: " << path
+				  << ".bird (run BuildTools)" << std::endl;
+		return nullptr;
+	}
+
+	format::FontHeader header{};
+	file.read(reinterpret_cast<char*>(&header), sizeof(header));
+	std::vector<format::FontGlyph> glyphs(header.glyphCount);
+	file.read(reinterpret_cast<char*>(glyphs.data()),
+			  glyphs.size() * sizeof(format::FontGlyph));
+	const size_t texelCount =
+		static_cast<size_t>(header.atlasWidth) * header.atlasHeight;
+	std::vector<uint8_t> coverage(texelCount);
+	file.read(reinterpret_cast<char*>(coverage.data()), coverage.size());
+	if (!file) {
+		throw std::runtime_error("Truncated font file: " + path + ".bird");
+	}
+	file.close();
+
+	// Expand coverage to white RGBA so that one UI shader path multiplies
+	// vertex colour by the texel for both glyphs and solid quads.
+	uint8_t* rgba = new uint8_t[texelCount * 4];
+	for (size_t i = 0; i < texelCount; i++) {
+		rgba[i * 4 + 0] = 0xFF;
+		rgba[i * 4 + 1] = 0xFF;
+		rgba[i * 4 + 2] = 0xFF;
+		rgba[i * 4 + 3] = coverage[i];
+	}
+	std::shared_ptr<Texture> atlas =
+		TextureBuilder(rgba, header.atlasWidth, header.atlasHeight,
+					   FORMAT_8RGBA)
+			.build();
+
+	auto font = std::make_shared<Font>(header, std::move(glyphs), atlas);
+	addResource(path, font, ASSET_TYPE_FONT);
+	return font;
 }
 
 std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(std::string path) {

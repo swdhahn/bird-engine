@@ -81,6 +81,36 @@ struct ShaderUniformInfo {
 enum ShaderUniformTypes { UNIFORM, TEXTURE, UBO };
 
 // #####################################
+// ############### FONTS ###############
+// #####################################
+
+/*
+ * FontHeader
+ * FontGlyph[glyphCount]                  // codepoints firstCodepoint..
+ * uint8_t atlas[atlasWidth * atlasHeight] // single-channel coverage
+ */
+constexpr uint32_t FONT_FORMAT_VERSION = 1;
+
+struct FontHeader {
+	uint32_t version;
+	float bakedPixelHeight;	 // glyph metrics below are in these pixels
+	float ascent;			 // baseline to top, positive
+	float descent;			 // baseline to bottom, negative
+	float lineGap;
+	uint32_t atlasWidth;
+	uint32_t atlasHeight;
+	uint32_t firstCodepoint;
+	uint32_t glyphCount;
+	uint16_t whiteTexelX;  // fully covered texel for untextured quads
+	uint16_t whiteTexelY;
+};
+struct FontGlyph {
+	uint16_t atlasX0, atlasY0, atlasX1, atlasY1;  // atlas pixel rectangle
+	float offsetX, offsetY;	 // quad top-left relative to pen on baseline
+	float advance;			 // horizontal pen advance
+};
+
+// #####################################
 // #####################################
 
 #pragma pack(pop)

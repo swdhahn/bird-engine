@@ -1,6 +1,7 @@
 #include "UIButton.h"
 
 #include "../Application.h"
+#include "UILabel.h"
 #include "UIManager.h"
 #include "UIObject.h"
 
@@ -38,6 +39,22 @@ void UIButton::onRelease(float mx, float my) {
 void UIButton::onHover(bool hovered) {
 	m_hovered = hovered;
 	refreshFillColor();
+}
+
+void UIButton::setText(const std::string& text) {
+	if (!m_label) {
+		auto label = std::make_unique<UILabel>(text);
+		m_label = label.get();
+		addChild(std::move(label));
+		return;
+	}
+	m_label->setText(text);
+}
+
+void UIButton::layout() {
+	if (!m_label) return;
+	m_label->layout();
+	m_label->setPosition((m_scale - m_label->getScale()) * 0.5f);
 }
 
 void UIButton::setOnClick(std::function<void()> onClick) {

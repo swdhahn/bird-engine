@@ -71,7 +71,7 @@ Texture::Texture(uint8_t* pData, uint32_t width, uint32_t height,
 	: m_pData(pData), m_width(width), m_height(height), m_format(format) {}
 
 Texture::~Texture() {
-	delete m_pData;
+	delete[] m_pData;
 }
 
 void Texture::read() {}
