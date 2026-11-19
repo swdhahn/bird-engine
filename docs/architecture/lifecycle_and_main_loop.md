@@ -42,8 +42,9 @@ flowchart TD
     Start["Frame Start"] --> Time["1. Calculate Delta Time (glfwGetTime)"]
     Time --> CamCheck{"2. Camera Transform Dirty?"}
     CamCheck -- Yes --> CamUpdate["Camera::updateTransformationMatrix()"]
-    CamCheck -- No --> UITick["3. UIManager::process(delta)"]
-    CamUpdate --> UITick
+    CamCheck -- No --> Physics["3. Fixed steps: physicsProcess(fixedDelta), then PhysicsServer::step()"]
+    CamUpdate --> Physics
+    Physics --> UITick["3b. UIManager::process(delta)"]
     UITick --> Scripts["4. ProcessScript::process(delta) on all registered scripts"]
     Scripts --> SceneProc["5. Application::processScene() (Recurse dirty WorldObjects)"]
     SceneProc --> Render["6. GraphicsPipeline::renderRootScene()"]
@@ -57,7 +58,9 @@ flowchart TD
 ### Key Phases:
 1. **Delta Time**:
    Calculated as `delta = Window::getGLFWTime() - lastTime`. Delta time is passed to UI timers and all `ProcessScript::process(delta)` callbacks to ensure framerate-independent physics and animations.
-2. **Transform Dirty Checking (`processScene`)**:
+2. **Fixed-Step Physics**:
+   A `FixedStepClock` (default 1/60 s) turns the frame delta into zero or more whole steps. Long frames are clamped to 0.25 s and at most 8 steps run per frame; older backlog is dropped, so a slow machine slows the simulation instead of spiralling. Each step first calls `ProcessScript::physicsProcess(fixedDelta)` on every registered script, then `PhysicsServer::step()`, which steps every scene's `PhysicsWorld` (see [Physics](physics.md)). Input is ticked once per frame, outside the physics loop.
+3. **Transform Dirty Checking (`processScene`)**:
    Instead of re-computing matrix transformations every time an object moves, `WorldObject` flags `m_needsMatrixUpdate = true`. During `processScene()`, only objects whose position, rotation, or scale changed will recalculate their 4x4 matrix:
    ```cpp
    for (auto& obj : scene->getChildren()) {
@@ -66,9 +69,9 @@ flowchart TD
        }
    }
    ```
-3. **Multi-Pass Rendering**:
+4. **Multi-Pass Rendering**:
    Delegated to `GraphicsPipeline::renderRootScene(m_scene)` which renders the 3D scene, post-processing filters, and 2D UI overlay.
-4. **Platform Event Coalescing**:
+5. **Platform Event Coalescing**:
    `window->pollWindow()` dispatches GLFW key and mouse events. If the window was resized, `pollResize()` coalesces rapid window manager events and triggers `handleResize()`.
 
 ---
@@ -76,7 +79,7 @@ flowchart TD
 ## 3. Teardown (`Application::deinit`)
 
 When `window->shouldWindowClose()` becomes true:
-1. The active `Scene` hierarchy is deinitialized, invoking `deinit()` across all child entities and components.
-2. Registered scripts are unregistered.
+1. The active `Scene` hierarchy is deinitialized recursively: every component receives `deinit()` followed by `_deinit()`, which unregisters scripts and destroys physics bodies.
+2. The root `Scene` is destroyed, taking its `PhysicsWorld`s with it, and then the `PhysicsServer` (worker threads and Jolt's global registry). A server destroyed while a world is alive aborts, since the world would dangle.
 3. The `UIManager` and `GraphicsPipeline` tear down GPU resources, buffers, and shaders.
 4. The application exits gracefully with exit code 0.

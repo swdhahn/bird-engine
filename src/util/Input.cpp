@@ -11,6 +11,9 @@
 
 namespace {
 
+// Set while the game captures the mouse; pointer events then skip the UI.
+bool g_mouseCaptured = false;
+
 bird::UIManager* uiManager() {
 	return bird::APPLICATION ? bird::APPLICATION->getUIManager() : nullptr;
 }
@@ -117,13 +120,18 @@ float Input::getActionValue(std::string name) {
 }
 
 void Input::tick() {
+	const double previousX = m_mx, previousY = m_my;
 	glfwGetCursorPos(m_window->getGLFWWindow(), &m_mx, &m_my);
+	m_mouseDelta = m_resetDelta ? Vector2(0.0f)
+								: Vector2(float(m_mx - previousX), float(m_my - previousY));
+	m_resetDelta = false;
 
 	// While the UI owns the keyboard (a focused text box) or the pointer
-	// (hovering, dragging, modal), the game does not see that input.
+	// (hovering, dragging, modal), the game does not see that input. A
+	// captured mouse always belongs to the game.
 	const bird::UIManager* ui = uiManager();
 	const bool keysBlocked = ui && ui->wantsKeyboard();
-	const bool mouseBlocked = ui && ui->wantsMouse();
+	const bool mouseBlocked = !m_captured && ui && ui->wantsMouse();
 
 	for (int i = 0; i < m_actions.size(); i++) {
 		Action& a = m_actions[i];
@@ -156,6 +164,22 @@ void Input::tick() {
 void Input::setMouseMode(int cursorMode) {
 	glfwSetInputMode(m_window->getGLFWWindow(), GLFW_CURSOR, cursorMode);
 }
+void Input::setMouseCaptured(bool captured) {
+	if (captured == m_captured) return;
+	m_captured = captured;
+	g_mouseCaptured = captured;
+	m_resetDelta = true;
+	glfwSetInputMode(m_window->getGLFWWindow(), GLFW_CURSOR,
+					 captured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+	if (glfwRawMouseMotionSupported()) {
+		glfwSetInputMode(m_window->getGLFWWindow(), GLFW_RAW_MOUSE_MOTION,
+						 captured ? GLFW_TRUE : GLFW_FALSE);
+	}
+	if (captured) {
+		if (UIManager* ui = uiManager()) ui->setFocus(nullptr);
+	}
+}
+
 void Input::setMouseRawMotion(bool rawMotion) {
 	if (glfwRawMouseMotionSupported()) {
 		glfwSetInputMode(m_window->getGLFWWindow(), GLFW_RAW_MOUSE_MOTION,
@@ -167,6 +191,7 @@ void Input::setMouseRawMotion(bool rawMotion) {
 
 void mouse_button_callback(GLFWwindow* window, int button, int action,
 						   int mods) {
+	if (g_mouseCaptured) return;
 	double xpos, ypos;
 	glfwGetCursorPos(window, &xpos, &ypos);
 	if (UIManager* ui = uiManager()) {
@@ -175,6 +200,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action,
 	}
 }
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
+	if (g_mouseCaptured) return;
 	if (UIManager* ui = uiManager()) ui->mouseMove(Vector2(xpos, ypos));
 }
 void cursor_enter_callback(GLFWwindow* window, int entered) {
@@ -185,6 +211,7 @@ void cursor_enter_callback(GLFWwindow* window, int entered) {
 	}
 }
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+	if (g_mouseCaptured) return;
 	double xpos, ypos;
 	glfwGetCursorPos(window, &xpos, &ypos);
 	if (UIManager* ui = uiManager()) {

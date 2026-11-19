@@ -8,6 +8,9 @@
 #include <algorithm>
 #include <vector>
 
+#include "physics/FixedStepClock.h"
+#include "physics/PhysicsServer.h"
+#include "physics/PhysicsWorld.h"
 #include "renders/GraphicsPipeline.h"
 #include "renders/opengl/GLPipeline.h"
 #include "scene/components/ProcessScript.h"
@@ -93,12 +96,34 @@ class Application {
 	GraphicsPipeline* getGraphicsPipeline();
 	UIManager* getUIManager();
 
+	/** Global physics state; every scene's PhysicsWorld is stepped through it. */
+	PhysicsServer* getPhysicsServer();
+	/** The fixed-step clock driving physicsProcess() and physics steps. */
+	FixedStepClock& getPhysicsClock();
+
+	/**
+	 * Draws every physics world's colliders as wireframes each frame (into
+	 * GraphicsPipeline::getDebugDraw()), configured by getPhysicsDebugSettings().
+	 */
+	void setPhysicsDebugDraw(bool enabled) { m_physicsDebugDraw = enabled; }
+	bool isPhysicsDebugDrawEnabled() const { return m_physicsDebugDraw; }
+	PhysicsDebugSettings& getPhysicsDebugSettings() { return m_physicsDebugSettings; }
+
+	/** Smooth rendering between physics steps (on by default). */
+	void setPhysicsInterpolation(bool enabled) { m_physicsInterpolation = enabled; }
+	bool isPhysicsInterpolationEnabled() const { return m_physicsInterpolation; }
+
    private:
 	/** Propagates a window size change to the renderer, camera and UI. */
 	void handleResize();
 
 	GraphicsPipeline* m_graphicsPipeline;
 	UIManager* m_uiManager;
+	_own<PhysicsServer> m_physicsServer;
+	FixedStepClock m_physicsClock;
+	bool m_physicsDebugDraw = false;
+	bool m_physicsInterpolation = true;
+	PhysicsDebugSettings m_physicsDebugSettings;
 	Scene* m_scene;
 
 	std::vector<ProcessScriptComponent*> m_processableScripts;

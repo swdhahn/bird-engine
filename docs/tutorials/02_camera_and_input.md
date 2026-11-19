@@ -41,11 +41,11 @@ bird::INPUT->addAction(bird::Action("move_right").addKey(KEY_D));
 bird::INPUT->addAction(bird::Action("move_up").addKey(KEY_SPACE));
 bird::INPUT->addAction(bird::Action("move_down").addKey(KEY_LEFT_SHIFT));
 
-bird::INPUT->addAction(bird::Action("look_left").addKey(KEY_LEFT));
-bird::INPUT->addAction(bird::Action("look_right").addKey(KEY_RIGHT));
-bird::INPUT->addAction(bird::Action("look_up").addKey(KEY_UP));
-bird::INPUT->addAction(bird::Action("look_down").addKey(KEY_DOWN));
+// Hold the right mouse button to look around.
+bird::INPUT->addAction(bird::Action("look").addMouseButton(MOUSE_BUTTON_2));
 ```
+
+Mouse movement is not an action: read it with `Input::getMouseDelta()` (pixels since the last frame, +x right, +y down). `Input::setMouseCaptured(true)` hides and locks the cursor (raw motion where supported) and stops the UI from receiving pointer events until released, which is what a mouse-look camera wants.
 
 ---
 
@@ -76,14 +76,21 @@ public:
 
     void process(float delta) override {
         const float moveSpeed = 12.0f;
-        const float turnSpeed = 3.5f;
+        const float sensitivity = 0.0025f;  // radians per pixel
 
-        // 1. Calculate rotation from arrow keys
-        float yawDelta = input()->getActionValue("look_right") - 
-                         input()->getActionValue("look_left");
-
-        // Rotate camera locally around the world up axis
-        object()->rotateLocal(bird::Vector3(0.0f, 1.0f, 0.0f), yawDelta * turnSpeed * delta);
+        // 1. Mouse look while the right button is held (cursor captured).
+        const bool looking = input()->getActionValue("look") > 0.5f;
+        input()->setMouseCaptured(looking);
+        if (looking) {
+            const bird::Vector2 mouse = input()->getMouseDelta();
+            m_yaw -= mouse.x * sensitivity;
+            m_pitch = glm::clamp(m_pitch - mouse.y * sensitivity,
+                                 glm::radians(-89.0f), glm::radians(89.0f));
+        }
+        // Yaw about world up, then pitch about the camera's right axis. The
+        // camera looks down its local -Z.
+        object()->setWorldRotation(glm::angleAxis(m_yaw, bird::Vector3(0, 1, 0)) *
+                                   glm::angleAxis(m_pitch, bird::Vector3(1, 0, 0)));
 
         // 2. Calculate movement direction
         float forward = input()->getActionValue("move_forward") - 
@@ -93,13 +100,18 @@ public:
         float vertical = input()->getActionValue("move_up") - 
                          input()->getActionValue("move_down");
 
-        bird::Vector3 moveDir(-strafe, vertical, forward);
+        // Camera-local direction: +X right, +Y up, -Z forward.
+        bird::Vector3 moveDir(strafe, vertical, -forward);
 
-        // 3. Move along camera's current orientation
-        object()->translate(moveDir * moveSpeed * delta * 
-                            object()->getLocalRotation() * 
-                            object()->getWorldRotation());
+        // 3. Rotate into world space and move the eye
+        object()->translate(object()->getWorldRotation() *
+                            object()->getLocalRotation() *
+                            moveDir * moveSpeed * delta);
     }
+
+private:
+    float m_yaw = 0.0f;
+    float m_pitch = 0.0f;
 };
 ```
 

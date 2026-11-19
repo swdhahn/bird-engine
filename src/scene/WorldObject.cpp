@@ -17,6 +17,7 @@ WorldObject::WorldObject()
 	  m_transformMatrix(1),
 	  m_needsMatrixUpdate(true),
 	  m_isInitiated(false),
+	  m_parent(nullptr),
 	  m_id(++s_uniqueIdentificationIndex) {}
 
 void WorldObject::init(Scene* parent) {
@@ -29,10 +30,16 @@ void WorldObject::init(Scene* parent) {
 }
 
 void WorldObject::deinit() {
+	if (!m_isInitiated) return;
 	for (int i = 0; i < m_components.size(); i++) {
 		m_components[i]->deinit();
+		m_components[i]->_deinit();
 	}
 	m_isInitiated = false;
+}
+
+bool WorldObject::isInitiated() const {
+	return m_isInitiated;
 }
 
 const uint64_t& WorldObject::getID() const {
@@ -45,22 +52,22 @@ bool WorldObject::operator==(const WorldObject& e) {
 
 void WorldObject::translate(const Vector3& delta) {
 	m_worldPosition += delta;
-	m_needsMatrixUpdate = true;
+	markTransformChanged();
 }
 
 void WorldObject::translateLocal(const Vector3& delta) {
 	m_localPosition += delta;
-	m_needsMatrixUpdate = true;
+	markTransformChanged();
 }
 
 void WorldObject::rotate(const Vector3& axis, const float& angle) {
 	m_worldRotation = fromAngleAxis(angle, axis) * m_worldRotation;
-	m_needsMatrixUpdate = true;
+	markTransformChanged();
 }
 
 void WorldObject::rotateLocal(const Vector3& axis, const float& angle) {
 	m_localRotation = fromAngleAxis(angle, axis) * m_localRotation;
-	m_needsMatrixUpdate = true;
+	markTransformChanged();
 }
 
 const Vector3& WorldObject::getWorldPosition() const {
@@ -69,7 +76,7 @@ const Vector3& WorldObject::getWorldPosition() const {
 
 void WorldObject::setWorldPosition(Vector3 mWorldPosition) {
 	m_worldPosition = mWorldPosition;
-	m_needsMatrixUpdate = true;
+	markTransformChanged();
 }
 
 const Vector3& WorldObject::getLocalPosition() const {
@@ -78,7 +85,7 @@ const Vector3& WorldObject::getLocalPosition() const {
 
 void WorldObject::setLocalPosition(Vector3 mLocalPosition) {
 	m_localPosition = mLocalPosition;
-	m_needsMatrixUpdate = true;
+	markTransformChanged();
 }
 
 const Quaternion& WorldObject::getWorldRotation() const {
@@ -87,7 +94,7 @@ const Quaternion& WorldObject::getWorldRotation() const {
 
 void WorldObject::setWorldRotation(Quaternion mWorldRotation) {
 	m_worldRotation = mWorldRotation;
-	m_needsMatrixUpdate = true;
+	markTransformChanged();
 }
 
 const Quaternion& WorldObject::getLocalRotation() const {
@@ -96,7 +103,7 @@ const Quaternion& WorldObject::getLocalRotation() const {
 
 void WorldObject::setLocalRotation(Quaternion mLocalRotation) {
 	m_localRotation = mLocalRotation;
-	m_needsMatrixUpdate = true;
+	markTransformChanged();
 }
 
 const Matrix4& WorldObject::getTransformMatrix() const {
@@ -110,6 +117,7 @@ void WorldObject::setTransformMatrix(Matrix4 transformMatrix) {
 
 void WorldObject::updateTransformationMatrix() {
 	updateTransformMatrix(this, &m_transformMatrix);
+	m_needsMatrixUpdate = false;
 }
 
 bool WorldObject::needsMatrixUpdate() const {
@@ -122,6 +130,16 @@ const Vector3& WorldObject::getScale() const {
 
 void WorldObject::setScale(Vector3 scale) {
 	m_scale = scale;
+	markTransformChanged();
+}
+
+void WorldObject::markTransformChanged() {
+	m_needsMatrixUpdate = true;
+	m_transformRevision++;
+}
+
+uint64_t WorldObject::getTransformRevision() const {
+	return m_transformRevision;
 }
 
 std::vector<_own<Component>>& WorldObject::getComponents() {
@@ -139,12 +157,15 @@ void WorldObject::addComponent(_own<Component> component) {
 }
 
 void WorldObject::removeComponent(Component* component) {
-	component->deinit();
+	if (m_isInitiated) {
+		component->deinit();
+		component->_deinit();
+	}
 	m_components.erase(std::remove_if(m_components.begin(), m_components.end(),
 									  [&](_own<Component>& comp) {
 										  return (component == comp.get());
 									  }),
-					   m_components.begin());
+					   m_components.end());
 }
 
 Scene* WorldObject::getParent() {

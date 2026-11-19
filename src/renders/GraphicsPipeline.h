@@ -13,6 +13,7 @@
 #include "../scene/DefaultCamera.h"
 #include "../scene/Scene.h"
 #include "../scene/components/MeshComponent.h"
+#include "DebugDraw.h"
 #include "Window.h"
 #include "generic/FrameBuffer.h"
 
@@ -34,6 +35,16 @@ struct GlobalUBOData {
  */
 struct ObjectPushConstants {
 	Matrix4 model;
+	/** Inverse-transpose of the model's 3x3, as std430 mat3 (vec3 columns
+	 * padded to 16 bytes). Lights normals correctly on rotated objects. */
+	Vector4 normalMatrix[3];
+
+	explicit ObjectPushConstants(const Matrix4& modelMatrix) : model(modelMatrix) {
+		const Matrix3 normal = glm::transpose(glm::inverse(Matrix3(modelMatrix)));
+		for (int column = 0; column < 3; column++) {
+			normalMatrix[column] = Vector4(normal[column], 0.0f);
+		}
+	}
 };
 
 /**
@@ -102,6 +113,12 @@ class GraphicsPipeline {
 	/** Removes an active mesh component from the drawing list. */
 	void removeMesh(MeshComponent* mesh);
 
+	/**
+	 * World-space debug lines drawn over this frame's 3D scene. The
+	 * Application clears the list at the start of each frame.
+	 */
+	DebugDrawList& getDebugDraw() { return m_debugDraw; }
+
 	/** Shared full-screen quad mesh used for post-processing passes. */
 	static std::shared_ptr<Mesh> s_quad_mesh;
 
@@ -115,6 +132,7 @@ class GraphicsPipeline {
 
 	std::vector<MeshComponent*> m_meshes;
 	std::vector<std::unique_ptr<FrameBuffer>> m_framebuffers;
+	DebugDrawList m_debugDraw;
 };
 
 }  // namespace bird

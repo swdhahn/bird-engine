@@ -13,6 +13,7 @@
 #include "GLMesh.h"
 #include "GLShader.h"
 #include "GLTexture.h"
+#include "GLDebugRenderer.h"
 #include "GLUIRenderer.h"
 
 namespace bird::gl {
@@ -48,6 +49,9 @@ class GLPipeline : public GraphicsPipeline {
    private:
 	void renderScene(Scene* scene);
 
+	/** Draws the debug line list into the scene target (before post). */
+	void renderDebugLines();
+
 	/** Draws the batched UI mesh with an orthographic projection. */
 	void renderUI();
 
@@ -57,6 +61,8 @@ class GLPipeline : public GraphicsPipeline {
 	std::shared_ptr<Shader> ui_shader;
 	std::shared_ptr<Shader> m_postProcessShader;
 	std::unique_ptr<GLUIRenderer> m_uiRenderer;
+	std::shared_ptr<Shader> m_debugLineShader;
+	std::unique_ptr<GLDebugRenderer> m_debugRenderer;
 };
 
 }  // namespace bird::gl

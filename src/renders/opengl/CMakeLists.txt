@@ -13,7 +13,9 @@ add_library(
   GLFrameBuffer.h
   GLFrameBuffer.cpp
   GLUIRenderer.h
-  GLUIRenderer.cpp)
+  GLUIRenderer.cpp
+  GLDebugRenderer.h
+  GLDebugRenderer.cpp)
 set_target_properties(opengl-renderer PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 if(MSVC)
     set_target_properties(opengl-renderer PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)

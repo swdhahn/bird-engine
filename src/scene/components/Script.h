@@ -3,6 +3,7 @@
 
 #include <memory>
 
+#include "../../physics/ContactEvent.h"
 #include "Component.h"
 
 namespace bird {
@@ -17,6 +18,17 @@ class ScriptComponent : public Component {
    public:
 	virtual void init() override;
 	virtual void deinit() override;
+
+	/**
+	 * Physics notifications for a RigidBodyComponent on the same object,
+	 * delivered on the main thread after the step that produced them.
+	 * Contact events come from solid bodies, trigger events from pairs
+	 * involving a sensor.
+	 */
+	virtual void onContactBegin(const ContactEvent& event) {}
+	virtual void onContactEnd(const ContactEvent& event) {}
+	virtual void onTriggerEnter(const ContactEvent& event) {}
+	virtual void onTriggerExit(const ContactEvent& event) {}
 
    protected:
 	/** Returns the enclosing parent Scene of the host entity. */

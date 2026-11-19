@@ -18,12 +18,15 @@ layout(std140, binding = 0) uniform Global {
 // Per-draw data: a push constant on Vulkan, plain uniforms on OpenGL.
 layout(push_constant) uniform ObjectConstants {
     mat4 model;
+    // inverse-transpose of the model's upper 3x3: keeps normals
+    // perpendicular under rotation and non-uniform scale.
+    mat3 normalMatrix;
 } object;
 
 void main() {
     gl_Position = perspective * view * object.model * vec4(position, 1.0f);
     fragTexCoord = texCoord;
-    fragNormal = normal;
+    fragNormal = object.normalMatrix * normal;
     fragPos = vec3(object.model * vec4(position, 1.0f));
     fragViewPos = viewPos.rgb;
 }

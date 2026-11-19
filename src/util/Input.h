@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "../renders/Window.h"
+#include "Math.h"
 
 namespace bird {
 
@@ -83,6 +84,23 @@ class Input {
 	void setMouseRawMotion(bool rawMotion);
 
 	/**
+	 * Captures the mouse for camera control: the cursor is hidden and
+	 * locked to the window, motion is raw where supported, and the UI stops
+	 * receiving pointer events (and loses keyboard focus) until released.
+	 */
+	void setMouseCaptured(bool captured);
+	bool isMouseCaptured() const { return m_captured; }
+
+	/**
+	 * Cursor movement in window pixels since the previous tick (+x right,
+	 * +y down). Zero on the tick that follows a capture change, so toggling
+	 * never produces a jump.
+	 */
+	Vector2 getMouseDelta() const { return m_mouseDelta; }
+	/** Cursor position in window pixels at the last tick. */
+	Vector2 getMousePosition() const { return Vector2(m_mx, m_my); }
+
+	/**
 	 * Per-frame input update tick. Evaluates current key and mouse states
 	 * against registered actions.
 	 */
@@ -90,7 +108,10 @@ class Input {
 
    private:
 	Window* m_window;
-	double m_mx, m_my;
+	double m_mx = 0.0, m_my = 0.0;
+	Vector2 m_mouseDelta{0.0f};
+	bool m_captured = false;
+	bool m_resetDelta = true;  // first tick, or capture changed
 
 	std::vector<Action> m_actions;
 };
