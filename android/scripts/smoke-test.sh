@@ -25,6 +25,10 @@ sleep 10  # a few more seconds of frames
 adb logcat -d -s Bird:V AndroidRuntime:E DEBUG:V libc:F > logcat.txt
 adb exec-out screencap -p > screenshot.png || true
 cat logcat.txt
+# Inline copy of the screenshot, for reviewers who cannot fetch artifacts.
+if [ -s screenshot.png ]; then
+  echo "SCREENSHOT_PNG_BASE64 $(base64 -w 0 screenshot.png)"
+fi
 
 status=0
 grep -q "GL context: OpenGL ES" logcat.txt || { echo "::error::No GL context line"; status=1; }
