@@ -120,7 +120,11 @@ jobs:
           api-level: 30
           arch: x86_64
           target: google_apis
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          # Guest-side rendering (ANGLE on SwiftShader): the host-side
+          # translator miscounts uniform blocks against the default-block
+          # uniform limit and rejects the light-volume shader, which phones
+          # accept.
+          emulator-options: -no-window -gpu guest -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
           script: ./android/scripts/smoke-test.sh android/app/build/outputs/apk/debug/app-debug.apk
 
