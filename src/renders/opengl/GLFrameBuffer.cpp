@@ -1,6 +1,6 @@
 #include "GLFrameBuffer.h"
 
-#include <GL/glew.h>
+#include "GLApi.h"
 
 #include <stdexcept>
 #include <string>
@@ -27,8 +27,10 @@ GLFrameBuffer::GLFrameBuffer(
 	}
 
 	if (colorCount == 0) {
-		// Depth-only targets (shadow atlases) write no color.
-		glDrawBuffer(GL_NONE);
+		// Depth-only targets (shadow atlases) write no color. glDrawBuffers
+		// is the form both desktop GL and ES accept.
+		const GLenum none = GL_NONE;
+		glDrawBuffers(1, &none);
 		glReadBuffer(GL_NONE);
 	} else {
 		std::vector<GLenum> buffers(colorCount);

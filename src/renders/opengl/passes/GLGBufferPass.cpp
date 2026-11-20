@@ -1,6 +1,7 @@
 #include "GLGBufferPass.h"
 
-#include <GL/glew.h>
+#include "../GLApi.h"
+#include "../GLCapabilities.h"
 
 #include "../../../util/ResourceManager.h"
 #include "../GLDrawCommands.h"
@@ -31,9 +32,11 @@ void GLGBufferPass::execute(const std::vector<RenderItem>& items,
 	auto& shader = static_cast<GLShader&>(*m_shader);
 	shader.bind();
 	// RT0 is sRGB storage: encoding on write keeps dark albedo precise.
-	glEnable(GL_FRAMEBUFFER_SRGB);
+	// Without write control (ES) sRGB attachments always encode.
+	const bool srgbToggle = GLCapabilities::current().srgbWriteControl;
+	if (srgbToggle) glEnable(GL_FRAMEBUFFER_SRGB);
 	drawItems(items, shader, state);
-	glDisable(GL_FRAMEBUFFER_SRGB);
+	if (srgbToggle) glDisable(GL_FRAMEBUFFER_SRGB);
 }
 
 }  // namespace bird::gl

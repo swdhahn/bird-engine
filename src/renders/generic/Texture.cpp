@@ -11,7 +11,8 @@
 #include "../GraphicsPipeline.h"
 #include "../opengl/GLTexture.h"
 // #include "../vulkan/VKTexture.h"
-#include <GL/glew.h>
+#include "../opengl/GLApi.h"
+#include "../opengl/GLCapabilities.h"
 
 namespace bird {
 
@@ -83,6 +84,45 @@ GLFormatTriple resolveGLFormat(uint32_t format, bool srgb) {
 	throw std::invalid_argument("TextureBuilder: no storage format specified.");
 }
 
+/** @return channel count of an 8-bit color format, or 0 for other formats. */
+uint32_t eightBitChannels(uint32_t format) {
+	if (format & FORMAT_8RGBA) return 4;
+	if (format & FORMAT_8RGB) return 3;
+	if (format & FORMAT_8GA) return 2;
+	if (format & FORMAT_8G) return 1;
+	return 0;
+}
+
+/**
+ * Expands 8-bit gray, gray-alpha or RGB pixels to RGBA; gray replicates
+ * into the color channels, missing alpha becomes opaque. O(width * height).
+ */
+std::vector<uint8_t> expandToRgba(const uint8_t* pixels, uint32_t width,
+								  uint32_t height, uint32_t channels) {
+	const size_t count = static_cast<size_t>(width) * height;
+	std::vector<uint8_t> rgba(count * 4);
+	for (size_t i = 0; i < count; i++) {
+		const uint8_t* source = pixels + i * channels;
+		uint8_t* target = rgba.data() + i * 4;
+		const bool gray = channels < 3;
+		target[0] = source[0];
+		target[1] = gray ? source[0] : source[1];
+		target[2] = gray ? source[0] : source[2];
+		target[3] = (channels == 2) ? source[1]
+					: (channels == 4) ? source[3]
+									  : 255;
+	}
+	return rgba;
+}
+
+/** Sets the four channel swizzles; core in desktop 3.3 and ES 3.0. */
+void setSwizzle(GLint red, GLint green, GLint blue, GLint alpha) {
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, red);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, green);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, blue);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, alpha);
+}
+
 }  // namespace
 
 std::shared_ptr<Texture> TextureBuilder::build() {
@@ -98,7 +138,19 @@ std::shared_ptr<Texture> TextureBuilder::build() {
 	// Mipmaps are meaningless on depth and render-target float formats.
 	const bool mipmapped =
 		m_generateMipMaps && !depth && !isFloatColorFormat(m_format);
-	const GLFormatTriple gl = resolveGLFormat(m_format, m_srgb);
+	const gl::GLCapabilities& caps = gl::GLCapabilities::current();
+	// ES and WebGL pair an internal format with one upload layout only, and
+	// WebGL has no swizzles; uploading every 8-bit color image as RGBA
+	// satisfies both and keeps sRGB, filtering and mipmaps available.
+	const uint32_t channels = eightBitChannels(m_format);
+	const bool expandToFour = caps.isEmbedded() && channels != 0 &&
+							  channels != 4;
+	const uint32_t uploadFormat =
+		expandToFour
+			? ((m_format & ~(FORMAT_8G | FORMAT_8GA | FORMAT_8RGB)) |
+			   FORMAT_8RGBA)
+			: static_cast<uint32_t>(m_format);
+	const GLFormatTriple gl = resolveGLFormat(uploadFormat, m_srgb);
 
 	uint32_t texID;
 	glGenTextures(1, &texID);
@@ -108,7 +160,12 @@ std::shared_ptr<Texture> TextureBuilder::build() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
 
-	const GLint magFilter = m_nearestFiltering ? GL_NEAREST : GL_LINEAR;
+	// ES and WebGL treat a depth texture as incomplete under LINEAR
+	// filtering unless compare mode is on.
+	const bool forceNearest =
+		depth && !m_depthCompare && !caps.linearDepthFiltering;
+	const GLint magFilter =
+		(m_nearestFiltering || forceNearest) ? GL_NEAREST : GL_LINEAR;
 	GLint minFilter = magFilter;
 	if (mipmapped) {
 		minFilter = m_nearestFiltering ? GL_NEAREST_MIPMAP_NEAREST
@@ -123,17 +180,22 @@ std::shared_ptr<Texture> TextureBuilder::build() {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
 	}
 
-	if (m_format & FORMAT_8GA) {
-		const GLint swizzle[4] = {GL_RED, GL_RED, GL_RED, GL_GREEN};
-		glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle);
+	std::vector<uint8_t> expanded;
+	const uint8_t* upload = m_pData;
+	if (expandToFour) {
+		if (m_pData != nullptr) {
+			expanded = expandToRgba(m_pData, m_width, m_height, channels);
+			upload = expanded.data();
+		}
+	} else if (m_format & FORMAT_8GA) {
+		setSwizzle(GL_RED, GL_RED, GL_RED, GL_GREEN);
 	} else if (m_format & FORMAT_8G) {
-		const GLint swizzle[4] = {GL_RED, GL_RED, GL_RED, GL_ONE};
-		glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle);
+		setSwizzle(GL_RED, GL_RED, GL_RED, GL_ONE);
 	}
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	glTexImage2D(GL_TEXTURE_2D, 0, gl.internalFormat, m_width, m_height, 0,
-				 gl.layout, gl.type, m_pData);
+				 gl.layout, gl.type, upload);
 	if (mipmapped) glGenerateMipmap(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, 0);
 

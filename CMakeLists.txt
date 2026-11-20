@@ -5,6 +5,25 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(Bird)
 
+# OpenGL API profile. DESKTOP: OpenGL 4.1+ through GLEW. ES: OpenGL ES 3.0+,
+# the profile shared by Android, iOS (deprecated GLES) and WebGL 2; on Linux
+# it runs on Mesa for testing. Optional features are detected at run time.
+if(ANDROID OR IOS OR EMSCRIPTEN)
+  set(BIRD_DEFAULT_GL_PROFILE "ES")
+else()
+  set(BIRD_DEFAULT_GL_PROFILE "DESKTOP")
+endif()
+set(BIRD_GL_PROFILE "${BIRD_DEFAULT_GL_PROFILE}" CACHE STRING
+    "OpenGL API profile: DESKTOP (OpenGL 4.1+) or ES (OpenGL ES 3.0+)")
+set_property(CACHE BIRD_GL_PROFILE PROPERTY STRINGS DESKTOP ES)
+if(NOT BIRD_GL_PROFILE MATCHES "^(DESKTOP|ES)$")
+  message(FATAL_ERROR "BIRD_GL_PROFILE must be DESKTOP or ES, not '${BIRD_GL_PROFILE}'")
+endif()
+message(STATUS "Bird OpenGL profile: ${BIRD_GL_PROFILE}")
+if(BIRD_GL_PROFILE STREQUAL "ES")
+  add_compile_definitions(BIRD_GL_ES)
+endif()
+
 set(BIRD_FILES
     src/util/stb_image.h
     src/util/Constants.h
@@ -67,17 +86,36 @@ elseif(UNIX AND NOT APPLE)
            -lXi
            -ldl
            -lXinerama
-           -lXcursor
-           -lGL)
+           -lXcursor)
 endif()
 
 set(INSTALLED_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libs/install")
 set(CMAKE_PREFIX_PATH "${INSTALLED_LIB_PATH}")
 
-find_package(OpenGL REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
-find_package(glew CONFIG REQUIRED)
+
+# GL libraries for the selected profile, linked by every GL-using target.
+if(BIRD_GL_PROFILE STREQUAL "DESKTOP")
+  find_package(OpenGL REQUIRED)
+  find_package(glew CONFIG REQUIRED)
+  set(BIRD_GL_LIBRARIES libglew_static)
+  if(UNIX AND NOT APPLE)
+    list(APPEND BIRD_GL_LIBRARIES -lGL)
+  endif()
+elseif(ANDROID)
+  set(BIRD_GL_LIBRARIES GLESv3 EGL)
+elseif(IOS)
+  set(BIRD_GL_LIBRARIES "-framework OpenGLES")
+elseif(EMSCRIPTEN)
+  # Emscripten maps the ES 3.0 API onto WebGL 2.
+  set(BIRD_GL_LIBRARIES "-sMAX_WEBGL_VERSION=2" "-sMIN_WEBGL_VERSION=2")
+else()
+  # Desktop testing of the ES profile (Mesa, ANGLE): GLES plus EGL.
+  find_library(BIRD_GLES_LIBRARY NAMES GLESv2 libGLESv2 REQUIRED)
+  find_library(BIRD_EGL_LIBRARY NAMES EGL libEGL REQUIRED)
+  set(BIRD_GL_LIBRARIES ${BIRD_GLES_LIBRARY} ${BIRD_EGL_LIBRARY})
+endif()
 find_package(spirv_cross_core CONFIG REQUIRED)
 find_package(spirv_cross_glsl CONFIG REQUIRED)
 find_package(spirv_cross_cpp CONFIG REQUIRED)
@@ -148,7 +186,7 @@ target_link_libraries(
   Bird_core
   PUBLIC glm
   PRIVATE glfw
-          libglew_static
+          ${BIRD_GL_LIBRARIES}
           assimp::assimp
           VOLK::volk
           Jolt::Jolt)

@@ -4,7 +4,8 @@
 
 #include "GLShader.h"
 
-#include <GL/glew.h>
+#include "GLApi.h"
+#include "GLCapabilities.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -17,22 +18,53 @@ namespace bird::gl {
 namespace {
 
 GLenum glStageFor(format::ShaderStageKind stage) {
+	const GLCapabilities& caps = GLCapabilities::current();
 	switch (stage) {
 		case format::SHADER_STAGE_VERTEX:
 			return GL_VERTEX_SHADER;
 		case format::SHADER_STAGE_FRAGMENT:
 			return GL_FRAGMENT_SHADER;
 		case format::SHADER_STAGE_GEOMETRY:
+			if (!caps.geometryShaders) break;
 			return GL_GEOMETRY_SHADER;
 		case format::SHADER_STAGE_TESS_CONTROL:
+			if (!caps.tessellationShaders) break;
 			return GL_TESS_CONTROL_SHADER;
 		case format::SHADER_STAGE_TESS_EVALUATION:
+			if (!caps.tessellationShaders) break;
 			return GL_TESS_EVALUATION_SHADER;
 		case format::SHADER_STAGE_COMPUTE:
 			break;	// GL 4.1 has no compute; not supported on this path
 	}
-	throw std::runtime_error("Shader stage unsupported by the GL backend");
+	throw std::runtime_error(
+		"Shader stage unsupported by this GL context (stage " +
+		std::to_string(static_cast<int>(stage)) + ")");
 }
+
+/** Program bound through GLShader::bind; 0 when none. */
+GLuint s_boundProgram = 0;
+
+/**
+ * Makes a program current for glUniform* calls and restores the previous
+ * one afterwards. glProgramUniform* would avoid the switch but needs
+ * GL 4.1 or ES 3.1; this form works on every context, WebGL included.
+ */
+class ScopedProgram {
+   public:
+	explicit ScopedProgram(GLuint program)
+		: m_previous(s_boundProgram), m_switched(program != s_boundProgram) {
+		if (m_switched) glUseProgram(program);
+	}
+	~ScopedProgram() {
+		if (m_switched) glUseProgram(m_previous);
+	}
+	ScopedProgram(const ScopedProgram&) = delete;
+	ScopedProgram& operator=(const ScopedProgram&) = delete;
+
+   private:
+	GLuint m_previous;
+	bool m_switched;
+};
 
 format::ShaderStageKind expectedStage(ShaderPipeline pipeline) {
 	switch (pipeline) {
@@ -67,15 +99,13 @@ format::ShaderTarget selectTarget() {
 	if (const char* forced = std::getenv("BIRD_GL_SHADER_TARGET")) {
 		if (std::strcmp(forced, "410") == 0) return format::SHADER_TARGET_GLSL_410;
 		if (std::strcmp(forced, "460") == 0) return format::SHADER_TARGET_GLSL_460;
+		if (std::strcmp(forced, "es300") == 0) {
+			return format::SHADER_TARGET_GLSL_ES_300;
+		}
 		throw std::runtime_error(
-			"BIRD_GL_SHADER_TARGET must be \"410\" or \"460\"");
+			"BIRD_GL_SHADER_TARGET must be \"410\", \"460\" or \"es300\"");
 	}
-	int32_t major = 0, minor = 0;
-	glGetIntegerv(GL_MAJOR_VERSION, &major);
-	glGetIntegerv(GL_MINOR_VERSION, &minor);
-	const bool has46 = major > 4 || (major == 4 && minor >= 6);
-	return has46 ? format::SHADER_TARGET_GLSL_460
-				 : format::SHADER_TARGET_GLSL_410;
+	return chooseShaderTarget(GLCapabilities::current());
 }
 
 }  // namespace
@@ -124,7 +154,7 @@ GLShader::GLShader(
 								 log);
 	}
 
-	if (target == format::SHADER_TARGET_GLSL_410) {
+	if (target != format::SHADER_TARGET_GLSL_460) {
 		applyResourceBindings(stages);
 	}
 	resolvePushConstants(stages);
@@ -149,7 +179,9 @@ uint32_t GLShader::compileStage(const ShaderBinary& binary,
 }
 
 void GLShader::applyResourceBindings(const std::vector<ShaderBinary>& stages) {
-	// GLSL 410 cannot express layout(binding); apply the baked table.
+	// GLSL 410 and ES 300 cannot express layout(binding); apply the baked
+	// table.
+	ScopedProgram scoped(m_programId);
 	for (const ShaderBinary& stage : stages) {
 		for (const ShaderResource& resource : stage.resources) {
 			if (resource.kind == format::SHADER_RESOURCE_UNIFORM_BUFFER) {
@@ -162,8 +194,8 @@ void GLShader::applyResourceBindings(const std::vector<ShaderBinary>& stages) {
 				const int32_t location =
 					glGetUniformLocation(m_programId, resource.name.c_str());
 				if (location != -1) {
-					glProgramUniform1i(m_programId, location,
-									   static_cast<int32_t>(resource.binding));
+					glUniform1i(location,
+								static_cast<int32_t>(resource.binding));
 				}
 			}
 		}
@@ -191,6 +223,7 @@ void GLShader::setPushConstants(const void* data, uint32_t size,
 		throw std::out_of_range("setPushConstants exceeds the block size");
 	}
 	const auto* bytes = static_cast<const uint8_t*>(data);
+	ScopedProgram scoped(m_programId);
 	for (const PushConstantSlot& slot : m_pushConstants) {
 		const uint32_t end = slot.offset + pushConstantTypeSize(slot.type);
 		if (slot.location == -1 || slot.offset < offset ||
@@ -216,44 +249,44 @@ void GLShader::setPushConstants(const void* data, uint32_t size,
 		const int32_t loc = slot.location;
 		switch (slot.type) {
 			case format::PUSH_CONSTANT_FLOAT:
-				glProgramUniform1f(m_programId, loc, floats(0));
+				glUniform1f(loc, floats(0));
 				break;
 			case format::PUSH_CONSTANT_VEC2:
-				glProgramUniform2f(m_programId, loc, floats(0), floats(1));
+				glUniform2f(loc, floats(0), floats(1));
 				break;
 			case format::PUSH_CONSTANT_VEC3:
-				glProgramUniform3f(m_programId, loc, floats(0), floats(1),
+				glUniform3f(loc, floats(0), floats(1),
 								   floats(2));
 				break;
 			case format::PUSH_CONSTANT_VEC4:
-				glProgramUniform4f(m_programId, loc, floats(0), floats(1),
+				glUniform4f(loc, floats(0), floats(1),
 								   floats(2), floats(3));
 				break;
 			case format::PUSH_CONSTANT_INT:
-				glProgramUniform1i(m_programId, loc, ints(0));
+				glUniform1i(loc, ints(0));
 				break;
 			case format::PUSH_CONSTANT_IVEC2:
-				glProgramUniform2i(m_programId, loc, ints(0), ints(1));
+				glUniform2i(loc, ints(0), ints(1));
 				break;
 			case format::PUSH_CONSTANT_IVEC3:
-				glProgramUniform3i(m_programId, loc, ints(0), ints(1), ints(2));
+				glUniform3i(loc, ints(0), ints(1), ints(2));
 				break;
 			case format::PUSH_CONSTANT_IVEC4:
-				glProgramUniform4i(m_programId, loc, ints(0), ints(1), ints(2),
+				glUniform4i(loc, ints(0), ints(1), ints(2),
 								   ints(3));
 				break;
 			case format::PUSH_CONSTANT_UINT:
-				glProgramUniform1ui(m_programId, loc, uints(0));
+				glUniform1ui(loc, uints(0));
 				break;
 			case format::PUSH_CONSTANT_UVEC2:
-				glProgramUniform2ui(m_programId, loc, uints(0), uints(1));
+				glUniform2ui(loc, uints(0), uints(1));
 				break;
 			case format::PUSH_CONSTANT_UVEC3:
-				glProgramUniform3ui(m_programId, loc, uints(0), uints(1),
+				glUniform3ui(loc, uints(0), uints(1),
 									uints(2));
 				break;
 			case format::PUSH_CONSTANT_UVEC4:
-				glProgramUniform4ui(m_programId, loc, uints(0), uints(1),
+				glUniform4ui(loc, uints(0), uints(1),
 									uints(2), uints(3));
 				break;
 			case format::PUSH_CONSTANT_MAT3: {
@@ -262,13 +295,13 @@ void GLShader::setPushConstants(const void* data, uint32_t size,
 				for (size_t column = 0; column < 3; column++) {
 					std::memcpy(&packed[column * 3], src + column * 16, 12);
 				}
-				glProgramUniformMatrix3fv(m_programId, loc, 1, GL_FALSE, packed);
+				glUniformMatrix3fv(loc, 1, GL_FALSE, packed);
 				break;
 			}
 			case format::PUSH_CONSTANT_MAT4: {
 				float matrix[16];
 				std::memcpy(matrix, src, sizeof(matrix));
-				glProgramUniformMatrix4fv(m_programId, loc, 1, GL_FALSE, matrix);
+				glUniformMatrix4fv(loc, 1, GL_FALSE, matrix);
 				break;
 			}
 		}
@@ -276,15 +309,18 @@ void GLShader::setPushConstants(const void* data, uint32_t size,
 }
 
 GLShader::~GLShader() {
+	if (s_boundProgram == m_programId) s_boundProgram = 0;
 	glDeleteProgram(m_programId);
 }
 
 void GLShader::bind() const {
 	glUseProgram(m_programId);
+	s_boundProgram = m_programId;
 }
 
 void GLShader::unbind() const {
 	glUseProgram(0);
+	s_boundProgram = 0;
 }
 
 }  // namespace bird::gl

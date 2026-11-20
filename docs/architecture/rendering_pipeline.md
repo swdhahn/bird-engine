@@ -101,23 +101,51 @@ Shared GLSL lives in `assets/shaders/include/` (`globals`, `material`, `pbr`, `l
 
 - **G-buffer views:** set `WorldEnvironment::debugView` to 1 (albedo), 2 (normals), 3 (roughness/metallic), or 4 (linear depth). The demos cycle views with **V** and accept `BIRD_DEBUG_VIEW=n`.
 - **Frame capture:** `BIRD_CAPTURE=/path/frame.ppm BIRD_CAPTURE_FRAME=120` writes the finished frame as a binary PPM.
+- **Shader variant:** `BIRD_GL_SHADER_TARGET=410`, `460` or `es300` forces the GLSL variant a context uses.
+- **Capability fallbacks:** `BIRD_GL_CAPS_DISABLE=depthClamp,srgbWriteControl,linearDepthFiltering` forces the fallback paths that OpenGL ES devices take, on any context.
 
 ---
 
-## 7. Backend Status
+## 7. OpenGL Profiles: Desktop GL, OpenGL ES and WebGL
+
+One GL backend serves every OpenGL family. The CMake option `BIRD_GL_PROFILE` picks the API at build time:
+
+| Profile | API | Function loading | Default for |
+|---|---|---|---|
+| `DESKTOP` | OpenGL 4.1+ core | GLEW | Linux, Windows, macOS |
+| `ES` | OpenGL ES 3.0+ | Linked directly | Android, iOS, Emscripten (WebGL 2) |
+
+`src/renders/opengl/GLApi.h` is the only header that includes GL declarations, and it selects the platform header for the profile. Optional features are detected at run time by `GLCapabilities`, so the passes branch on flags rather than `#ifdef`:
+
+| Capability | Desktop | OpenGL ES | Fallback when absent |
+|---|---|---|---|
+| `depthClamp` | 3.2+ | `GL_EXT_depth_clamp` | Clamp requests are ignored; geometry past near/far clips |
+| `srgbWriteControl` | Core | `GL_EXT_sRGB_write_control` | sRGB attachments always encode, so nothing to toggle |
+| `debugOutput` | 4.3+ / `KHR_debug` | 3.2+ / `KHR_debug` | Not enabled |
+| `halfFloatRenderTargets` | Core | 3.2+ / `EXT_color_buffer_(half_)float` | `GLRenderTargets` fails fast with a clear error |
+| `linearDepthFiltering` | Core | Never | Depth textures without compare mode filter with `NEAREST` |
+
+On ES and WebGL, 8-bit gray, gray-alpha and RGB textures upload as RGBA, since those APIs accept only exact internal-format pairings and WebGL has no swizzles. Uniforms are written with `glUniform*` on the bound program, which every API version supports.
+
+To test the ES profile on a Linux desktop, configure with `-DBIRD_GL_PROFILE=ES` (requires the GLES and EGL development packages, e.g. `libgles-dev libegl-dev`); GLFW then opens an OpenGL ES 3.0 context through EGL.
+
+---
+
+## 8. Backend Status
 
 | Feature | OpenGL (`GLPipeline`) | Vulkan | Metal | DirectX 12 |
 |---|---|---|---|---|
-| **Status** | Complete | Not compiled (legacy experiment) | Stub | Stub |
+| **Status** | Complete (desktop GL and OpenGL ES 3.0) | Not compiled (legacy experiment) | Stub | Stub |
 | **Shading** | Deferred + forward, PBR, HDR | None | None | None |
 | **Shadows** | Cascaded, spot, point (atlas) | None | None | None |
-| **Shader source** | Baked `.bird` (GLSL 410/460) | Baked SPIR-V (planned) | Planned | Planned |
+| **Shader source** | Baked `.bird` (GLSL 410/460, GLSL ES 300) | Baked SPIR-V (planned) | Planned | Planned |
 
 ---
 
-## 8. Known Limitations and Next Steps
+## 9. Known Limitations and Next Steps
 
 - Masked (alpha-tested) materials cast fully opaque shadows; the shadow pass does not sample textures.
 - Ambient light is uniform; image-based lighting would replace `evaluateAmbient`.
 - MSAA is unavailable with the deferred path; FXAA remains the anti-aliasing solution, and TAA is the natural successor.
 - Light volumes draw one call per light; instancing becomes worthwhile beyond a few hundred lights.
+- On OpenGL ES devices without `GL_EXT_depth_clamp`, shadow casters behind a light's near plane and light volumes past the far plane are clipped.

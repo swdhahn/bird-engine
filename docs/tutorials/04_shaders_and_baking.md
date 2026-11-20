@@ -100,8 +100,8 @@ Run `BuildTools` from your project or engine root:
 ### What BuildTools Does:
 1. Invokes Google `shaderc` to compile GLSL into SPIR-V bytecodes.
 2. Performs reflection on uniform blocks, push constant offsets, and sampler bindings.
-3. Translates SPIR-V into GLSL 460 and GLSL 410 using Khronos `SPIRV-Cross`.
-4. Writes an optimized binary `assets/shaders/custom.vert.bird` containing all three representations.
+3. Translates SPIR-V into GLSL 460, GLSL 410 and GLSL ES 300 using Khronos `SPIRV-Cross`.
+4. Writes an optimized binary `assets/shaders/custom.vert.bird` containing all four representations.
 
 ---
 

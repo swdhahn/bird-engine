@@ -69,7 +69,7 @@ struct MeshVBOFormat {
  * in the GLSL variants, so the OpenGL runtime can resolve them by name.
  */
 constexpr char SHADER_FILE_MAGIC[4] = {'B', 'S', 'H', 'D'};
-constexpr uint32_t SHADER_FORMAT_VERSION = 2;
+constexpr uint32_t SHADER_FORMAT_VERSION = 3;
 
 enum ShaderStageKind : uint8_t {
 	SHADER_STAGE_VERTEX,
@@ -85,7 +85,10 @@ enum ShaderTarget : uint8_t {
 	SHADER_TARGET_GLSL_460,	 // OpenGL 4.6 source, bindings in layout()
 	SHADER_TARGET_GLSL_410,	 // OpenGL 4.1 source, bindings via resources
 	SHADER_TARGET_MSL,		 // reserved
-	SHADER_TARGET_HLSL		 // reserved
+	SHADER_TARGET_HLSL,		 // reserved
+	// OpenGL ES 3.0 / WebGL 2 source (Android, iOS, browsers). Bindings via
+	// resources, as for 410; stage-to-stage varyings are matched by name.
+	SHADER_TARGET_GLSL_ES_300
 };
 
 enum ShaderResourceKind : uint8_t {

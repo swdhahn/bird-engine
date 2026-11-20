@@ -4,7 +4,7 @@
 
 #include "GLMesh.h"
 
-#include <GL/glew.h>
+#include "GLApi.h"
 
 namespace bird::gl {
 

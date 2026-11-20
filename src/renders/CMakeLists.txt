@@ -41,12 +41,12 @@ add_library(
 
 add_subdirectory(opengl)
 
-target_link_libraries(opengl-renderer PRIVATE glm libglew_static)
+target_link_libraries(opengl-renderer PRIVATE glm ${BIRD_GL_LIBRARIES})
 # target_link_libraries(vulkan-renderer PRIVATE glm VOLK::volk)
 target_link_libraries(
   renders
   PRIVATE 
-      glm libglew_static glfw opengl-renderer
+      glm ${BIRD_GL_LIBRARIES} glfw opengl-renderer
 )
 
     

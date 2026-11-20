@@ -4,7 +4,7 @@
 
 #include "GLBuffer.h"
 
-#include <GL/glew.h>
+#include "GLApi.h"
 
 #include <algorithm>
 #include <stdexcept>

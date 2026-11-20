@@ -4,7 +4,9 @@
 
 #include "Window.h"
 
-#include <GL/glew.h>
+#include "opengl/GLApi.h"
+// GLApi.h already declares GL; stop GLFW from adding a desktop GL header.
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 #include <cctype>
@@ -24,12 +26,20 @@ Window::Window(uint32_t width, uint32_t height, std::string title) {
 		m_pWindow =
 			glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
 	} else if (CURRENT_GRAPHICS_PIPELINE == GRAPHICS_PIPELINE_OPENGL) {
+#if defined(BIRD_GL_ES)
+		// Desktop testing of the ES profile: an ES 3.0 context through EGL.
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+		glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+#else
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
 #ifdef __APPLE__
 		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#endif
 		m_pWindow =
 			glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
 		glfwMakeContextCurrent(m_pWindow);

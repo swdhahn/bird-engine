@@ -19,13 +19,13 @@ flowchart TD
     subgraph BuildTools Compiler
         BT["BuildTools (AssetLoader)"]
         SC["shaderc (Vulkan GLSL -> SPIR-V)"]
-        SCROSS["SPIRV-Cross (SPIR-V -> GLSL 460 / 410)"]
+        SCROSS["SPIRV-Cross (SPIR-V -> GLSL 460 / 410 / ES 300)"]
         STB["stb_truetype (Font Rasterizer)"]
         ASSIMP["Assimp (Model Processor)"]
     end
 
     subgraph Baked Assets (.bird)
-        B_SHADER[".bird Shader (SPIR-V + GLSL 460 + GLSL 410 + Reflection)"]
+        B_SHADER[".bird Shader (SPIR-V + GLSL 460 + GLSL 410 + GLSL ES 300 + Reflection)"]
         B_FONT[".bird Font (Atlas Texture + Glyph Metrics)"]
         B_MODEL[".bird Mesh & Material"]
     end
@@ -50,6 +50,7 @@ A baked shader file (`<name>.<stage>.bird`) packages everything the engine needs
   - `SPIRV`: Raw bytecode for Vulkan (`VKPipeline`).
   - `GLSL_460`: Modern OpenGL 4.6 shader code with layout bindings.
   - `GLSL_410`: Backward-compatible OpenGL 4.1 shader code (macOS compliant).
+  - `GLSL_ES_300`: OpenGL ES 3.0 / WebGL 2 shader code. Bindings are applied at link time, as for 410, and varyings are named by location (`bird_varying_<n>`) because ES 3.0 pairs stages by name.
 - **Reflection Metadata**:
   - Uniform blocks (name, binding, size).
   - Push constant block (member offsets, types, sizes).

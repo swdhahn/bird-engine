@@ -54,15 +54,47 @@ void expectRejected(const std::string& path, const std::string& source,
 
 }  // namespace
 
-TEST(ShaderBake, ProducesAllThreeVariants) {
+TEST(ShaderBake, ProducesEveryVariant) {
 	const ShaderBinary binary = bakeShader("test.vert", kVertex);
 	EXPECT_EQ(binary.stage, format::SHADER_STAGE_VERTEX);
-	ASSERT_EQ(binary.variants.size(), 3u);
+	ASSERT_EQ(binary.variants.size(), 4u);
 	const auto& spirv = binary.variant(format::SHADER_TARGET_SPIRV);
 	ASSERT_GE(spirv.size(), 4u);
 	EXPECT_EQ(*reinterpret_cast<const uint32_t*>(spirv.data()), 0x07230203u);
 	EXPECT_EQ(text(binary, format::SHADER_TARGET_GLSL_460).rfind("#version 460", 0), 0u);
 	EXPECT_EQ(text(binary, format::SHADER_TARGET_GLSL_410).rfind("#version 410", 0), 0u);
+	EXPECT_EQ(text(binary, format::SHADER_TARGET_GLSL_ES_300).rfind("#version 300 es", 0), 0u);
+}
+
+TEST(ShaderBake, GlslEs300StripsBindingsAndUsesHighPrecision) {
+	const std::string es =
+		text(bakeShader("test.frag", kTwoSamplers),
+			 format::SHADER_TARGET_GLSL_ES_300);
+	EXPECT_EQ(es.find("binding"), std::string::npos) << es;
+	EXPECT_NE(es.find("precision highp float;"), std::string::npos) << es;
+}
+
+TEST(ShaderBake, GlslEs300PairsVaryingsByLocationName) {
+	// ES 3.0 links vertex outputs to fragment inputs by name, so both
+	// stages must name a varying after its location, whatever the source.
+	const std::string vertex =
+		text(bakeShader("test.vert", kVertex), format::SHADER_TARGET_GLSL_ES_300);
+	const std::string fragment = text(bakeShader("test.frag", kTwoSamplers),
+									  format::SHADER_TARGET_GLSL_ES_300);
+	EXPECT_NE(vertex.find("out vec2 bird_varying_0;"), std::string::npos)
+		<< vertex;
+	EXPECT_NE(fragment.find("in vec2 bird_varying_0;"), std::string::npos)
+		<< fragment;
+	// Vertex inputs and fragment outputs keep their names and locations.
+	EXPECT_NE(vertex.find("layout(location = 0) in"), std::string::npos);
+	EXPECT_NE(fragment.find("layout(location = 0) out"), std::string::npos);
+}
+
+TEST(ShaderBake, DesktopVariantsKeepSourceVaryingNames) {
+	const std::string desktop =
+		text(bakeShader("test.vert", kVertex), format::SHADER_TARGET_GLSL_410);
+	EXPECT_EQ(desktop.find("bird_varying_"), std::string::npos);
+	EXPECT_NE(desktop.find(" uv;"), std::string::npos) << desktop;
 }
 
 TEST(ShaderBake, Glsl410StripsBindingsWhile460KeepsThem) {
@@ -108,7 +140,8 @@ TEST(ShaderBake, ReflectsPushConstantLayout) {
 	EXPECT_EQ(members[3].type, format::PUSH_CONSTANT_UINT);
 	// On OpenGL the block becomes ordinary uniforms with those names.
 	for (auto target : {format::SHADER_TARGET_GLSL_410,
-						format::SHADER_TARGET_GLSL_460}) {
+						format::SHADER_TARGET_GLSL_460,
+						format::SHADER_TARGET_GLSL_ES_300}) {
 		EXPECT_NE(text(binary, target).find("uniform Object object;"),
 				  std::string::npos);
 	}
@@ -301,6 +334,7 @@ TEST_P(EngineShader, BakesForEveryTarget) {
 	const ShaderBinary binary = bakeShader(path.string(), readFile(path));
 	EXPECT_FALSE(text(binary, format::SHADER_TARGET_GLSL_410).empty());
 	EXPECT_FALSE(text(binary, format::SHADER_TARGET_GLSL_460).empty());
+	EXPECT_FALSE(text(binary, format::SHADER_TARGET_GLSL_ES_300).empty());
 	EXPECT_LE(binary.pushConstantSize, 128u);
 }
 

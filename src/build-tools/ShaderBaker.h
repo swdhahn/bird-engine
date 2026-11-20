@@ -25,7 +25,8 @@ format::ShaderStageKind stageFromPath(const std::string& path);
 
 /**
  * Bakes one Vulkan-style GLSL stage: GLSL -> SPIR-V (shaderc), validated,
- * reflected, then SPIR-V -> GLSL 460 and GLSL 410 (SPIRV-Cross).
+ * reflected, then SPIR-V -> GLSL 460, GLSL 410 and GLSL ES 300
+ * (SPIRV-Cross).
  *
  * `#include "file"` resolves relative to the including file; every included
  * file is recorded with its content hash for staleness checks. Include
@@ -38,7 +39,7 @@ format::ShaderStageKind stageFromPath(const std::string& path);
  *
  * @param path - used for the stage and in error messages.
  * @param source - GLSL source text.
- * @return the stage with SPIRV, GLSL_460 and GLSL_410 variants.
+ * @return the stage with SPIRV, GLSL_460, GLSL_410 and GLSL_ES_300 variants.
  * @throws ShaderBakeError naming the file and the violated rule.
  */
 ShaderBinary bakeShader(const std::string& path, const std::string& source);

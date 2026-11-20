@@ -1,6 +1,6 @@
 #include "GLPostProcessPass.h"
 
-#include <GL/glew.h>
+#include "../GLApi.h"
 
 #include "../../../util/ResourceManager.h"
 #include "../GLDrawCommands.h"
