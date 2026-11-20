@@ -4,6 +4,8 @@
 
 #include "ResourceManager.h"
 
+#include "../animation/skeletal/PoseOps.h"
+
 namespace bird {
 
 ResourceManager::ResourceManager() {
@@ -123,6 +125,48 @@ std::shared_ptr<Font> ResourceManager::loadFont(const std::string& path) {
 	return font;
 }
 
+namespace {
+
+/**
+ * Moves one mesh's skin stream (if the bake has one) into GPU buffers.
+ * @return Per-joint influence radii for culling, or empty when rigid.
+ */
+std::vector<float> attachSkin(MeshBuilder& builder, const SkeletalAsset& asset,
+							  uint32_t meshIndex, uint32_t vertexCount,
+							  const float* positions, const std::string& path) {
+	for (const SkinStream& skin : asset.skins) {
+		if (skin.meshIndex != meshIndex) continue;
+		if (skin.joints.size() != vertexCount) {
+			throw std::runtime_error("Skin of mesh " + std::to_string(meshIndex) +
+									 " in " + path +
+									 " does not match its vertex count; "
+									 "re-run BuildTools");
+		}
+		std::vector<float> radii =
+			computeJointRadii(*asset.skeleton, skin, positions, vertexCount);
+		const size_t count = static_cast<size_t>(vertexCount) * 4;
+		auto joints = std::make_unique<uint16_t[]>(count);
+		auto weights = std::make_unique<float[]>(count);
+		for (size_t v = 0; v < vertexCount; ++v) {
+			for (size_t k = 0; k < 4; ++k) {
+				joints[v * 4 + k] = skin.joints[v][k];
+				weights[v * 4 + k] = skin.weights[v][k];
+			}
+		}
+		builder.setSkinBuffers(
+			BufferBuilder<uint16_t, 4>(BUFFER_STAGED | BUFFER_ARRAY)
+				.data(std::move(joints), count)
+				.build(),
+			BufferBuilder<float, 4>(BUFFER_STAGED | BUFFER_ARRAY)
+				.data(std::move(weights), count)
+				.build());
+		return radii;
+	}
+	return {};
+}
+
+}  // namespace
+
 std::shared_ptr<const SkeletalAsset> ResourceManager::loadSkeletalAsset(
 	const std::string& path) {
 	const auto cached = m_skeletalAssets.find(path);
@@ -152,6 +196,9 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(
 
 	uint16_t meshCount = 0;
 	file.read(reinterpret_cast<char*>(&meshCount), sizeof(uint16_t));
+	// Skinned models carry their influences beside the skeleton bake.
+	const std::shared_ptr<const SkeletalAsset> skeletal =
+		loadSkeletalAsset(path);
 	std::vector<std::shared_ptr<Mesh>> meshes(meshCount);
 	for (int i = 0; i < meshCount; i++) {
 		std::unique_ptr<uint32_t[]> indices = nullptr;
@@ -228,6 +275,8 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(
 			BufferBuilder<float>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY)
 				.data(std::move(vertices), vertexCount * vertexSize)
 				.build();
+		// Host copy stays alive inside the buffer while the builder holds it.
+		const float* positions = vertexBuffer->m_pData.get();
 		std::unique_ptr<bird::Buffer<float>> normalBuffer =
 			BufferBuilder<float>(bird::BUFFER_STAGED | bird::BUFFER_ARRAY)
 				.data(std::move(normals), normalCount * normalSize)
@@ -247,12 +296,20 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(
 			.setTextureCoordBuffer(std::move(textureCoordBuffer));
 
 		if (tangents) mb.setTangentBuffer(std::move(tangents));
+		std::vector<float> jointRadii;
+		if (skeletal && vertexSize == 3) {
+			jointRadii =
+				attachSkin(mb, *skeletal, i, vertexCount, positions, path);
+		}
 
 		std::shared_ptr<Material> mat =
 			loadMaterial(path + std::to_string(materialIndex) + ".mat");
 		if (!mat) mat = std::make_shared<Material>();
 		mb.setMaterial(mat);
 		meshes.data()[i] = mb.build();
+		if (!jointRadii.empty()) {
+			meshes.data()[i]->setJointRadii(std::move(jointRadii));
+		}
 		// addResource(path + std::to_string(i), meshes.data()[i], MESH);
 	}
 

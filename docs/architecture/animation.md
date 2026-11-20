@@ -91,6 +91,15 @@ Known limitations:
 * Assimp 5.3 does not report per-key interpolation, so clips import as linear.
 * Static meshes inside a skinned file are not pre-transformed.
 
-### Status
+### GPU skinning
 
-GPU skinning is not wired yet. The palette and skin streams are produced and tested; the remaining work is attribute locations for joints and weights on `GLMesh`, a skinning uniform block, skinned variants of the forward, G-buffer and shadow vertex shaders, and inflated culling bounds for animated meshes.
+Rendering is linear blend skinning in the vertex stage, on every backend target the baker emits (GLSL 4.10 and 4.60), with nothing desktop-only, so the same design carries to OpenGL ES and WebGL.
+
+* **Mesh streams.** `ResourceManager::loadMesh` attaches the skin streams from `<model>.skel.bird` to the matching meshes (`Mesh::setSkin`). `GLMesh` exposes joint indices at attribute location 4 as integers (`glVertexAttribIPointer`, `uvec4` in GLSL) and weights at location 5.
+* **Palette block.** `GLSkinningBlock` owns uniform block 4 (`SkinningUBOData`, 256 `mat3x4` entries, 12 KB). It re-uploads only when the palette differs from the last one uploaded this frame, so a character's meshes and its G-buffer, forward and shadow draws share one upload.
+* **Programs.** Each pass holds a `GLMeshPrograms` pair: the rigid program and its skinned twin (`mesh_skinned.vert`, `shadow_depth_skinned.vert`) behind the same fragment stage and push constants. `prepare(item)` switches programs only when needed; the render queue sorts rigid draws before skinned ones, so each pass switches at most once.
+* **Shaders.** `include/mesh_vertex.glsl` holds the vertex interface shared by `mesh.vert` and `mesh_skinned.vert`; `include/skinning.glsl` blends the four joint rows and transforms points and directions.
+* **Culling.** A skinned draw's bounds come from `skinnedBounds`: a sphere around every influencing joint, with the radius measured at load (`computeJointRadii`) and scaled by the joint's current scale. Linear blend skinning keeps each vertex inside the convex hull of its joints' rigid copies, so the box always contains the posed mesh.
+* **Fallback.** A skinned mesh on an object without a `SkeletalAnimationComponent` draws with the rigid program, in its bind pose.
+
+Future work: a ring of palette blocks (or one large block addressed by offset) to avoid re-specifying a single buffer between draws, and dual quaternion skinning for volume-preserving twists.

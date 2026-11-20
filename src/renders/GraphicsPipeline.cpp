@@ -7,6 +7,8 @@
 #include <cstring>
 #include <memory>
 
+#include "../animation/skeletal/PoseOps.h"
+#include "../animation/skeletal/SkeletalAnimationComponent.h"
 #include "generic/Material.h"
 #include "generic/Mesh.h"
 #include "generic/RawBuffer.h"
@@ -154,12 +156,30 @@ GlobalUBOData GraphicsPipeline::buildGlobalData() const {
 	return global;
 }
 
+namespace {
+
+/** The object's skeletal animation, or null. O(components). */
+SkeletalAnimationComponent* findSkeletalAnimation(WorldObject* object) {
+	for (auto& component : object->getComponents()) {
+		if (auto* skeletal =
+				dynamic_cast<SkeletalAnimationComponent*>(component.get())) {
+			return skeletal;
+		}
+	}
+	return nullptr;
+}
+
+}  // namespace
+
 void GraphicsPipeline::buildRenderQueue(const Frustum& frustum) {
 	m_renderQueue.clear();
 	m_shadowCasters.clear();
 	const Matrix4 view = m_camera->getViewMatrix();
 	for (MeshComponent* component : m_meshes) {
-		const Matrix4& model = component->world_object()->getTransformMatrix();
+		WorldObject* object = component->world_object();
+		const Matrix4& model = object->getTransformMatrix();
+		// Skinned meshes without an animation component draw in bind pose.
+		SkeletalAnimationComponent* skeletal = findSkeletalAnimation(object);
 		const int meshCount = component->getMeshCount();
 		for (int i = 0; i < meshCount; i++) {
 			Material* material = component->getMaterial(i).get();
@@ -168,7 +188,15 @@ void GraphicsPipeline::buildRenderQueue(const Frustum& frustum) {
 			item.mesh = component->getMeshes()[i].get();
 			item.material = material;
 			item.model = model;
-			item.worldBounds = item.mesh->getLocalBounds().transformed(model);
+			AABB localBounds = item.mesh->getLocalBounds();
+			if (skeletal && item.mesh->isSkinned()) {
+				item.skinPalette = &skeletal->getSkinningPalette();
+				const AABB posed =
+					skinnedBounds(skeletal->getAnimator().getModelMatrices(),
+								  item.mesh->getJointRadii());
+				if (!posed.isEmpty()) localBounds = posed;
+			}
+			item.worldBounds = localBounds.transformed(model);
 			if (material->castsShadows()) m_shadowCasters.push_back(item);
 			if (!frustum.intersects(item.worldBounds)) continue;
 			item.viewDepth =

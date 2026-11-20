@@ -204,3 +204,56 @@ TEST(SkeletalAnimator, StopReturnsToRestAndValidatesInput) {
 	foreign->addTrack(std::move(track));
 	EXPECT_THROW(animator.play(foreign), std::invalid_argument);
 }
+
+TEST(PoseOps, JointRadiiMeasureInfluencedVerticesInBindSpace) {
+	auto skeleton = makeArm();
+	// Vertex 0 at (0, 1.5, 0) on the tip (0.5 above it); vertex 1 at
+	// (2, 0, 0) on the root; vertex 2 split, and unweighted joints stay 0.
+	const float positions[] = {0, 1.5f, 0, 2, 0, 0, 0, 1, 0};
+	SkinStream skin;
+	skin.joints = {{1, 0, 0, 0}, {0, 0, 0, 0}, {0, 1, 0, 0}};
+	skin.weights = {{1, 0, 0, 0}, {1, 0, 0, 0}, {0.5f, 0.5f, 0, 0}};
+	const std::vector<float> radii =
+		computeJointRadii(*skeleton, skin, positions, 3);
+	ASSERT_EQ(radii.size(), 2u);
+	EXPECT_NEAR(radii[0], 2.0f, kEps);
+	EXPECT_NEAR(radii[1], 0.5f, kEps);
+	EXPECT_THROW(computeJointRadii(*skeleton, skin, positions, 2),
+				 std::invalid_argument);
+}
+
+TEST(PoseOps, SkinnedBoundsAlwaysContainTheSkinnedMesh) {
+	auto skeleton = makeArm();
+	const float positions[] = {0, 1.5f, 0, 1, 0, 0, 0.5f, 1, 0};
+	SkinStream skin;
+	skin.joints = {{1, 0, 0, 0}, {0, 0, 0, 0}, {0, 1, 0, 0}};
+	skin.weights = {{1, 0, 0, 0}, {1, 0, 0, 0}, {0.3f, 0.7f, 0, 0}};
+	const std::vector<float> radii =
+		computeJointRadii(*skeleton, skin, positions, 3);
+
+	SkeletalAnimator animator(skeleton);
+	animator.play(makeSwing(), LoopMode::Loop);
+	for (int frame = 0; frame < 20; ++frame) {
+		animator.update(0.05f);
+		const AABB box = skinnedBounds(animator.getModelMatrices(), radii);
+		ASSERT_FALSE(box.isEmpty());
+		for (size_t v = 0; v < 3; ++v) {
+			const Vector3 p(positions[v * 3], positions[v * 3 + 1],
+							positions[v * 3 + 2]);
+			Vector3 skinned(0.0f);
+			for (int k = 0; k < 4; ++k) {
+				const float w = skin.weights[v][k];
+				if (w > 0.0f) {
+					skinned += w * apply(animator.getSkinningPalette()
+											 [skin.joints[v][k]],
+										 p);
+				}
+			}
+			for (int axis = 0; axis < 3; ++axis) {
+				EXPECT_GE(skinned[axis], box.min[axis] - kEps) << frame;
+				EXPECT_LE(skinned[axis], box.max[axis] + kEps) << frame;
+			}
+		}
+	}
+	EXPECT_TRUE(skinnedBounds(animator.getModelMatrices(), {}).isEmpty());
+}

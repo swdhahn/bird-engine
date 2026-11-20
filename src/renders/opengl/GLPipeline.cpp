@@ -65,10 +65,12 @@ void GLPipeline::init() {
 						.bindingPoint(UBO_BINDING_LIGHTS)
 						.build();
 
-	m_shadowPass = std::make_unique<GLShadowPass>(resources, ShadowSettings{});
-	m_gBufferPass = std::make_unique<GLGBufferPass>(resources);
+	m_skinning = std::make_unique<GLSkinningBlock>();
+	m_shadowPass = std::make_unique<GLShadowPass>(resources, ShadowSettings{},
+												  *m_skinning);
+	m_gBufferPass = std::make_unique<GLGBufferPass>(resources, *m_skinning);
 	m_lightingPass = std::make_unique<GLLightingPass>(resources);
-	m_forwardPass = std::make_unique<GLForwardPass>(resources);
+	m_forwardPass = std::make_unique<GLForwardPass>(resources, *m_skinning);
 	m_postProcessPass = std::make_unique<GLPostProcessPass>(resources);
 	createRenderTargets();
 }
@@ -128,6 +130,7 @@ void GLPipeline::captureFrameIfRequested() {
 }
 
 void GLPipeline::renderWorld() {
+	m_skinning->beginFrame();  // palettes were rewritten since last frame
 	GlobalUBOData global = buildGlobalData();
 	m_globalUBO->update(&global, 1, 0);
 	m_globalUBO->bindToBindingPoint();
@@ -208,6 +211,7 @@ void GLPipeline::cleanUp() {
 	m_lightingPass.reset();
 	m_gBufferPass.reset();
 	m_shadowPass.reset();
+	m_skinning.reset();	 // after the passes that reference it
 	m_targets.reset();
 	m_lightsBlock.reset();
 	m_pWindow.reset();

@@ -84,6 +84,8 @@ class GLPipeline : public GraphicsPipeline {
 	uint64_t m_frameIndex = 0;
 	std::unique_ptr<GLRenderTargets> m_targets;
 	std::unique_ptr<Buffer<LightsUBOData>> m_lightsBlock;
+	/** Declared before the passes that reference it (destroyed after). */
+	std::unique_ptr<GLSkinningBlock> m_skinning;
 	std::unique_ptr<GLShadowPass> m_shadowPass;
 	std::unique_ptr<GLGBufferPass> m_gBufferPass;
 	std::unique_ptr<GLLightingPass> m_lightingPass;
