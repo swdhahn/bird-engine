@@ -43,12 +43,12 @@ jobs:
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           # Newest 3.x CMake the SDK repository offers (the root project
-          # needs 3.23+); the runner image ships a recent NDK.
+          # needs 3.23+), and the runner image's default (stable) NDK.
           CMAKE_VERSION=$("$SDKMANAGER" --list 2>/dev/null \
             | grep -oE 'cmake;3\.[0-9]+\.[0-9]+' | sed 's/cmake;//' \
             | sort -uV | tail -1)
           yes | "$SDKMANAGER" "cmake;${CMAKE_VERSION}" > /dev/null
-          NDK_VERSION=$(basename "$ANDROID_NDK_LATEST_HOME")
+          NDK_VERSION=$(basename "$ANDROID_NDK_HOME")
           echo "CMake ${CMAKE_VERSION}, NDK ${NDK_VERSION}"
           echo "CMAKE_VERSION=${CMAKE_VERSION}" >> "$GITHUB_ENV"
           echo "NDK_VERSION=${NDK_VERSION}" >> "$GITHUB_ENV"
