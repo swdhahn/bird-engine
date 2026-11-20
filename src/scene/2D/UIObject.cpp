@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "UIAnimator.h"
 #include "UIGeometry.h"
 #include "UIManager.h"
 
@@ -309,10 +310,16 @@ void UIObject::arrangeAnchored(UIObject& child, Vector2 contentOrigin,
 
 void UIObject::updateTransforms(const Matrix3& parentBasis,
 								const UIRect& clip) {
-	const Vector2 pivotPoint = m_pivot * getSize();
+	// Layout places the top-left corner; the visual transform then rotates
+	// and scales around its origin and translates by its offset.
+	const Vector2 origin = m_visual.origin * getSize();
+	Matrix3 scale(1.0f);
+	scale[0][0] = m_visual.scale.x;
+	scale[1][1] = m_visual.scale.y;
 	m_basis = parentBasis *
-			  ui::makeBasis(m_layoutPosition + pivotPoint, m_rotation) *
-			  ui::makeBasis(-pivotPoint, 0.0f);
+			  ui::makeBasis(m_layoutPosition + m_visual.offset + origin,
+							m_rotation) *
+			  scale * ui::makeBasis(-origin, 0.0f);
 	m_clip = clip;
 	const UIRect childClip =
 		m_clipChildren ? clip.intersect(screenBounds(m_basis, childClipRect()))
@@ -350,6 +357,70 @@ void UIObject::markLayoutDirty() {
 
 void UIObject::markVisualDirty() {
 	if (m_manager) m_manager->invalidateDraw();
+}
+
+void UIObject::markTransformDirty() {
+	if (m_manager) m_manager->invalidateTransforms();
+}
+
+// ------------------------------------------------------- visual transform
+
+UIObject& UIObject::setVisualOffset(Vector2 offset) {
+	if (offset != m_visual.offset) {
+		m_visual.offset = offset;
+		markTransformDirty();
+	}
+	return *this;
+}
+
+UIObject& UIObject::setVisualScale(Vector2 scale) {
+	if (scale != m_visual.scale) {
+		m_visual.scale = scale;
+		markTransformDirty();
+	}
+	return *this;
+}
+
+UIObject& UIObject::setVisualRotation(float radians) {
+	if (radians != m_rotation) {
+		m_rotation = radians;
+		markTransformDirty();
+	}
+	return *this;
+}
+
+UIObject& UIObject::setVisualOrigin(Vector2 fraction) {
+	if (fraction != m_visual.origin) {
+		m_visual.origin = fraction;
+		markTransformDirty();
+	}
+	return *this;
+}
+
+UIObject& UIObject::setOpacity(float opacity) {
+	opacity = std::clamp(opacity, 0.0f, 1.0f);
+	if (opacity != m_visual.opacity) {
+		m_visual.opacity = opacity;
+		markVisualDirty();
+	}
+	return *this;
+}
+
+UIAnimator UIObject::animate() {
+	return UIAnimator(*this);
+}
+
+uint32_t UIObject::claimAnimated(UIAnimatedProperty property) {
+	if (property >= UIAnimatedProperty::Count) {
+		throw std::invalid_argument("UIObject::claimAnimated: bad property");
+	}
+	return ++m_animationStamps[static_cast<size_t>(property)];
+}
+
+bool UIObject::ownsAnimated(UIAnimatedProperty property,
+							uint32_t stamp) const {
+	return property < UIAnimatedProperty::Count &&
+		   m_animationStamps[static_cast<size_t>(property)] == stamp;
 }
 
 const Font* UIObject::font() const {

@@ -56,6 +56,11 @@ class UIDrawList {
 
 	/** Local-to-screen transform for subsequent primitives. */
 	void setTransform(const Matrix3& transform);
+	/**
+	 * Alpha multiplier for subsequent primitives (fill and border), used
+	 * for subtree opacity. Reset to 1 by clear().
+	 */
+	void setOpacity(float opacity);
 	/** Intersects a local-space rect with the current clip and pushes it. */
 	void pushClip(const UIRect& localRect);
 	void popClip();
@@ -138,6 +143,12 @@ class UIDrawList {
 	std::vector<UIRect> m_clipStack;
 	std::vector<UIDrawCommand> m_commands;
 	Matrix3 m_transform{1.0f};
+	float m_opacity = 1.0f;
+	/** Applies m_opacity to one colour. */
+	Vector4 faded(Vector4 color) const {
+		color.a *= m_opacity;
+		return color;
+	}
 	Vector2 m_whiteUV;
 };
 
