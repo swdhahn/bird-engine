@@ -10,6 +10,9 @@ val birdNdkVersion = providers.gradleProperty("birdNdkVersion")
     .getOrElse("27.2.12479018")
 val birdCmakeVersion = providers.gradleProperty("birdCmakeVersion")
     .getOrElse("3.31.6")
+// Comma-separated ABIs; CI adds x86_64 to smoke-test on an emulator.
+val birdAbis = providers.gradleProperty("birdAbis")
+    .getOrElse("arm64-v8a").split(",").map { it.trim() }
 
 android {
     namespace = "dev.birdengine.sample"
@@ -24,7 +27,7 @@ android {
         versionName = "0.1.0"
 
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += birdAbis
         }
         externalNativeBuild {
             cmake {
