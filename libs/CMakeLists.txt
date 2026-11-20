@@ -15,7 +15,15 @@ if(MSVC)
 	# Visual Studio / MSVC specific
 	set(LIB_EXT ".lib")
 	set(LIB_PREFIX "")      # MSVC often outputs "volk.lib"
-	set(BUILD_SUBDIR "/$<CONFIG>") # Handles /Debug or /Release subfolders
+	# Only multi-config generators (Visual Studio) nest output under a
+	# per-config subfolder (Debug/Release/...); single-config generators
+	# used with cl.exe (e.g. Ninja) do not, even though MSVC is still TRUE.
+	get_property(IS_MULTI_CONFIG_GENERATOR GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+	if(IS_MULTI_CONFIG_GENERATOR)
+		set(BUILD_SUBDIR "/$<CONFIG>")
+	else()
+		set(BUILD_SUBDIR "")
+	endif()
 	set(COMPILER_WARNING_FLAGS "") # Clear GCC flags for MSVC
 	message(STATUS "Configuring for MSVC (Windows)")
 else()
@@ -197,7 +205,10 @@ ExternalProject_Add_Step(
 set(JOLT_EXTRA_ARGS "")
 if(MSVC)
 	# Force Jolt to use /MD (Dynamic) to match your main project
-	set(JOLT_EXTRA_ARGS "-DUSE_STATIC_MSVC_RUNTIME_LIBRARY=OFF")
+	# Jolt's own ENABLE_ALL_WARNINGS default (ON) adds /Wall /WX, which
+	# treats warnings MSVC emits inside the Windows SDK's own headers
+	# (e.g. wingdi.h) as hard errors; disable it rather than patching SDK code.
+	set(JOLT_EXTRA_ARGS "-DUSE_STATIC_MSVC_RUNTIME_LIBRARY=OFF" "-DENABLE_ALL_WARNINGS=OFF")
 endif()
 ExternalProject_Add(
 		JOLT
