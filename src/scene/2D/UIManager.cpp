@@ -58,6 +58,7 @@ void UIManager::process(float delta) {
 	m_time += delta;
 	flushRemovals();
 	tickAnimations(delta);
+	m_animations.tick(delta);
 	flushRemovals();
 	layoutNow();
 	updateTooltip(delta);
@@ -70,8 +71,19 @@ void UIManager::process(float delta) {
 }
 
 void UIManager::layoutNow() {
-	if (!m_layoutDirty) return;
+	if (!m_layoutDirty) {
+		if (m_transformsDirty) {
+			// Visual-only change: O(n) transform pass, no measure/arrange.
+			m_transformsDirty = false;
+			for (UIObject* layer : {m_root.get(), m_overlay.get()}) {
+				layer->updateTransforms(Matrix3(1.0f), UIRect::unbounded());
+			}
+			m_drawDirty = true;
+		}
+		return;
+	}
 	m_layoutDirty = false;
+	m_transformsDirty = false;
 	for (UIObject* layer : {m_root.get(), m_overlay.get()}) {
 		layer->setSize(m_viewport);
 		layer->measure(m_viewport);
@@ -99,19 +111,29 @@ void UIManager::invalidateDraw() {
 	m_drawDirty = true;
 }
 
-void UIManager::rebuildDrawList() {
-	m_drawList.clear();
-	drawTree(*m_root);
-	drawTree(*m_overlay);
+void UIManager::invalidateTransforms() {
+	m_transformsDirty = true;
+	m_drawDirty = true;
 }
 
-void UIManager::drawTree(UIObject& node) {
+void UIManager::rebuildDrawList() {
+	m_drawList.clear();
+	drawTree(*m_root, 1.0f);
+	drawTree(*m_overlay, 1.0f);
+	m_drawList.setOpacity(1.0f);
+}
+
+void UIManager::drawTree(UIObject& node, float parentOpacity) {
 	if (!node.isVisible()) return;
+	const float opacity = parentOpacity * node.getOpacity();
+	if (opacity <= 0.0f) return;  // fully faded: nothing below can show
+	m_drawList.setOpacity(opacity);
 	m_drawList.setTransform(node.getWorldMatrix());
 	node.draw(m_drawList);
 	if (node.clipsChildren()) m_drawList.pushClip(node.childClipRect());
-	for (auto& child : node.getChildren()) drawTree(*child);
+	for (auto& child : node.getChildren()) drawTree(*child, opacity);
 	if (node.clipsChildren()) m_drawList.popClip();
+	m_drawList.setOpacity(opacity);
 	m_drawList.setTransform(node.getWorldMatrix());
 	node.drawOverlay(m_drawList);
 }
@@ -149,6 +171,10 @@ void UIManager::onSubtreeRemoved(UIObject* subtree) {
 	m_animating.erase(
 		std::remove_if(m_animating.begin(), m_animating.end(), inside),
 		m_animating.end());
+	// Every owner registered here is a live UIObject (removal cancels).
+	m_animations.cancelOwnersIf([&inside](const void* owner) {
+		return inside(static_cast<UIObject*>(const_cast<void*>(owner)));
+	});
 	// A popup dies with its node; a popup whose owner dies is closed.
 	for (auto it = m_popups.begin(); it != m_popups.end();) {
 		if (inside(it->node)) {

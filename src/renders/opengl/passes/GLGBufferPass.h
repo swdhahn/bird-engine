@@ -7,6 +7,7 @@
 #include "../../generic/RenderQueue.h"
 #include "../GLRenderState.h"
 #include "../GLRenderTargets.h"
+#include "../GLSkinning.h"
 
 namespace bird {
 class ResourceManager;
@@ -24,7 +25,10 @@ class GLGBufferPass {
 	 * Loads the pass's shader programs.
 	 * @param resources Shared cache through which the programs load.
 	 */
-	explicit GLGBufferPass(ResourceManager& resources);
+	/**
+	 * @param skinning Shared palette block used by skinned draws.
+	 */
+	GLGBufferPass(ResourceManager& resources, GLSkinningBlock& skinning);
 
 	/**
 	 * @param items Deferred bucket, sorted by material then depth.
@@ -34,7 +38,7 @@ class GLGBufferPass {
 				 const Vector3& clearColor, GLRenderState& state);
 
    private:
-	std::shared_ptr<Shader> m_shader;
+	GLMeshPrograms m_programs;
 };
 
 }  // namespace bird::gl

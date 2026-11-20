@@ -39,13 +39,21 @@ struct RenderItem {
 	AABB worldBounds;
 	/** Distance from the camera along the view direction. */
 	float viewDepth = 0.0f;
+	/**
+	 * Joint palette for skinned draws (owned by the object's animation
+	 * component, valid for the frame); null for rigid draws.
+	 */
+	const std::vector<Matrix3x4>* skinPalette = nullptr;
+
+	bool isSkinned() const { return skinPalette != nullptr; }
 };
 
 /**
  * Per-frame draw list split into buckets and sorted for each pass.
  *
- * Opaque buckets sort by material (minimizing uniform and texture rebinds),
- * then front to back (maximizing early depth rejection). The transparent
+ * Opaque buckets group rigid draws before skinned ones (one program switch
+ * per pass), then sort by material (minimizing uniform and texture
+ * rebinds), then front to back (maximizing early depth rejection). The transparent
  * bucket sorts strictly back to front for correct blending. Sorting is
  * O(n log n) per bucket; submission is amortized O(1).
  */

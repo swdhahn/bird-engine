@@ -35,7 +35,7 @@ void drawMesh(const Mesh& mesh) {
 		GL_UNSIGNED_INT, nullptr);
 }
 
-void drawItems(const std::vector<RenderItem>& items, GLShader& shader,
+void drawItems(const std::vector<RenderItem>& items, GLMeshPrograms& programs,
 			   GLRenderState& state) {
 	const Material* bound = nullptr;
 	for (const RenderItem& item : items) {
@@ -43,6 +43,7 @@ void drawItems(const std::vector<RenderItem>& items, GLShader& shader,
 			bindMaterial(*item.material, state);
 			bound = item.material;
 		}
+		GLShader& shader = programs.prepare(item);
 		const ObjectPushConstants object{item.model};
 		shader.setPushConstants(&object, sizeof(object));
 		drawMesh(*item.mesh);

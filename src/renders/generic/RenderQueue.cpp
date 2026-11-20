@@ -34,6 +34,7 @@ void RenderQueue::submit(const RenderItem& item) {
 
 void RenderQueue::sort() {
 	auto opaqueOrder = [](const RenderItem& a, const RenderItem& b) {
+		if (a.isSkinned() != b.isSkinned()) return b.isSkinned();
 		if (a.material != b.material) return a.material < b.material;
 		return a.viewDepth < b.viewDepth;
 	};

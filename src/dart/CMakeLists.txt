@@ -60,6 +60,15 @@ set(BIRD_SCRIPT_HEADERS
     ${CMAKE_SOURCE_DIR}/src/scene/2D/UIColorControls.h
     ${CMAKE_SOURCE_DIR}/src/scene/2D/UIColorPicker.h
     ${CMAKE_SOURCE_DIR}/src/scene/2D/UIRichInputs.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIVisualTransform.h
+    ${CMAKE_SOURCE_DIR}/src/scene/2D/UIAnimator.h
+    ${CMAKE_SOURCE_DIR}/src/animation/Easing.h
+    ${CMAKE_SOURCE_DIR}/src/animation/Curve.h
+    ${CMAKE_SOURCE_DIR}/src/animation/PlaybackClock.h
+    ${CMAKE_SOURCE_DIR}/src/animation/AnimationSystem.h
+    ${CMAKE_SOURCE_DIR}/src/animation/Curves.h
+    ${CMAKE_SOURCE_DIR}/src/animation/WorldTweens.h
+    ${CMAKE_SOURCE_DIR}/src/animation/skeletal/SkeletalAnimationComponent.h
     ${CMAKE_SOURCE_DIR}/src/Application.h
 )
 

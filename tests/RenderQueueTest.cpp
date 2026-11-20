@@ -99,3 +99,21 @@ TEST(Bounds, FrustumCullsBoxesBehindCamera) {
 	EXPECT_TRUE(frustum.intersectsSphere(Vector3(0, 0, 2), 3.0f));
 	EXPECT_FALSE(frustum.intersectsSphere(Vector3(0, 0, 5), 3.0f));
 }
+
+TEST(RenderQueue, OpaqueBucketsGroupRigidBeforeSkinned) {
+	Material a, b;
+	const std::vector<Matrix3x4> palette(1);
+	RenderQueue queue;
+	RenderItem skinnedNear = item(a, 1.0f, 1);
+	skinnedNear.skinPalette = &palette;
+	queue.submit(skinnedNear);
+	queue.submit(item(b, 5.0f, 2));
+	queue.submit(item(a, 3.0f, 3));
+	queue.sort();
+	const auto& deferred = queue.bucket(RenderBucket::Deferred);
+	ASSERT_EQ(deferred.size(), 3u);
+	// One program switch per pass: every rigid draw precedes every skinned.
+	EXPECT_FALSE(deferred[0].isSkinned());
+	EXPECT_FALSE(deferred[1].isSkinned());
+	EXPECT_TRUE(deferred[2].isSkinned());
+}

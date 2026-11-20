@@ -310,7 +310,8 @@ INSTANTIATE_TEST_SUITE_P(
 					  "light_directional.frag", "light_volume.vert",
 					  "light_volume.frag", "shadow_depth.vert",
 					  "shadow_depth.frag", "tonemap.frag", "passthrough.vert",
-					  "fxaa.frag", "ui.vert", "ui.frag", "debug_line.vert"));
+					  "fxaa.frag", "ui.vert", "ui.frag", "debug_line.vert",
+					  "mesh_skinned.vert", "shadow_depth_skinned.vert"));
 
 TEST(EngineShaderBindings, MatchGpuLayoutConventions) {
 	const auto root = std::filesystem::path(BIRD_SOURCE_DIR) / "assets/shaders";
@@ -330,4 +331,21 @@ TEST(EngineShaderBindings, MatchGpuLayoutConventions) {
 				   readFile(root / "light_volume.frag"));
 	EXPECT_EQ(volume.pushConstantSize, 128u);
 	EXPECT_EQ(bindingOf(volume, "gDepth"), 7u);
+}
+
+TEST(EngineShaderBindings, SkinnedVariantsMatchTheirRigidCounterparts) {
+	const auto root = std::filesystem::path(BIRD_SOURCE_DIR) / "assets/shaders";
+	auto bake = [&root](const char* name) {
+		return bakeShader((root / name).string(), readFile(root / name));
+	};
+	const ShaderBinary rigid = bake("mesh.vert");
+	const ShaderBinary skinned = bake("mesh_skinned.vert");
+	// Values mirror UBO_BINDING_SKINNING in renders/generic/GpuLayouts.h.
+	EXPECT_EQ(bindingOf(skinned, "Skinning"), 4u);
+	EXPECT_EQ(bindingOf(skinned, "Global"), 0u);
+	// The passes fill both programs with the same push constants.
+	EXPECT_EQ(skinned.pushConstantSize, rigid.pushConstantSize);
+	EXPECT_EQ(bake("shadow_depth_skinned.vert").pushConstantSize,
+			  bake("shadow_depth.vert").pushConstantSize);
+	EXPECT_EQ(bindingOf(bake("shadow_depth_skinned.vert"), "Skinning"), 4u);
 }

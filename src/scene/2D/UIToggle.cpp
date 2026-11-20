@@ -1,6 +1,7 @@
 #include "UIToggle.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "UIManager.h"
 #include "UITextUtil.h"
@@ -15,11 +16,22 @@ UIToggle::UIToggle(std::string text, bool on)
 UIToggle& UIToggle::setOn(bool on) {
 	if (on == m_on) return *this;
 	m_on = on;
+	const float target = on ? 1.0f : 0.0f;
 	if (UIManager* manager = getManager()) {
-		manager->animate(this);
-	} else {
-		m_knob = on ? 1.0f : 0.0f;	// detached: no frames to animate in
+		manager->getAnimationSystem().cancel(m_knobAnimation);
 	}
+	// Constant knob speed: a reversal mid-slide takes proportionally less
+	// time. Detached toggles snap (UIAnimator::start handles that).
+	m_knobAnimation =
+		animate()
+			.value(m_knob, target,
+				   [this](float knob) {
+					   m_knob = knob;
+					   markVisualDirty();
+				   })
+			.duration(theme().animationSeconds * std::fabs(target - m_knob))
+			.ease(Ease::Linear)
+			.start();
 	markVisualDirty();
 	if (m_onChanged) m_onChanged(m_on);
 	return *this;
@@ -38,14 +50,6 @@ UIToggle& UIToggle::setOnChanged(std::function<void(bool)> onChanged) {
 
 void UIToggle::toggle() {
 	if (isEffectivelyEnabled()) setOn(!m_on);
-}
-
-bool UIToggle::tick(float delta) {
-	const float target = m_on ? 1.0f : 0.0f;
-	const float step = delta / std::max(theme().animationSeconds, 1e-3f);
-	m_knob = m_knob < target ? std::min(m_knob + step, target)
-							 : std::max(m_knob - step, target);
-	return m_knob != target;
 }
 
 bool UIToggle::onMouseDown(const UIMouseEvent& event) {

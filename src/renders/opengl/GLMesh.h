@@ -14,7 +14,8 @@ namespace bird::gl {
  * OpenGL Vertex Array Object (VAO) mesh implementation.
  *
  * Binds vertex streams to fixed attribute locations shared by every engine
- * shader: position 0, normal 1, uv 2, tangent 3.
+ * shader: position 0, normal 1, uv 2, tangent 3, and for skinned meshes
+ * joint indices 4 (integer) and joint weights 5.
  */
 class GLMesh : public Mesh {
    public:
@@ -22,6 +23,8 @@ class GLMesh : public Mesh {
 	static constexpr uint32_t ATTRIBUTE_NORMAL = 1;
 	static constexpr uint32_t ATTRIBUTE_TEXCOORD = 2;
 	static constexpr uint32_t ATTRIBUTE_TANGENT = 3;
+	static constexpr uint32_t ATTRIBUTE_JOINTS = 4;
+	static constexpr uint32_t ATTRIBUTE_WEIGHTS = 5;
 
 	GLMesh(std::unique_ptr<Buffer<uint32_t>> indexBuffer,
 		   std::unique_ptr<Buffer<float>> vertexBuffer,
@@ -35,6 +38,9 @@ class GLMesh : public Mesh {
 
 	/** Returns native OpenGL VAO identifier. */
 	const uint32_t& getVAO() const;
+
+   protected:
+	void onSkinAttached() override;
 
    private:
 	uint32_t m_vao;

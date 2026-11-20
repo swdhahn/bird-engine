@@ -4,6 +4,7 @@
 #include <functional>
 #include <string>
 
+#include "UIAnimator.h"
 #include "UIObject.h"
 
 namespace bird {
@@ -29,7 +30,6 @@ class UIToggle : public UIObject {
 	bool onMouseDown(const UIMouseEvent& event) override;
 	bool onMouseUp(const UIMouseEvent& event) override;
 	bool onKey(const UIKeyEvent& event) override;
-	bool tick(float delta) override;
 	void draw(UIDrawList& list) override;
 
    protected:
@@ -39,6 +39,8 @@ class UIToggle : public UIObject {
 	std::string m_text;
 	bool m_on;
 	float m_knob;
+	/** Running knob transition, superseded on every toggle. */
+	AnimationHandle m_knobAnimation;
 	std::function<void(bool)> m_onChanged;
 };
 
