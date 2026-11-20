@@ -123,6 +123,18 @@ std::shared_ptr<Font> ResourceManager::loadFont(const std::string& path) {
 	return font;
 }
 
+std::shared_ptr<const SkeletalAsset> ResourceManager::loadSkeletalAsset(
+	const std::string& path) {
+	const auto cached = m_skeletalAssets.find(path);
+	if (cached != m_skeletalAssets.end()) return cached->second;
+	const std::string baked = RESOURCE_PATH + path + ".skel.bird";
+	if (!std::filesystem::exists(baked)) return nullptr;
+	auto asset = std::make_shared<const SkeletalAsset>(
+		bird::loadSkeletalAsset(baked));
+	m_skeletalAssets.emplace(path, asset);
+	return asset;
+}
+
 std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(
 	const std::string& path) {
 	if (m_meshes.find(path) != m_meshes.end()) {

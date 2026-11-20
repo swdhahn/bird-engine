@@ -2,6 +2,8 @@ target_sources(scene PRIVATE
   ScreenObject.h ScreenObject.cpp
   UIGeometry.h UILayout.h UIEvents.h UIPlatform.h UITheme.h UITextUtil.h
   UIObject.h UIObject.cpp
+  UIVisualTransform.h
+  UIAnimator.h UIAnimator.cpp
   UIManager.h UIManager.cpp
   UIDrawList.h UIDrawList.cpp
   UITextEditState.h UITextEditState.cpp

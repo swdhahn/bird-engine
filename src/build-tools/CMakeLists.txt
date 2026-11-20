@@ -17,10 +17,14 @@ add_library(BirdBake STATIC
       AssetLoader.cpp AssetLoader.h
       ShaderBaker.cpp ShaderBaker.h
       FormatHeaders.h
+      SkeletalImport.cpp SkeletalImport.h
+      ../animation/skeletal/Skeleton.cpp
+      ../animation/skeletal/SkeletalClip.cpp
+      ../animation/skeletal/SkeletalAsset.cpp
       ../renders/generic/ShaderBinary.cpp ../renders/generic/ShaderBinary.h
       ../util/stb_image.h ../util/stb_truetype.h)
 target_include_directories(BirdBake PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(BirdBake PUBLIC ${ASSIMP_LIBRARIES}
+target_link_libraries(BirdBake PUBLIC ${ASSIMP_LIBRARIES} glm
       shaderc::shaderc_combined
       ${SPIRV_LIBRARIES}
       spirv-cross-core
