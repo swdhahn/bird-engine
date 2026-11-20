@@ -4,55 +4,45 @@
 
 #include "Input.h"
 
-#include <GLFW/glfw3.h>
-
 #include "../Application.h"
 #include "../scene/2D/UIManager.h"
 
 namespace {
 
-// Set while the game captures the mouse; pointer events then skip the UI.
-bool g_mouseCaptured = false;
-
 bird::UIManager* uiManager() {
 	return bird::APPLICATION ? bird::APPLICATION->getUIManager() : nullptr;
-}
-
-/** GLFW and UI modifier bits share values (shift 1, ctrl 2, alt 4, super 8). */
-uint8_t uiModifiers(int mods) {
-	return static_cast<uint8_t>(mods & 0x0F);
 }
 
 bird::UIKey uiKey(int key) {
 	using bird::UIKey;
 	switch (key) {
-		case GLFW_KEY_BACKSPACE: return UIKey::Backspace;
-		case GLFW_KEY_DELETE: return UIKey::Delete;
-		case GLFW_KEY_LEFT: return UIKey::Left;
-		case GLFW_KEY_RIGHT: return UIKey::Right;
-		case GLFW_KEY_UP: return UIKey::Up;
-		case GLFW_KEY_DOWN: return UIKey::Down;
-		case GLFW_KEY_HOME: return UIKey::Home;
-		case GLFW_KEY_END: return UIKey::End;
-		case GLFW_KEY_PAGE_UP: return UIKey::PageUp;
-		case GLFW_KEY_PAGE_DOWN: return UIKey::PageDown;
-		case GLFW_KEY_ENTER:
-		case GLFW_KEY_KP_ENTER: return UIKey::Enter;
-		case GLFW_KEY_ESCAPE: return UIKey::Escape;
-		case GLFW_KEY_TAB: return UIKey::Tab;
-		case GLFW_KEY_SPACE: return UIKey::Space;
-		case GLFW_KEY_A: return UIKey::A;
-		case GLFW_KEY_C: return UIKey::C;
-		case GLFW_KEY_V: return UIKey::V;
-		case GLFW_KEY_X: return UIKey::X;
+		case KEY_BACKSPACE: return UIKey::Backspace;
+		case KEY_DELETE: return UIKey::Delete;
+		case KEY_LEFT: return UIKey::Left;
+		case KEY_RIGHT: return UIKey::Right;
+		case KEY_UP: return UIKey::Up;
+		case KEY_DOWN: return UIKey::Down;
+		case KEY_HOME: return UIKey::Home;
+		case KEY_END: return UIKey::End;
+		case KEY_PAGE_UP: return UIKey::PageUp;
+		case KEY_PAGE_DOWN: return UIKey::PageDown;
+		case KEY_ENTER:
+		case KEY_KP_ENTER: return UIKey::Enter;
+		case KEY_ESCAPE: return UIKey::Escape;
+		case KEY_TAB: return UIKey::Tab;
+		case KEY_SPACE: return UIKey::Space;
+		case KEY_A: return UIKey::A;
+		case KEY_C: return UIKey::C;
+		case KEY_V: return UIKey::V;
+		case KEY_X: return UIKey::X;
 		default: return UIKey::Unknown;
 	}
 }
 
 bird::UIMouseButton uiButton(int button) {
 	switch (button) {
-		case GLFW_MOUSE_BUTTON_RIGHT: return bird::UIMouseButton::Right;
-		case GLFW_MOUSE_BUTTON_MIDDLE: return bird::UIMouseButton::Middle;
+		case MOUSE_BUTTON_RIGHT: return bird::UIMouseButton::Right;
+		case MOUSE_BUTTON_MIDDLE: return bird::UIMouseButton::Middle;
 		default: return bird::UIMouseButton::Left;
 	}
 }
@@ -92,15 +82,12 @@ std::string Action::getName() {
 	return m_name;
 }
 
-Input::Input(Window* window)
-	: m_window(window), m_actions(std::vector<bird::Action>()) {
-	glfwSetCursorPosCallback(window->getGLFWWindow(), cursor_position_callback);
-	glfwSetMouseButtonCallback(window->getGLFWWindow(), mouse_button_callback);
-	glfwSetKeyCallback(window->getGLFWWindow(), key_callback);
-	glfwSetCharCallback(window->getGLFWWindow(), character_callback);
-	glfwSetCursorEnterCallback(window->getGLFWWindow(), cursor_enter_callback);
-	glfwSetScrollCallback(window->getGLFWWindow(), scroll_callback);
-	glfwSetJoystickCallback(joystick_callback);
+Input::Input(Window* window) : m_window(window) {
+	m_window->setEventListener(this);
+}
+
+Input::~Input() {
+	m_window->setEventListener(nullptr);
 }
 
 void Input::addAction(Action action) {
@@ -119,11 +106,21 @@ float Input::getActionValue(std::string name) {
 	return 0;
 }
 
+bool Input::isKeyDown(int key) const {
+	return key >= 0 && key < kKeyCount && m_keysDown.test(key);
+}
+
+bool Input::isMouseButtonDown(int button) const {
+	return button >= 0 && button < kMouseButtonCount &&
+		   m_buttonsDown.test(button);
+}
+
 void Input::tick() {
-	const double previousX = m_mx, previousY = m_my;
-	glfwGetCursorPos(m_window->getGLFWWindow(), &m_mx, &m_my);
 	m_mouseDelta = m_resetDelta ? Vector2(0.0f)
-								: Vector2(float(m_mx - previousX), float(m_my - previousY));
+								: Vector2(float(m_mx - m_tickX),
+										  float(m_my - m_tickY));
+	m_tickX = m_mx;
+	m_tickY = m_my;
 	m_resetDelta = false;
 
 	// While the UI owns the keyboard (a focused text box) or the pointer
@@ -133,104 +130,96 @@ void Input::tick() {
 	const bool keysBlocked = ui && ui->wantsKeyboard();
 	const bool mouseBlocked = !m_captured && ui && ui->wantsMouse();
 
-	for (int i = 0; i < m_actions.size(); i++) {
-		Action& a = m_actions[i];
-		bool flag = true;
-		for (int j = 0; j < a.getKeys().size() && !keysBlocked; j++) {
-			int key = glfwGetKey(m_window->getGLFWWindow(), a.getKeys()[j]);
-			if (key == GLFW_PRESS) {
-				a.setValue(1.0f);
-				flag = false;
-				break;
+	for (Action& action : m_actions) {
+		bool active = false;
+		if (!keysBlocked) {
+			for (int key : action.getKeys()) {
+				if (isKeyDown(key)) {
+					active = true;
+					break;
+				}
 			}
 		}
-		for (int j = 0; j < a.getMouseButtons().size() && !mouseBlocked; j++) {
-			int mb = glfwGetMouseButton(m_window->getGLFWWindow(),
-										a.getMouseButtons()[j]);
-			if (mb == GLFW_PRESS) {
-				a.setValue(1.0f);
-				flag = false;
-				break;
+		if (!active && !mouseBlocked) {
+			for (int button : action.getMouseButtons()) {
+				if (isMouseButtonDown(button)) {
+					active = true;
+					break;
+				}
 			}
 		}
-		// joystick
-		// joystick buttons
-		if (flag) {
-			a.setValue(0);
-		}
+		action.setValue(active ? 1.0f : 0.0f);
 	}
 }
 
 void Input::setMouseMode(int cursorMode) {
-	glfwSetInputMode(m_window->getGLFWWindow(), GLFW_CURSOR, cursorMode);
+	switch (cursorMode) {
+		case CURSOR_HIDDEN:
+			m_window->setCursorMode(CursorMode::Hidden);
+			break;
+		case CURSOR_DISABLED:
+			m_window->setCursorMode(CursorMode::Disabled);
+			break;
+		default:
+			m_window->setCursorMode(CursorMode::Normal);
+			break;
+	}
 }
+
 void Input::setMouseCaptured(bool captured) {
 	if (captured == m_captured) return;
 	m_captured = captured;
-	g_mouseCaptured = captured;
 	m_resetDelta = true;
-	glfwSetInputMode(m_window->getGLFWWindow(), GLFW_CURSOR,
-					 captured ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
-	if (glfwRawMouseMotionSupported()) {
-		glfwSetInputMode(m_window->getGLFWWindow(), GLFW_RAW_MOUSE_MOTION,
-						 captured ? GLFW_TRUE : GLFW_FALSE);
-	}
+	m_window->setCursorMode(captured ? CursorMode::Disabled
+									 : CursorMode::Normal);
+	m_window->setRawMouseMotion(captured);
 	if (captured) {
 		if (UIManager* ui = uiManager()) ui->setFocus(nullptr);
 	}
 }
 
 void Input::setMouseRawMotion(bool rawMotion) {
-	if (glfwRawMouseMotionSupported()) {
-		glfwSetInputMode(m_window->getGLFWWindow(), GLFW_RAW_MOUSE_MOTION,
-						 rawMotion ? GLFW_TRUE : GLFW_FALSE);
-	} else {
+	if (!m_window->setRawMouseMotion(rawMotion)) {
 		std::cerr << "Raw Motion is not supported on this device" << std::endl;
 	}
 }
 
-void mouse_button_callback(GLFWwindow* window, int button, int action,
-						   int mods) {
-	if (g_mouseCaptured) return;
-	double xpos, ypos;
-	glfwGetCursorPos(window, &xpos, &ypos);
+void Input::onKey(int key, InputAction action, uint8_t modifiers) {
+	if (key >= 0 && key < kKeyCount) {
+		m_keysDown.set(key, action != InputAction::Release);
+	}
 	if (UIManager* ui = uiManager()) {
-		ui->mouseButton(uiButton(button), action == GLFW_PRESS,
-						Vector2(xpos, ypos), uiModifiers(mods));
+		ui->key(uiKey(key), action != InputAction::Release,
+				action == InputAction::Repeat, modifiers, key);
 	}
 }
-void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
-	if (g_mouseCaptured) return;
-	if (UIManager* ui = uiManager()) ui->mouseMove(Vector2(xpos, ypos));
-}
-void cursor_enter_callback(GLFWwindow* window, int entered) {
-	if (entered) {
-		// The cursor entered the content area of the window
-	} else {
-		// The cursor left the content area of the window
-	}
-}
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-	if (g_mouseCaptured) return;
-	double xpos, ypos;
-	glfwGetCursorPos(window, &xpos, &ypos);
-	if (UIManager* ui = uiManager()) {
-		ui->scroll(Vector2(xpos, ypos), Vector2(xoffset, yoffset));
-	}
-}
-void joystick_callback(int jid, int event) {
-	if (event == GLFW_CONNECTED) {
-	} else if (event == GLFW_DISCONNECTED) {
-	}
-}
-void character_callback(GLFWwindow* window, unsigned int codepoint) {
+
+void Input::onCharacter(uint32_t codepoint) {
 	if (UIManager* ui = uiManager()) ui->character(codepoint);
 }
-void key_callback(GLFWwindow* window, int key, int scancode, int action,
-				  int mods) {
+
+void Input::onMouseButton(int button, InputAction action, uint8_t modifiers) {
+	if (button >= 0 && button < kMouseButtonCount) {
+		m_buttonsDown.set(button, action != InputAction::Release);
+	}
+	if (m_captured) return;	 // a captured pointer belongs to the game
 	if (UIManager* ui = uiManager()) {
-		ui->key(uiKey(key), action != GLFW_RELEASE, action == GLFW_REPEAT,
-				uiModifiers(mods), key);
+		ui->mouseButton(uiButton(button), action == InputAction::Press,
+						Vector2(m_mx, m_my), modifiers);
+	}
+}
+
+void Input::onCursorMove(double x, double y) {
+	m_mx = x;
+	m_my = y;
+	if (m_captured) return;
+	if (UIManager* ui = uiManager()) ui->mouseMove(Vector2(x, y));
+}
+
+void Input::onScroll(double dx, double dy) {
+	if (m_captured) return;
+	if (UIManager* ui = uiManager()) {
+		ui->scroll(Vector2(m_mx, m_my), Vector2(dx, dy));
 	}
 }
 

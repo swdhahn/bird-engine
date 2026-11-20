@@ -33,13 +33,13 @@ sequenceDiagram
 
 ---
 
-## 2. The Per-Frame Loop (`Application::run`)
+## 2. The Per-Frame Loop (`Application::run` and `Application::tick`)
 
-The core loop in [src/Application.cpp](file:///home/swdhahn/Programming/cWorkspace/bird-engine-gemrun/src/Application.cpp) executes continuously until the window is closed:
+The core loop in [src/Application.cpp](file:///home/swdhahn/Programming/cWorkspace/bird-engine-gemrun/src/Application.cpp) calls `Application::tick()` once per frame until the window is closed. Platforms that own their event loop (Android, iOS, the Web) call `tick()` from their frame callback instead of `run()`:
 
 ```mermaid
 flowchart TD
-    Start["Frame Start"] --> Time["1. Calculate Delta Time (glfwGetTime)"]
+    Start["Frame Start"] --> Time["1. Calculate Delta Time (platform::now)"]
     Time --> CamCheck{"2. Camera Transform Dirty?"}
     CamCheck -- Yes --> CamUpdate["Camera::updateTransformationMatrix()"]
     CamCheck -- No --> Physics["3. Fixed steps: physicsProcess(fixedDelta), then PhysicsServer::step()"]
@@ -49,7 +49,7 @@ flowchart TD
     Scripts --> SceneProc["5. Application::processScene() (Recurse dirty WorldObjects)"]
     SceneProc --> Render["6. GraphicsPipeline::renderRootScene()"]
     Render --> Input["7. INPUT->tick()"]
-    Render --> Window["8. Window::pollWindow() & handleResize()"]
+    Render --> Window["8. Window::present(), pollEvents() & handleResize()"]
     Window --> Loop{"Window Should Close?"}
     Loop -- No --> Start
     Loop -- Yes --> Shutdown["deinit() & Exit"]
@@ -57,7 +57,7 @@ flowchart TD
 
 ### Key Phases:
 1. **Delta Time**:
-   Calculated as `delta = Window::getGLFWTime() - lastTime`. Delta time is passed to UI timers and all `ProcessScript::process(delta)` callbacks to ensure framerate-independent physics and animations.
+   Calculated as `delta = platform::now() - lastFrameTime` from a monotonic clock. Delta time is passed to UI timers and all `ProcessScript::process(delta)` callbacks to ensure framerate-independent physics and animations.
 2. **Fixed-Step Physics**:
    A `FixedStepClock` (default 1/60 s) turns the frame delta into zero or more whole steps. Long frames are clamped to 0.25 s and at most 8 steps run per frame; older backlog is dropped, so a slow machine slows the simulation instead of spiralling. Each step first calls `ProcessScript::physicsProcess(fixedDelta)` on every registered script, then `PhysicsServer::step()`, which steps every scene's `PhysicsWorld` (see [Physics](physics.md)). Input is ticked once per frame, outside the physics loop.
 3. **Transform Dirty Checking (`processScene`)**:
@@ -72,7 +72,28 @@ flowchart TD
 4. **Multi-Pass Rendering**:
    Delegated to `GraphicsPipeline::renderRootScene(m_scene)` which renders the 3D scene, post-processing filters, and 2D UI overlay.
 5. **Platform Event Coalescing**:
-   `window->pollWindow()` dispatches GLFW key and mouse events. If the window was resized, `pollResize()` coalesces rapid window manager events and triggers `handleResize()`.
+   `window->present()` shows the frame and `window->pollEvents()` delivers key, character, button, cursor and scroll events to `Input`, which tracks key and button state for actions and forwards the events to the UI. If the window was resized, `pollResize()` coalesces rapid window manager events and triggers `handleResize()`.
+
+### Platform Layer
+
+Everything that touches the operating system sits behind small interfaces in `src/platform/`, selected at build time by the CMake option `BIRD_PLATFORM`:
+
+| Interface | Purpose | `DESKTOP` | `HEADLESS` |
+|---|---|---|---|
+| `Window` (`renders/Window.h`) | Surface, context, events, clipboard, cursors | `GlfwWindow` | `HeadlessWindow` (EGL pbuffer, no input) |
+| `platform::VFS` | Reads packaged assets | `NativeVFS` (file system) | `NativeVFS` |
+| `platform::now()` | Monotonic frame clock | `steady_clock` | `steady_clock` |
+| `platform::log()` | Log lines with a replaceable sink | Console | Console |
+
+Only `src/platform/desktop/` includes GLFW. Key and button codes are the engine's `KEY_*` and `MOUSE_BUTTON_*` values (GLFW's numbering), so other backends translate their native codes into the same space.
+
+`HEADLESS` renders off-screen through EGL (Mesa's surfaceless platform where available), stops after `BIRD_HEADLESS_FRAMES` frames (default 120), and pairs with `BIRD_CAPTURE` for automated frame captures on machines without a display:
+
+```bash
+cmake -B build-headless -DBIRD_PLATFORM=HEADLESS -DBIRD_GL_PROFILE=ES
+cmake --build build-headless --target Bird
+BIRD_CAPTURE=frame.ppm BIRD_CAPTURE_FRAME=60 ./build-headless/Bird test/build/libBird_test
+```
 
 ---
 

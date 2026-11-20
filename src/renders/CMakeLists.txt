@@ -46,7 +46,7 @@ target_link_libraries(opengl-renderer PRIVATE glm ${BIRD_GL_LIBRARIES})
 target_link_libraries(
   renders
   PRIVATE 
-      glm ${BIRD_GL_LIBRARIES} glfw opengl-renderer
+      glm ${BIRD_GL_LIBRARIES} opengl-renderer
 )
 
     

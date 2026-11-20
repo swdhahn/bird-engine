@@ -16,8 +16,8 @@ enum class UICursor : uint8_t {
 };
 
 /**
- * Operating-system services the UI needs. The window implements this with
- * GLFW; tests substitute a fake, so the UI stays testable without a window.
+ * Operating-system services the UI needs. Each platform's Window implements
+ * this; tests substitute a fake, so the UI stays testable without a window.
  */
 class UIPlatform {
    public:

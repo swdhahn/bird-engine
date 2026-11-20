@@ -4,10 +4,12 @@
 
 #include "GLShader.h"
 
+#include "../../platform/VFS.h"
 #include "GLApi.h"
 #include "GLCapabilities.h"
 
 #include <algorithm>
+#include <optional>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
@@ -66,6 +68,25 @@ class ScopedProgram {
 	bool m_switched;
 };
 
+/**
+ * Loads a baked stage through the platform VFS, so shaders inside an APK or
+ * an app bundle load like files on a desktop.
+ * @throws ShaderBinaryError when the file is missing or invalid.
+ */
+ShaderBinary readBakedStage(const std::string& path) {
+	std::optional<std::vector<uint8_t>> bytes =
+		platform::VFS::get().readFile(path);
+	if (!bytes) {
+		throw ShaderBinaryError("Missing shader binary " + path +
+								" (run BuildTools)");
+	}
+	try {
+		return parseShaderBinary(*bytes);
+	} catch (const ShaderBinaryError& error) {
+		throw ShaderBinaryError(path + ": " + error.what());
+	}
+}
+
 format::ShaderStageKind expectedStage(ShaderPipeline pipeline) {
 	switch (pipeline) {
 		case VERTEX:
@@ -123,7 +144,7 @@ GLShader::GLShader(
 	std::vector<ShaderBinary> stages;
 	stages.reserve(shaderFiles.size());
 	for (const auto& [path, pipeline] : shaderFiles) {
-		stages.push_back(readShaderBinaryFile(path + ".bird"));
+		stages.push_back(readBakedStage(path + ".bird"));
 		if (stages.back().stage != expectedStage(pipeline)) {
 			throw std::runtime_error(path +
 									 ": baked stage does not match the "

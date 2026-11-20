@@ -4,6 +4,8 @@
 
 #include "Application.h"
 
+#include "platform/Clock.h"
+#include "platform/Log.h"
 #include "renders/Window.h"
 #include "renders/opengl/GLPipeline.h"
 #include "scene/2D/UIManager.h"
@@ -49,69 +51,74 @@ void Application::init(Script<Scene>* script) {
 }
 
 void Application::run() {
-	double lastTime = Window::getGLFWTime();
-	float delta = 0.0f;
-	uint16_t fps = 0;
-
-	double secondTime = Window::getGLFWTime();
+	m_lastFrameTime = platform::now();
+	m_fpsWindowStart = m_lastFrameTime;
 	while (!m_graphicsPipeline->getWindow()->shouldWindowClose()) {
-		delta = (Window::getGLFWTime() - lastTime);
-		lastTime = Window::getGLFWTime();
-
-		if (m_graphicsPipeline->getCamera()->needsMatrixUpdate()) {
-			m_graphicsPipeline->getCamera()->updateTransformationMatrix();
-		}
-
-		// Debug lines are rebuilt every frame (physics first, then scripts).
-		m_graphicsPipeline->getDebugDraw().clear();
-
-		// PHYSICS SECTION: zero or more fixed steps
-		const int physicsSteps = m_physicsClock.advance(delta);
-		const float fixedStep = m_physicsClock.getStep();
-		for (int step = 0; step < physicsSteps; step++) {
-			for (size_t i = 0; i < m_processableScripts.size(); i++) {
-				m_processableScripts[i]->physicsProcess(fixedStep);
-			}
-			m_physicsServer->step(fixedStep);
-		}
-		if (m_physicsDebugDraw) {
-			Camera* camera = m_graphicsPipeline->getCamera();
-			const Vector3 eye = camera ? camera->getWorldPosition() : Vector3(0.0f);
-			for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
-				world->debugDraw(m_graphicsPipeline->getDebugDraw(),
-								 m_physicsDebugSettings, eye);
-			}
-		}
-
-		// PROCESS SECTION
-		m_uiManager->process(delta);
-		for (int i = 0; i < m_processableScripts.size(); i++) {
-			m_processableScripts[i]->process(delta);
-		}
-
-		processScene(m_scene, delta);
-		// After matrix updates: draw moving bodies between their last two
-		// physics poses so motion is smooth at any frame rate.
-		if (m_physicsInterpolation) {
-			for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
-				world->interpolate(m_physicsClock.getAlpha());
-			}
-		}
-		// PROCESS SECTION END
-
-		m_graphicsPipeline->renderRootScene(m_scene);
-		fps++;
-		if (secondTime + 1.0 < Window::getGLFWTime()) {
-			std::cout << "FPS: " << fps << std::endl;
-			fps = 0;
-			secondTime = Window::getGLFWTime();
-		}
-		INPUT->tick();
-		m_graphicsPipeline->getWindow()->pollWindow();
-		handleResize();
+		tick();
 	}
 
 	deinit();
+}
+
+void Application::tick() {
+	const double frameTime = platform::now();
+	const float delta = static_cast<float>(frameTime - m_lastFrameTime);
+	m_lastFrameTime = frameTime;
+
+	if (m_graphicsPipeline->getCamera()->needsMatrixUpdate()) {
+		m_graphicsPipeline->getCamera()->updateTransformationMatrix();
+	}
+
+	// Debug lines are rebuilt every frame (physics first, then scripts).
+	m_graphicsPipeline->getDebugDraw().clear();
+
+	// PHYSICS SECTION: zero or more fixed steps
+	const int physicsSteps = m_physicsClock.advance(delta);
+	const float fixedStep = m_physicsClock.getStep();
+	for (int step = 0; step < physicsSteps; step++) {
+		for (size_t i = 0; i < m_processableScripts.size(); i++) {
+			m_processableScripts[i]->physicsProcess(fixedStep);
+		}
+		m_physicsServer->step(fixedStep);
+	}
+	if (m_physicsDebugDraw) {
+		Camera* camera = m_graphicsPipeline->getCamera();
+		const Vector3 eye = camera ? camera->getWorldPosition() : Vector3(0.0f);
+		for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
+			world->debugDraw(m_graphicsPipeline->getDebugDraw(),
+							 m_physicsDebugSettings, eye);
+		}
+	}
+
+	// PROCESS SECTION
+	m_uiManager->process(delta);
+	for (size_t i = 0; i < m_processableScripts.size(); i++) {
+		m_processableScripts[i]->process(delta);
+	}
+
+	processScene(m_scene, delta);
+	// After matrix updates: draw moving bodies between their last two
+	// physics poses so motion is smooth at any frame rate.
+	if (m_physicsInterpolation) {
+		for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
+			world->interpolate(m_physicsClock.getAlpha());
+		}
+	}
+	// PROCESS SECTION END
+
+	m_graphicsPipeline->renderRootScene(m_scene);
+	m_framesThisSecond++;
+	if (m_fpsWindowStart + 1.0 < platform::now()) {
+		platform::log(platform::LogLevel::Info,
+					  "FPS: " + std::to_string(m_framesThisSecond));
+		m_framesThisSecond = 0;
+		m_fpsWindowStart = platform::now();
+	}
+	INPUT->tick();
+	Window* window = m_graphicsPipeline->getWindow().get();
+	window->present();
+	window->pollEvents();
+	handleResize();
 }
 
 void Application::processScene(Scene* scene, float delta) {

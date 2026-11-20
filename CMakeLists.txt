@@ -24,7 +24,36 @@ if(BIRD_GL_PROFILE STREQUAL "ES")
   add_compile_definitions(BIRD_GL_ES)
 endif()
 
+# Platform backend: window, input events, assets, logging.
+#   DESKTOP   GLFW window (Linux, Windows, macOS)
+#   HEADLESS  EGL pbuffer, no input; for CI rendering and captures (Linux)
+# Android, iOS and Web backends follow.
+set(BIRD_PLATFORM "DESKTOP" CACHE STRING "Platform backend: DESKTOP or HEADLESS")
+set_property(CACHE BIRD_PLATFORM PROPERTY STRINGS DESKTOP HEADLESS)
+set(BIRD_PLATFORM_FILES
+    src/platform/Platform.h
+    src/platform/Clock.h
+    src/platform/Clock.cpp
+    src/platform/Log.h
+    src/platform/Log.cpp
+    src/platform/VFS.h
+    src/platform/VFS.cpp)
+if(BIRD_PLATFORM STREQUAL "DESKTOP")
+  list(APPEND BIRD_PLATFORM_FILES
+      src/platform/desktop/GlfwWindow.h
+      src/platform/desktop/GlfwWindow.cpp
+      src/platform/desktop/DesktopPlatform.cpp)
+elseif(BIRD_PLATFORM STREQUAL "HEADLESS")
+  list(APPEND BIRD_PLATFORM_FILES
+      src/platform/headless/HeadlessWindow.h
+      src/platform/headless/HeadlessWindow.cpp
+      src/platform/headless/HeadlessPlatform.cpp)
+else()
+  message(FATAL_ERROR "BIRD_PLATFORM '${BIRD_PLATFORM}' is not implemented yet")
+endif()
+
 set(BIRD_FILES
+    ${BIRD_PLATFORM_FILES}
     src/util/stb_image.h
     src/util/Constants.h
     src/util/Memory.hpp
@@ -76,23 +105,31 @@ elseif(WIN32)
 
   endif()
 elseif(UNIX AND NOT APPLE)
-  find_package(X11 REQUIRED)
-  target_link_libraries(
-    Bird_core
-    PUBLIC -lX11
-           -lXxf86vm
-           -lXrandr
-           -lpthread
-           -lXi
-           -ldl
-           -lXinerama
-           -lXcursor)
+  target_link_libraries(Bird_core PUBLIC -lpthread -ldl)
+  if(BIRD_PLATFORM STREQUAL "DESKTOP")
+    # GLFW's X11 backend.
+    find_package(X11 REQUIRED)
+    target_link_libraries(
+      Bird_core
+      PUBLIC -lX11
+             -lXxf86vm
+             -lXrandr
+             -lXi
+             -lXinerama
+             -lXcursor)
+  endif()
 endif()
 
 set(INSTALLED_LIB_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libs/install")
 set(CMAKE_PREFIX_PATH "${INSTALLED_LIB_PATH}")
 
-find_package(glfw3 CONFIG REQUIRED)
+if(BIRD_PLATFORM STREQUAL "DESKTOP")
+  find_package(glfw3 CONFIG REQUIRED)
+  set(BIRD_PLATFORM_LIBRARIES glfw)
+elseif(BIRD_PLATFORM STREQUAL "HEADLESS")
+  find_library(BIRD_HEADLESS_EGL_LIBRARY NAMES EGL REQUIRED)
+  set(BIRD_PLATFORM_LIBRARIES ${BIRD_HEADLESS_EGL_LIBRARY})
+endif()
 find_package(assimp CONFIG REQUIRED)
 
 # GL libraries for the selected profile, linked by every GL-using target.
@@ -185,7 +222,7 @@ include_directories(src/physics)
 target_link_libraries(
   Bird_core
   PUBLIC glm
-  PRIVATE glfw
+  PRIVATE ${BIRD_PLATFORM_LIBRARIES}
           ${BIRD_GL_LIBRARIES}
           assimp::assimp
           VOLK::volk

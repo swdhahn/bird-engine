@@ -12,6 +12,12 @@ void loadGLFunctions() {
 #else
 	glewExperimental = GL_TRUE;
 	const GLenum code = glewInit();
+#if defined(GLEW_ERROR_NO_GLX_DISPLAY)
+	// GL entry points are loaded before GLEW looks for GLX; contexts made
+	// through EGL (Wayland, headless) have no GLX display, which only
+	// affects GLX extensions the engine never uses.
+	if (code == GLEW_ERROR_NO_GLX_DISPLAY) return;
+#endif
 	if (code != GLEW_OK) {
 		throw std::runtime_error(
 			std::string("Couldn't initialize GLEW: ") +

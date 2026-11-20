@@ -5,6 +5,8 @@
 #ifndef BIRD_INPUT_H
 #define BIRD_INPUT_H
 
+#include <bitset>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -51,16 +53,21 @@ class Action {
 /**
  * Global input management subsystem.
  *
- * Maintains registered actions, captures platform window events from GLFW,
- * and tracks mouse cursor position and movement.
+ * Maintains registered actions and tracks key, button and cursor state from
+ * the events a platform Window delivers. Events also reach the UI, unless
+ * the game has captured the mouse.
  */
-class Input {
+class Input : public WindowEventListener {
    public:
 	/**
-	 * Creates the input subsystem attached to a platform window.
-	 * Registers GLFW keyboard and mouse event callbacks.
+	 * Creates the input subsystem and subscribes to the window's events.
+	 * @param window Event source; must outlive this object.
 	 */
-	Input(Window* window);
+	explicit Input(Window* window);
+	~Input() override;
+
+	Input(const Input&) = delete;
+	Input& operator=(const Input&) = delete;
 
 	/**
 	 * Registers a logical action.
@@ -98,7 +105,12 @@ class Input {
 	 */
 	Vector2 getMouseDelta() const { return m_mouseDelta; }
 	/** Cursor position in window pixels at the last tick. */
-	Vector2 getMousePosition() const { return Vector2(m_mx, m_my); }
+	Vector2 getMousePosition() const { return Vector2(m_tickX, m_tickY); }
+
+	/** @return true while a KEY_* key is held. */
+	bool isKeyDown(int key) const;
+	/** @return true while a MOUSE_BUTTON_* button is held. */
+	bool isMouseButtonDown(int button) const;
 
 	/**
 	 * Per-frame input update tick. Evaluates current key and mouse states
@@ -106,30 +118,36 @@ class Input {
 	 */
 	void tick();
 
+	// WindowEventListener: platform events in engine codes.
+	void onKey(int key, InputAction action, uint8_t modifiers) override;
+	void onCharacter(uint32_t codepoint) override;
+	void onMouseButton(int button, InputAction action,
+					   uint8_t modifiers) override;
+	void onCursorMove(double x, double y) override;
+	void onScroll(double dx, double dy) override;
+
    private:
+	static constexpr int kKeyCount = 349;		 // KEY_LAST + 1
+	static constexpr int kMouseButtonCount = 8;	 // MOUSE_BUTTON_LAST + 1
+
 	Window* m_window;
-	double m_mx = 0.0, m_my = 0.0;
+	double m_mx = 0.0, m_my = 0.0;				// tracked from events
+	double m_tickX = 0.0, m_tickY = 0.0;		// sampled by tick()
 	Vector2 m_mouseDelta{0.0f};
 	bool m_captured = false;
 	bool m_resetDelta = true;  // first tick, or capture changed
+	std::bitset<kKeyCount> m_keysDown;
+	std::bitset<kMouseButtonCount> m_buttonsDown;
 
 	std::vector<Action> m_actions;
 };
 
-void mouse_button_callback(GLFWwindow* window, int button, int action,
-						   int mods);
-void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
-void cursor_enter_callback(GLFWwindow* window, int entered);
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
-void joystick_callback(int jid, int event);
-void character_callback(GLFWwindow* window, unsigned int codepoint);
-void key_callback(GLFWwindow* window, int key, int scancode, int action,
-				  int mods);
 }  // namespace bird
 
 #define ACTION_NONE -1
 #define ACTION_RELEASE 0
 #define ACTION_PRESS 1
+#define ACTION_REPEAT 2
 
 #define CURSOR_DISABLED 0x00034003
 #define CURSOR_HIDDEN 0x00034002

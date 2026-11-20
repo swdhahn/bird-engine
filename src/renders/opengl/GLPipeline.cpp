@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "../../Application.h"
+#include "../../platform/Platform.h"
 #include "../../scene/2D/UIManager.h"
 #include "../generic/Font.h"
 #include "../generic/FrameBuffer.h"
@@ -28,8 +29,8 @@ GLPipeline::GLPipeline() : GraphicsPipeline(GRAPHICS_PIPELINE_OPENGL) {}
 GLPipeline::~GLPipeline() {}
 
 void GLPipeline::init() {
-	m_pWindow = std::make_unique<Window>(WINDOW_WIDTH, WINDOW_HEIGHT,
-										 "Bird Engine - Application");
+	m_pWindow = platform::createWindow(WINDOW_WIDTH, WINDOW_HEIGHT,
+									   "Bird Engine - Application");
 
 	loadGLFunctions();
 	const GLCapabilities& caps = GLCapabilities::current();

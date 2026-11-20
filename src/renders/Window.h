@@ -5,88 +5,113 @@
 #ifndef BIRD_WINDOW_H
 #define BIRD_WINDOW_H
 
-#include <array>
+#include <cstdint>
 #include <string>
 
 #include "../scene/2D/UIPlatform.h"
 #include "GraphicsConstants.h"
 
-struct GLFWwindow;
-struct GLFWcursor;
-
 namespace bird {
 
-/**
- * Desktop application window, event source, and UIPlatform implementation.
- *
- * Wraps a GLFW window instance, managing display resolution, DPI scaling,
- * double buffering, OS clipboard text access, and standard hardware cursors.
- */
-class Window : public UIPlatform {
-public:
-    /**
-     * Creates a desktop window and initializes GLFW context.
-     * @param width Initial width in screen points.
-     * @param height Initial height in screen points.
-     * @param title Window caption text.
-     */
-    Window(uint32_t width, uint32_t height, std::string title);
-    ~Window();
+/** Key and button transitions, matching the engine's ACTION_* values. */
+enum class InputAction : uint8_t { Release = 0, Press = 1, Repeat = 2 };
 
-    /** Returns true when the user requested closing the window (e.g. close button or Alt+F4). */
-    bool shouldWindowClose() const;
-
-    /** Polls OS window events from GLFW. */
-    void pollWindow() const;
-
-    /** Returns current GLFW wall clock time in seconds. */
-    static double getGLFWTime();
-
-    /** Underlying GLFW handle, for input callbacks and context calls. */
-    GLFWwindow* const getGLFWWindow() const;
-
-    /**
-     * Re-reads the window and framebuffer sizes. Polling once per frame
-     * coalesces bursts of resize events into a single rebuild.
-     * @return true when a size changed and the window is not minimized.
-     */
-    bool pollResize();
-
-    /** @return Framebuffer render target width in physical pixels. */
-    uint32_t getFramebufferWidth() const;
-
-    /** @return Framebuffer render target height in physical pixels. */
-    uint32_t getFramebufferHeight() const;
-
-    /** @return Window width in screen coordinates, matching cursor input. */
-    uint32_t getWidth() const;
-
-    /** @return Window height in screen coordinates, matching cursor input. */
-    uint32_t getHeight() const;
-
-    /** Retrieves textual content from the operating system clipboard. */
-    std::string getClipboardText() override;
-
-    /** Replaces the operating system clipboard text. */
-    void setClipboardText(const std::string& text) override;
-
-    /** Updates the active platform cursor (arrow, text beam, resize, etc.). */
-    void setCursor(UICursor cursor) override;
-
-    /** Human-readable name of a GLFW key code ("W", "Space", "F5"), for key bindings. */
-    std::string keyName(int keyCode) override;
-
-private:
-    GLFWwindow* m_pWindow;
-    // Standard cursors, created on first use and owned by the window.
-    std::array<GLFWcursor*, 6> m_cursors{};
-    // Zero until the first pollResize, which therefore always reports.
-    uint32_t m_framebufferWidth = 0;
-    uint32_t m_framebufferHeight = 0;
-    uint32_t m_width = 0;
-    uint32_t m_height = 0;
+/** How the platform presents and constrains the pointer. */
+enum class CursorMode : uint8_t {
+	Normal,	   // visible, free
+	Hidden,	   // invisible over the window, free
+	Disabled  // invisible and locked; motion stays unbounded
 };
 
-} // namespace bird
+/**
+ * Receives input events from a Window. Key and button codes use the
+ * engine's KEY_* and MOUSE_BUTTON_* values (see util/Input.h); positions
+ * are in window coordinates with +y down; modifiers use the UI bit layout
+ * (shift 1, ctrl 2, alt 4, super 8).
+ */
+class WindowEventListener {
+   public:
+	virtual ~WindowEventListener() = default;
 
-#endif // BIRD_WINDOW_H
+	virtual void onKey(int key, InputAction action, uint8_t modifiers) = 0;
+	virtual void onCharacter(uint32_t codepoint) = 0;
+	virtual void onMouseButton(int button, InputAction action,
+							   uint8_t modifiers) = 0;
+	virtual void onCursorMove(double x, double y) = 0;
+	virtual void onScroll(double dx, double dy) = 0;
+};
+
+/**
+ * Platform application window: owns the native surface and its graphics
+ * context, presents frames, pumps operating system events into a
+ * WindowEventListener, and serves the UI's platform needs (UIPlatform).
+ *
+ * Implementations live under src/platform/<platform>/ and are created
+ * through platform::createWindow(). This base keeps the size bookkeeping
+ * shared by every platform.
+ */
+class Window : public UIPlatform {
+   public:
+	~Window() override = default;
+
+	/** @return true once the user or the system asked the app to close. */
+	virtual bool shouldWindowClose() const = 0;
+
+	/** Shows the frame rendered since the previous call. */
+	virtual void present() = 0;
+
+	/** Dispatches pending operating system events to the listener. */
+	virtual void pollEvents() = 0;
+
+	/**
+	 * Re-reads the window and framebuffer sizes. Polling once per frame
+	 * coalesces bursts of resize events into a single rebuild.
+	 * @return true when a size changed and the window is not minimized.
+	 */
+	virtual bool pollResize() = 0;
+
+	virtual void setCursorMode(CursorMode mode) = 0;
+
+	/**
+	 * Requests unaccelerated pointer motion.
+	 * @return false when the platform cannot provide it.
+	 */
+	virtual bool setRawMouseMotion(bool enabled) = 0;
+
+	/** Routes input events to a listener; nullptr stops delivery. */
+	void setEventListener(WindowEventListener* listener) {
+		m_listener = listener;
+	}
+
+	/** @return Framebuffer render target width in physical pixels. */
+	uint32_t getFramebufferWidth() const { return m_framebufferWidth; }
+	/** @return Framebuffer render target height in physical pixels. */
+	uint32_t getFramebufferHeight() const { return m_framebufferHeight; }
+	/** @return Window width in screen coordinates, matching cursor input. */
+	uint32_t getWidth() const { return m_width; }
+	/** @return Window height in screen coordinates, matching cursor input. */
+	uint32_t getHeight() const { return m_height; }
+
+   protected:
+	/**
+	 * Records freshly queried sizes. A zero dimension (a minimized window)
+	 * keeps the last usable size.
+	 * @return true when a size changed and every dimension is positive.
+	 */
+	bool updateSizes(int framebufferWidth, int framebufferHeight, int width,
+					 int height);
+
+	WindowEventListener* listener() const { return m_listener; }
+
+   private:
+	WindowEventListener* m_listener = nullptr;
+	// Zero until the first pollResize, which therefore always reports.
+	uint32_t m_framebufferWidth = 0;
+	uint32_t m_framebufferHeight = 0;
+	uint32_t m_width = 0;
+	uint32_t m_height = 0;
+};
+
+}  // namespace bird
+
+#endif	// BIRD_WINDOW_H

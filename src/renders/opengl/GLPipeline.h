@@ -44,7 +44,7 @@ class GLPipeline : public GraphicsPipeline {
 	GLPipeline();
 	~GLPipeline() override;
 
-	/** Initializes GLFW context, GLEW bindings, depth testing, shaders, and FBOs. */
+	/** Creates the platform window and context, loads GL, shaders and FBOs. */
 	void init() override;
 
 	/** Frees OpenGL state and framebuffers. */

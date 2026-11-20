@@ -4,7 +4,30 @@
 
 #include "ResourceManager.h"
 
+#include <optional>
+#include <sstream>
+#include <vector>
+
+#include "../platform/VFS.h"
+
 namespace bird {
+
+namespace {
+
+/**
+ * Opens a baked asset through the platform VFS as an in-memory stream, so
+ * assets inside an APK or an app bundle load like files on a desktop.
+ * @return nullptr when the file is missing. O(file size).
+ */
+std::unique_ptr<std::istringstream> openBaked(const std::string& path) {
+	std::optional<std::vector<uint8_t>> bytes =
+		platform::VFS::get().readFile(path);
+	if (!bytes) return nullptr;
+	return std::make_unique<std::istringstream>(
+		std::string(bytes->begin(), bytes->end()), std::ios::binary);
+}
+
+}  // namespace
 
 ResourceManager::ResourceManager() {
 	m_resources = new std::unordered_map<
@@ -37,26 +60,22 @@ std::shared_ptr<Texture> ResourceManager::loadTextureWithColorSpace(
 		return std::static_pointer_cast<Texture>(textures.at(cacheKey));
 	}
 
-	std::fstream file(RESOURCE_PATH + path + ".bird",
-					  std::ios::in | std::ios::binary);
+	const auto file = openBaked(RESOURCE_PATH + path + ".bird");
 
-	if (!file.is_open()) {
+	if (!file) {
 		std::cout << "Error loading file. File does not exist: " << path
 				  << std::endl;
-		std::cerr << std::strerror(errno) << std::endl;
-		file.close();
 		return std::shared_ptr<Texture>(0);
 	}
 
 	int32_t width = 0, height = 0, channels = 0;
 
-	file.read(reinterpret_cast<char*>(&width), sizeof(int32_t));
-	file.read(reinterpret_cast<char*>(&height), sizeof(int32_t));
-	file.read(reinterpret_cast<char*>(&channels), sizeof(int32_t));
+	file->read(reinterpret_cast<char*>(&width), sizeof(int32_t));
+	file->read(reinterpret_cast<char*>(&height), sizeof(int32_t));
+	file->read(reinterpret_cast<char*>(&channels), sizeof(int32_t));
 	uint8_t* data = new uint8_t[width * height * channels];
-	file.read(reinterpret_cast<char*>(data),
+	file->read(reinterpret_cast<char*>(data),
 			  width * height * channels * sizeof(uint8_t));
-	file.close();
 
 	if (channels == 0) {
 		std::cout << "Error loading file: " << path << std::endl;
@@ -81,27 +100,25 @@ std::shared_ptr<Font> ResourceManager::loadFont(const std::string& path) {
 		return std::static_pointer_cast<Font>(fonts.at(path));
 	}
 
-	std::fstream file(RESOURCE_PATH + path + ".bird",
-					  std::ios::in | std::ios::binary);
-	if (!file.is_open()) {
+	const auto file = openBaked(RESOURCE_PATH + path + ".bird");
+	if (!file) {
 		std::cerr << "Error loading font. File does not exist: " << path
 				  << ".bird (run BuildTools)" << std::endl;
 		return nullptr;
 	}
 
 	format::FontHeader header{};
-	file.read(reinterpret_cast<char*>(&header), sizeof(header));
+	file->read(reinterpret_cast<char*>(&header), sizeof(header));
 	std::vector<format::FontGlyph> glyphs(header.glyphCount);
-	file.read(reinterpret_cast<char*>(glyphs.data()),
+	file->read(reinterpret_cast<char*>(glyphs.data()),
 			  glyphs.size() * sizeof(format::FontGlyph));
 	const size_t texelCount =
 		static_cast<size_t>(header.atlasWidth) * header.atlasHeight;
 	std::vector<uint8_t> distance(texelCount);
-	file.read(reinterpret_cast<char*>(distance.data()), distance.size());
-	if (!file) {
+	file->read(reinterpret_cast<char*>(distance.data()), distance.size());
+	if (!*file) {
 		throw std::runtime_error("Truncated font file: " + path + ".bird");
 	}
-	file.close();
 
 	// Expand the distance field into the alpha of white RGBA texels; the UI
 	// shader converts distance to coverage for glyphs and solid quads alike.
@@ -129,17 +146,15 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(
 		return m_meshes.at(path);
 	}
 	// load mesh from file
-	std::fstream file(RESOURCE_PATH + path + ".bird",
-					  std::ios::in | std::ios::binary);
+	const auto file = openBaked(RESOURCE_PATH + path + ".bird");
 
-	if (!file.is_open()) {
+	if (!file) {
 		std::cout << "Error loading file: " << path << std::endl;
-		file.close();
 		return std::vector<std::shared_ptr<Mesh>>(0);
 	}
 
 	uint16_t meshCount = 0;
-	file.read(reinterpret_cast<char*>(&meshCount), sizeof(uint16_t));
+	file->read(reinterpret_cast<char*>(&meshCount), sizeof(uint16_t));
 	std::vector<std::shared_ptr<Mesh>> meshes(meshCount);
 	for (int i = 0; i < meshCount; i++) {
 		std::unique_ptr<uint32_t[]> indices = nullptr;
@@ -152,37 +167,37 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(
 		uint32_t textureCoordCount = 0;
 
 		uint16_t materialIndex = 0;
-		file.read(reinterpret_cast<char*>(&materialIndex), sizeof(uint16_t));
+		file->read(reinterpret_cast<char*>(&materialIndex), sizeof(uint16_t));
 		uint32_t extraBufferPoints = 0;
-		file.read(reinterpret_cast<char*>(&extraBufferPoints),
+		file->read(reinterpret_cast<char*>(&extraBufferPoints),
 				  sizeof(uint32_t));
 
-		file.read(reinterpret_cast<char*>(&indexCount), sizeof(uint32_t));
+		file->read(reinterpret_cast<char*>(&indexCount), sizeof(uint32_t));
 		indices = std::make_unique<uint32_t[]>(indexCount);
-		file.read(reinterpret_cast<char*>(indices.get()),
+		file->read(reinterpret_cast<char*>(indices.get()),
 				  indexCount * sizeof(uint32_t));
 
-		file.read(reinterpret_cast<char*>(&vertexCount), sizeof(uint32_t));
+		file->read(reinterpret_cast<char*>(&vertexCount), sizeof(uint32_t));
 		uint8_t vertexSize = 0;
-		file.read(reinterpret_cast<char*>(&vertexSize), sizeof(uint8_t));
+		file->read(reinterpret_cast<char*>(&vertexSize), sizeof(uint8_t));
 		vertices = std::make_unique<float[]>(vertexCount * vertexSize);
-		file.read(reinterpret_cast<char*>(vertices.get()),
+		file->read(reinterpret_cast<char*>(vertices.get()),
 				  vertexCount * vertexSize * sizeof(float));
 
-		file.read(reinterpret_cast<char*>(&normalCount), sizeof(uint32_t));
+		file->read(reinterpret_cast<char*>(&normalCount), sizeof(uint32_t));
 		uint8_t normalSize = 0;
-		file.read(reinterpret_cast<char*>(&normalSize), sizeof(uint8_t));
+		file->read(reinterpret_cast<char*>(&normalSize), sizeof(uint8_t));
 		normals = std::make_unique<float[]>(normalCount * normalSize);
-		file.read(reinterpret_cast<char*>(normals.get()),
+		file->read(reinterpret_cast<char*>(normals.get()),
 				  normalCount * normalSize * sizeof(float));
 
-		file.read(reinterpret_cast<char*>(&textureCoordCount),
+		file->read(reinterpret_cast<char*>(&textureCoordCount),
 				  sizeof(uint32_t));
 		uint8_t textureCoordSize = 0;
-		file.read(reinterpret_cast<char*>(&textureCoordSize), sizeof(uint8_t));
+		file->read(reinterpret_cast<char*>(&textureCoordSize), sizeof(uint8_t));
 		textureCoords =
 			std::make_unique<float[]>(textureCoordCount * textureCoordSize);
-		file.read(reinterpret_cast<char*>(textureCoords.get()),
+		file->read(reinterpret_cast<char*>(textureCoords.get()),
 				  textureCoordCount * textureCoordSize * sizeof(float));
 
 		// Extra streams follow the fixed ones; stream 0 holds tangents
@@ -191,11 +206,11 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(
 		for (uint32_t extra = 0; extra < extraBufferPoints; extra++) {
 			uint32_t count = 0;
 			uint8_t floatsPer = 0;
-			file.read(reinterpret_cast<char*>(&count), sizeof(uint32_t));
-			file.read(reinterpret_cast<char*>(&floatsPer), sizeof(uint8_t));
+			file->read(reinterpret_cast<char*>(&count), sizeof(uint32_t));
+			file->read(reinterpret_cast<char*>(&floatsPer), sizeof(uint8_t));
 			const size_t floatCount = static_cast<size_t>(count) * floatsPer;
 			auto values = std::make_unique<float[]>(floatCount);
-			file.read(reinterpret_cast<char*>(values.get()),
+			file->read(reinterpret_cast<char*>(values.get()),
 					  floatCount * sizeof(float));
 			if (extra == 0 && floatsPer == 4 && count == vertexCount) {
 				tangents = BufferBuilder<float, 4>(BUFFER_STAGED | BUFFER_ARRAY)
@@ -203,7 +218,7 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(
 							   .build();
 			}
 		}
-		if (!file) {
+		if (!*file) {
 			throw std::runtime_error("Truncated mesh file: " + path + ".bird");
 		}
 
@@ -244,7 +259,6 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(
 		// addResource(path + std::to_string(i), meshes.data()[i], MESH);
 	}
 
-	file.close();
 
 	addMesh(path, meshes);
 
@@ -260,16 +274,14 @@ std::shared_ptr<Material> ResourceManager::loadMaterial(
 	}
 
 	// load material from file
-	std::fstream file(RESOURCE_PATH + path + ".bird",
-					  std::ios::in | std::ios::binary);
+	const auto file = openBaked(RESOURCE_PATH + path + ".bird");
 
-	if (!file.is_open()) {
+	if (!file) {
 		std::cout << "Error loading file: " << path << std::endl;
-		file.close();
 		return std::shared_ptr<Material>(0);
 	}
 
-	const format::MaterialFileData data = format::readMaterialFile(file);
+	const format::MaterialFileData data = format::readMaterialFile(*file);
 
 	auto mat = std::make_shared<Material>();
 	mat->setBaseColor(Vector4(data.baseColor[0], data.baseColor[1],
@@ -306,7 +318,6 @@ std::shared_ptr<Material> ResourceManager::loadMaterial(
 		mat->setBaseColor(Vector4(1.0f, 1.0f, 1.0f, data.baseColor[3]));
 	}
 
-	file.close();
 
 	addResource(path, mat, ASSET_TYPE_MATERIAL);
 

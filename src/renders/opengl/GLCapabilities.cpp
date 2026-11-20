@@ -1,10 +1,10 @@
 #include "GLCapabilities.h"
 
 #include <cstdlib>
-#include <iostream>
 #include <sstream>
 #include <stdexcept>
 
+#include "../../platform/Log.h"
 #include "GLApi.h"
 
 namespace bird::gl {
@@ -136,9 +136,12 @@ const GLCapabilities& GLCapabilities::current() {
 		if (const char* disabled = std::getenv("BIRD_GL_CAPS_DISABLE")) {
 			detected.disable(disabled);
 		}
-		std::cout << "GL context: " << familyName(detected.family) << " "
-				  << detected.major << "." << detected.minor << " ("
-				  << glString(GL_RENDERER) << ")" << std::endl;
+		platform::log(platform::LogLevel::Info,
+					  std::string("GL context: ") +
+						  familyName(detected.family) + " " +
+						  std::to_string(detected.major) + "." +
+						  std::to_string(detected.minor) + " (" +
+						  glString(GL_RENDERER) + ")");
 		return detected;
 	}();
 	return caps;
