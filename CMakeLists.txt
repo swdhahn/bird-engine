@@ -27,9 +27,24 @@ endif()
 # Platform backend: window, input events, assets, logging.
 #   DESKTOP   GLFW window (Linux, Windows, macOS)
 #   HEADLESS  EGL pbuffer, no input; for CI rendering and captures (Linux)
-# Android, iOS and Web backends follow.
-set(BIRD_PLATFORM "DESKTOP" CACHE STRING "Platform backend: DESKTOP or HEADLESS")
-set_property(CACHE BIRD_PLATFORM PROPERTY STRINGS DESKTOP HEADLESS)
+#   ANDROID   NativeActivity, EGL on the activity's window, APK assets
+# iOS and Web backends follow.
+if(ANDROID)
+  set(BIRD_DEFAULT_PLATFORM "ANDROID")
+else()
+  set(BIRD_DEFAULT_PLATFORM "DESKTOP")
+endif()
+set(BIRD_PLATFORM "${BIRD_DEFAULT_PLATFORM}" CACHE STRING
+    "Platform backend: DESKTOP, HEADLESS or ANDROID")
+set_property(CACHE BIRD_PLATFORM PROPERTY STRINGS DESKTOP HEADLESS ANDROID)
+# Host platforms also build the asset compiler, the Bird launcher, Dart
+# scripting, the tests and the install package; device platforms only
+# build the runtime library and load assets baked on the host.
+if(BIRD_PLATFORM MATCHES "^(DESKTOP|HEADLESS)$")
+  set(BIRD_HOST_BUILD ON)
+else()
+  set(BIRD_HOST_BUILD OFF)
+endif()
 set(BIRD_PLATFORM_FILES
     src/platform/Platform.h
     src/platform/Clock.h
@@ -48,6 +63,22 @@ elseif(BIRD_PLATFORM STREQUAL "HEADLESS")
       src/platform/headless/HeadlessWindow.h
       src/platform/headless/HeadlessWindow.cpp
       src/platform/headless/HeadlessPlatform.cpp)
+elseif(BIRD_PLATFORM STREQUAL "ANDROID")
+  if(NOT ANDROID)
+    message(FATAL_ERROR "BIRD_PLATFORM=ANDROID needs the Android NDK toolchain")
+  endif()
+  list(APPEND BIRD_PLATFORM_FILES
+      src/platform/android/AndroidApp.h
+      src/platform/android/AndroidApp.cpp
+      src/platform/android/AndroidKeyMap.h
+      src/platform/android/AndroidKeyMap.cpp
+      src/platform/android/AndroidLog.h
+      src/platform/android/AndroidLog.cpp
+      src/platform/android/AndroidWindow.h
+      src/platform/android/AndroidWindow.cpp
+      src/platform/android/ApkAssetVFS.h
+      src/platform/android/ApkAssetVFS.cpp
+      src/platform/android/AndroidMain.cpp)
 else()
   message(FATAL_ERROR "BIRD_PLATFORM '${BIRD_PLATFORM}' is not implemented yet")
 endif()
@@ -73,8 +104,10 @@ add_library(
   Bird_core SHARED
   ${BIRD_FILES} $<TARGET_OBJECTS:renders> $<TARGET_OBJECTS:opengl-renderer>
   $<TARGET_OBJECTS:scene> $<TARGET_OBJECTS:physics>)
-add_executable(Bird src/main.cpp)
-target_link_libraries(Bird Bird_core)
+if(BIRD_HOST_BUILD)
+  add_executable(Bird src/main.cpp)
+  target_link_libraries(Bird Bird_core)
+endif()
 
 target_link_options(
   Bird_core PRIVATE
@@ -104,7 +137,7 @@ elseif(WIN32)
     target_link_libraries(Bird_core PUBLIC -luser32 -lkernel32 -lopengl32)
 
   endif()
-elseif(UNIX AND NOT APPLE)
+elseif(UNIX AND NOT APPLE AND NOT ANDROID)
   target_link_libraries(Bird_core PUBLIC -lpthread -ldl)
   if(BIRD_PLATFORM STREQUAL "DESKTOP")
     # GLFW's X11 backend.
@@ -129,8 +162,27 @@ if(BIRD_PLATFORM STREQUAL "DESKTOP")
 elseif(BIRD_PLATFORM STREQUAL "HEADLESS")
   find_library(BIRD_HEADLESS_EGL_LIBRARY NAMES EGL REQUIRED)
   set(BIRD_PLATFORM_LIBRARIES ${BIRD_HEADLESS_EGL_LIBRARY})
+elseif(BIRD_PLATFORM STREQUAL "ANDROID")
+  # NativeActivity glue from the NDK; ANativeActivity_onCreate must survive
+  # linking because the system looks it up by name.
+  add_library(bird_native_app_glue STATIC
+      ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c)
+  target_include_directories(bird_native_app_glue
+      PUBLIC ${ANDROID_NDK}/sources/android/native_app_glue)
+  target_link_libraries(bird_native_app_glue PUBLIC android log)
+  target_include_directories(Bird_core
+      PRIVATE ${ANDROID_NDK}/sources/android/native_app_glue)
+  target_link_options(Bird_core PRIVATE -u ANativeActivity_onCreate)
+  # The game's shared library inside the APK, loaded by AndroidMain.
+  set(BIRD_ANDROID_GAME_LIBRARY "libgame.so" CACHE STRING
+      "File name of the game library the Android launcher loads")
+  target_compile_definitions(Bird_core PRIVATE
+      BIRD_ANDROID_GAME_LIBRARY="${BIRD_ANDROID_GAME_LIBRARY}")
+  set(BIRD_PLATFORM_LIBRARIES bird_native_app_glue android log dl)
 endif()
-find_package(assimp CONFIG REQUIRED)
+if(BIRD_HOST_BUILD)
+  find_package(assimp CONFIG REQUIRED)
+endif()
 
 # GL libraries for the selected profile, linked by every GL-using target.
 if(BIRD_GL_PROFILE STREQUAL "DESKTOP")
@@ -153,11 +205,41 @@ else()
   find_library(BIRD_EGL_LIBRARY NAMES EGL libEGL REQUIRED)
   set(BIRD_GL_LIBRARIES ${BIRD_GLES_LIBRARY} ${BIRD_EGL_LIBRARY})
 endif()
-find_package(spirv_cross_core CONFIG REQUIRED)
-find_package(spirv_cross_glsl CONFIG REQUIRED)
-find_package(spirv_cross_cpp CONFIG REQUIRED)
-find_package(SPIRV-Tools CONFIG REQUIRED)
-find_package(Jolt CONFIG REQUIRED)
+if(BIRD_HOST_BUILD)
+  find_package(spirv_cross_core CONFIG REQUIRED)
+  find_package(spirv_cross_glsl CONFIG REQUIRED)
+  find_package(spirv_cross_cpp CONFIG REQUIRED)
+  find_package(SPIRV-Tools CONFIG REQUIRED)
+  find_package(Jolt CONFIG REQUIRED)
+  set(BIRD_GLM_INCLUDE_DIR "${INSTALLED_LIB_PATH}/include")
+else()
+  # Device builds fetch their two runtime dependencies from source, with
+  # the versions and Jolt options libs/CMakeLists.txt uses on the host.
+  include(FetchContent)
+  FetchContent_Declare(bird_glm
+      GIT_REPOSITORY https://github.com/g-truc/glm.git
+      GIT_TAG 0.9.9.8
+      GIT_SHALLOW TRUE
+      SOURCE_SUBDIR do-not-configure)  # headers only
+  set(CROSS_PLATFORM_DETERMINISTIC ON CACHE BOOL "" FORCE)
+  set(CPP_RTTI_ENABLED ON CACHE BOOL "" FORCE)
+  set(TARGET_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+  set(TARGET_HELLO_WORLD OFF CACHE BOOL "" FORCE)
+  set(TARGET_PERFORMANCE_TEST OFF CACHE BOOL "" FORCE)
+  set(TARGET_SAMPLES OFF CACHE BOOL "" FORCE)
+  set(TARGET_VIEWER OFF CACHE BOOL "" FORCE)
+  set(ENABLE_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
+  set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(bird_jolt
+      GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
+      GIT_TAG v5.4.0
+      GIT_SHALLOW TRUE
+      SOURCE_SUBDIR Build)
+  FetchContent_MakeAvailable(bird_glm bird_jolt)
+  set_target_properties(Jolt PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  add_library(Jolt::Jolt ALIAS Jolt)
+  set(BIRD_GLM_INCLUDE_DIR "${bird_glm_SOURCE_DIR}")
+endif()
 
 if(TARGET libglew_static AND APPLE)
   # 1. Get the list of libraries GLEW thinks it needs
@@ -192,6 +274,7 @@ else()
   set(BUILD_SUBDIR "")
 endif()
 
+if(BIRD_HOST_BUILD)
 add_library(shaderc::shaderc_combined STATIC IMPORTED)
 set_target_properties(
   shaderc::shaderc_combined
@@ -207,10 +290,12 @@ set_target_properties(
                         "${INSTALLED_LIB_PATH}/lib/${LIB_PREFIX}volk${LIB_EXT}")
 set_target_properties(VOLK::volk PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
                                             "${INSTALLED_LIB_PATH}/include")
+set(BIRD_HOST_ONLY_LIBRARIES assimp::assimp VOLK::volk)
+endif()
 message(STATUS "${CMAKE_CURRENT_SOURCE_DIR}")
 add_library(glm INTERFACE)
 target_include_directories(
-  glm INTERFACE $<BUILD_INTERFACE:${INSTALLED_LIB_PATH}/include>
+  glm INTERFACE $<BUILD_INTERFACE:${BIRD_GLM_INCLUDE_DIR}>
                 $<INSTALL_INTERFACE:include>)
 add_subdirectory(src/renders)
 include_directories(src/renders)
@@ -224,8 +309,7 @@ target_link_libraries(
   PUBLIC glm
   PRIVATE ${BIRD_PLATFORM_LIBRARIES}
           ${BIRD_GL_LIBRARIES}
-          assimp::assimp
-          VOLK::volk
+          ${BIRD_HOST_ONLY_LIBRARIES}
           Jolt::Jolt)
 # Shader compilation (shaderc, SPIRV-Cross) lives in BirdBake/BuildTools;
 # the runtime only loads baked .bird shaders.
@@ -233,6 +317,11 @@ target_link_libraries(
 target_compile_definitions(Bird_core PRIVATE BIRD_CORE_EXPORTS)
 if(NOT MSVC)
   add_definitions(-Wno-deprecated-volatile)
+endif()
+
+if(NOT BIRD_HOST_BUILD)
+  # Device build: the runtime library is the whole product.
+  return()
 endif()
 
 # Build Tools

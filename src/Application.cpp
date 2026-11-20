@@ -25,6 +25,11 @@ Application::Application() {}
 Application::~Application() {}
 
 void Application::init(Script<Scene>* script) {
+	start(script);
+	run();
+}
+
+void Application::start(Script<Scene>* script) {
 	// The pipeline loads its shaders through the cache during init(); the
 	// cache's own init() needs the context that the pipeline creates.
 	RESOURCE_MANAGER = new ResourceManager();
@@ -47,12 +52,11 @@ void Application::init(Script<Scene>* script) {
 	m_scene->addComponent(std::unique_ptr<Script<Scene>>(script));
 	m_scene->init(nullptr);
 
-	run();
+	m_lastFrameTime = platform::now();
+	m_fpsWindowStart = m_lastFrameTime;
 }
 
 void Application::run() {
-	m_lastFrameTime = platform::now();
-	m_fpsWindowStart = m_lastFrameTime;
 	while (!m_graphicsPipeline->getWindow()->shouldWindowClose()) {
 		tick();
 	}

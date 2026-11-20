@@ -1,0 +1,67 @@
+name: Android APK
+
+# Builds a debug APK of the sample game (test/) for arm64 phones and
+# uploads it as the "bird-android-debug" artifact of each run.
+on:
+  push:
+    branches: [android-gles]
+    paths:
+      - "src/**"
+      - "assets/**"
+      - "test/**"
+      - "android/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/android.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "assets/**"
+      - "test/**"
+      - "android/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+jobs:
+  apk:
+    name: Debug APK (arm64-v8a)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Select NDK and CMake
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          # Newest 3.x CMake the SDK repository offers (the root project
+          # needs 3.23+); the runner image ships a recent NDK.
+          CMAKE_VERSION=$("$SDKMANAGER" --list 2>/dev/null \
+            | grep -oE 'cmake;3\.[0-9]+\.[0-9]+' | sed 's/cmake;//' \
+            | sort -uV | tail -1)
+          yes | "$SDKMANAGER" "cmake;${CMAKE_VERSION}" > /dev/null
+          NDK_VERSION=$(basename "$ANDROID_NDK_LATEST_HOME")
+          echo "CMake ${CMAKE_VERSION}, NDK ${NDK_VERSION}"
+          echo "CMAKE_VERSION=${CMAKE_VERSION}" >> "$GITHUB_ENV"
+          echo "NDK_VERSION=${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Build APK
+        working-directory: android
+        run: >
+          gradle assembleDebug --stacktrace
+          -PbirdNdkVersion="${NDK_VERSION}"
+          -PbirdCmakeVersion="${CMAKE_VERSION}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bird-android-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

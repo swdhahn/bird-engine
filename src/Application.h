@@ -49,6 +49,16 @@ class Application {
 	void init(Script<Scene>* script);
 
 	/**
+	 * Initializes every engine system and the root scene like init(), but
+	 * returns instead of entering the frame loop. Platforms that own their
+	 * event loop call start() once, then tick() per frame, then deinit().
+	 *
+	 * @param script User application entry script; ownership is transferred
+	 *               to the root Scene.
+	 */
+	void start(Script<Scene>* script);
+
+	/**
 	 * Tears down engine systems and releases allocated resources.
 	 */
 	void deinit();
