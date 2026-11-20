@@ -32,30 +32,56 @@ target_link_libraries(BuildTools PRIVATE BirdBake)
 
 # --- NEW: Dart API Generator Target ---
 
-# 1. Find LLVM and Clang (Requires libclang-dev / llvm-dev installed on host)
-# Homebrew's llvm is keg-only (not symlinked into /opt/homebrew), so point
-# CMake at it explicitly when LLVM_DIR/Clang_DIR aren't already set.
-if(APPLE AND NOT LLVM_DIR)
+# DartApiGenerator only uses the libclang C API (clang-c/Index.h), so it only
+# needs the merged libclang shared library plus that one header. We locate
+# those directly rather than via find_package(LLVM/Clang CONFIG): that path
+# pulls in the full internal component graph (clangBasic, clangAST, ...), and
+# several distro packages (notably Ubuntu's libclang-dev) export cmake
+# targets for those components without actually shipping the .a archives
+# they reference, which makes find_package() fail outright even though the
+# one thing we need is present.
+set(LIBCLANG_SEARCH_LIB_HINTS "")
+set(LIBCLANG_SEARCH_INCLUDE_HINTS "")
+
+if(APPLE)
   execute_process(COMMAND brew --prefix llvm
       OUTPUT_VARIABLE LLVM_BREW_PREFIX
       OUTPUT_STRIP_TRAILING_WHITESPACE
       ERROR_QUIET)
   if(LLVM_BREW_PREFIX)
-    list(APPEND CMAKE_PREFIX_PATH "${LLVM_BREW_PREFIX}")
+    list(APPEND LIBCLANG_SEARCH_LIB_HINTS "${LLVM_BREW_PREFIX}/lib")
+    list(APPEND LIBCLANG_SEARCH_INCLUDE_HINTS "${LLVM_BREW_PREFIX}/include")
   endif()
+elseif(WIN32)
+  # Default install locations for both the official LLVM.org installer and
+  # `choco install llvm`.
+  list(APPEND LIBCLANG_SEARCH_LIB_HINTS "C:/Program Files/LLVM/lib")
+  list(APPEND LIBCLANG_SEARCH_INCLUDE_HINTS "C:/Program Files/LLVM/include")
 endif()
-find_package(LLVM REQUIRED CONFIG)
-find_package(Clang REQUIRED CONFIG)
 
-# 2. Define the generator executable
+# Opportunistically widen the search using llvm-config, when present
+# (apt's llvm-dev always ships it; the Windows/macOS installs may not).
+find_program(LLVM_CONFIG_EXECUTABLE NAMES llvm-config llvm-config.exe)
+if(LLVM_CONFIG_EXECUTABLE)
+  execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --libdir
+      OUTPUT_VARIABLE LLVM_CONFIG_LIBDIR OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --includedir
+      OUTPUT_VARIABLE LLVM_CONFIG_INCLUDEDIR OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  list(APPEND LIBCLANG_SEARCH_LIB_HINTS "${LLVM_CONFIG_LIBDIR}")
+  list(APPEND LIBCLANG_SEARCH_INCLUDE_HINTS "${LLVM_CONFIG_INCLUDEDIR}")
+endif()
+
+find_library(LIBCLANG_LIBRARY NAMES clang libclang HINTS ${LIBCLANG_SEARCH_LIB_HINTS})
+find_path(LIBCLANG_INCLUDE_DIR NAMES clang-c/Index.h HINTS ${LIBCLANG_SEARCH_INCLUDE_HINTS})
+
+if(NOT LIBCLANG_LIBRARY OR NOT LIBCLANG_INCLUDE_DIR)
+  message(FATAL_ERROR "libclang (and its clang-c/Index.h header) not found. "
+                       "Install LLVM/Clang -- see docs/getting_started/building_from_source.md.")
+endif()
+
 add_executable(DartApiGenerator DartApiGenerator.cpp)
+target_include_directories(DartApiGenerator PRIVATE ${LIBCLANG_INCLUDE_DIR})
+target_link_libraries(DartApiGenerator PRIVATE ${LIBCLANG_LIBRARY})
 
-# 3. Add necessary include and library directories for GCC to find Clang headers
-target_include_directories(DartApiGenerator PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS})
-target_link_directories(DartApiGenerator PRIVATE ${LLVM_LIBRARY_DIRS})
-
-# 4. Link against the Clang C-API library
-target_link_libraries(DartApiGenerator PRIVATE libclang)
-
-# 5. Output the compiled tool to a predictable tools/ directory
+# Output the compiled tool to a predictable tools/ directory
 set_target_properties(DartApiGenerator PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tools")
