@@ -27,7 +27,8 @@ adb exec-out screencap -p > screenshot.png || true
 cat logcat.txt
 # Inline copy of the screenshot, for reviewers who cannot fetch artifacts.
 if [ -s screenshot.png ]; then
-  echo "SCREENSHOT_PNG_BASE64 $(base64 -w 0 screenshot.png)"
+  echo "Screenshot: $(stat -c %s screenshot.png) bytes"
+  base64 -w 1000 screenshot.png | sed 's/^/SCREENSHOT_PNG_BASE64 /'
 fi
 
 status=0
