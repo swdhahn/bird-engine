@@ -136,6 +136,11 @@ if(BIRD_HOST_BUILD)
   add_executable(Bird src/main.cpp)
   target_link_libraries(Bird Bird_core)
 endif()
+if(EMSCRIPTEN)
+  # Code linked with the engine must use the same exception model.
+  target_compile_options(Bird_core INTERFACE -fwasm-exceptions)
+  target_link_options(Bird_core INTERFACE -fwasm-exceptions)
+endif()
 
 target_link_options(
   Bird_core PRIVATE
