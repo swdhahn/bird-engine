@@ -41,7 +41,9 @@ target_link_options(bird_web PRIVATE
     -sALLOW_MEMORY_GROWTH=1
     -sINITIAL_MEMORY=256MB
     # Scene loading and physics recurse deeper than the 64 KB default.
-    -sSTACK_SIZE=4MB)
+    -sSTACK_SIZE=4MB
+    # Function names in browser stack traces and profiles.
+    --profiling-funcs)
 list(TRANSFORM BIRD_BAKED_ASSETS PREPEND "${BIRD_WEB_STAGE}/"
      OUTPUT_VARIABLE BIRD_STAGED_ASSETS)
 set_property(TARGET bird_web APPEND PROPERTY LINK_DEPENDS

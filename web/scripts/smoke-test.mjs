@@ -47,6 +47,31 @@ while (frames < 2 && !failure && Date.now() < deadline) {
   await new Promise((resolve) => setTimeout(resolve, 1000));
 }
 
+if (frames < 2 && !failure) {
+  // Show where the main thread is stuck: pause it and print the stack.
+  try {
+    const session = await page.createCDPSession();
+    await session.send('Debugger.enable');
+    const paused = new Promise((resolve) => session.once('Debugger.paused', resolve));
+    await session.send('Debugger.pause');
+    const event = await Promise.race([
+      paused,
+      new Promise((resolve) => setTimeout(() => resolve(null), 30000)),
+    ]);
+    if (event) {
+      console.log('Main thread stack when the timeout hit:');
+      for (const frame of event.callFrames.slice(0, 40)) {
+        console.log(`  at ${frame.functionName || '(anonymous)'} ${frame.url.split('/').pop()}`);
+      }
+    } else {
+      console.log('Main thread did not pause within 30 s');
+    }
+    await session.send('Debugger.resume').catch(() => {});
+  } catch (error) {
+    console.log(`No stack: ${error.message}`);
+  }
+}
+
 try {
   const screenshot = await page.screenshot({ type: 'png', encoding: 'base64' });
   console.log(`Screenshot: ${screenshot.length} base64 characters`);
