@@ -215,10 +215,17 @@ std::vector<CollisionShape> CollisionShape::triangleMeshChunks(
 	}
 
 	// Build each non-empty cell's mesh (only the vertices it uses) in parallel.
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+	// No threads in the browser: an async launch would never run, so each
+	// build runs when its result is requested.
+	constexpr std::launch kBuildPolicy = std::launch::deferred;
+#else
+	constexpr std::launch kBuildPolicy = std::launch::async;
+#endif
 	std::vector<std::future<CollisionShape>> builds;
 	for (const auto& cell : cells) {
 		if (cell.empty()) continue;
-		builds.push_back(std::async(std::launch::async, [&vertices, &indices, &cell] {
+		builds.push_back(std::async(kBuildPolicy, [&vertices, &indices, &cell] {
 			JPH::VertexList cellVertices;
 			JPH::IndexedTriangleList triangles;
 			triangles.reserve(cell.size());
