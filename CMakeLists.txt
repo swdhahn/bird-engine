@@ -5,6 +5,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(Bird)
 
+if(EMSCRIPTEN)
+  # The engine reports errors with C++ exceptions; WebAssembly's native
+  # exception handling is the fast path every current browser supports.
+  add_compile_options(-fwasm-exceptions)
+  add_link_options(-fwasm-exceptions)
+endif()
+
 # OpenGL API profile. DESKTOP: OpenGL 4.1+ through GLEW. ES: OpenGL ES 3.0+,
 # the profile shared by Android, iOS (deprecated GLES) and WebGL 2; on Linux
 # it runs on Mesa for testing. Optional features are detected at run time.
@@ -28,15 +35,18 @@ endif()
 #   DESKTOP   GLFW window (Linux, Windows, macOS)
 #   HEADLESS  EGL pbuffer, no input; for CI rendering and captures (Linux)
 #   ANDROID   NativeActivity, EGL on the activity's window, APK assets
-# iOS and Web backends follow.
+#   WEB       Emscripten: WebGL 2 on a <canvas>, preloaded assets
+# An iOS backend follows.
 if(ANDROID)
   set(BIRD_DEFAULT_PLATFORM "ANDROID")
+elseif(EMSCRIPTEN)
+  set(BIRD_DEFAULT_PLATFORM "WEB")
 else()
   set(BIRD_DEFAULT_PLATFORM "DESKTOP")
 endif()
 set(BIRD_PLATFORM "${BIRD_DEFAULT_PLATFORM}" CACHE STRING
-    "Platform backend: DESKTOP, HEADLESS or ANDROID")
-set_property(CACHE BIRD_PLATFORM PROPERTY STRINGS DESKTOP HEADLESS ANDROID)
+    "Platform backend: DESKTOP, HEADLESS, ANDROID or WEB")
+set_property(CACHE BIRD_PLATFORM PROPERTY STRINGS DESKTOP HEADLESS ANDROID WEB)
 # Host platforms also build the asset compiler, the Bird launcher, Dart
 # scripting, the tests and the install package; device platforms only
 # build the runtime library and load assets baked on the host.
@@ -79,6 +89,17 @@ elseif(BIRD_PLATFORM STREQUAL "ANDROID")
       src/platform/android/ApkAssetVFS.h
       src/platform/android/ApkAssetVFS.cpp
       src/platform/android/AndroidMain.cpp)
+elseif(BIRD_PLATFORM STREQUAL "WEB")
+  if(NOT EMSCRIPTEN)
+    message(FATAL_ERROR "BIRD_PLATFORM=WEB needs the Emscripten toolchain (emcmake)")
+  endif()
+  # The browser entry point (src/platform/web/WebMain.cpp) belongs to the
+  # executable that links the game; see web/CMakeLists.txt.
+  list(APPEND BIRD_PLATFORM_FILES
+      src/platform/web/WebKeyMap.h
+      src/platform/web/WebKeyMap.cpp
+      src/platform/web/WebWindow.h
+      src/platform/web/WebWindow.cpp)
 else()
   message(FATAL_ERROR "BIRD_PLATFORM '${BIRD_PLATFORM}' is not implemented yet")
 endif()
@@ -100,8 +121,15 @@ set(BIRD_FILES
     src/util/ResourceManager.h
     src/util/Resource.cpp
     src/util/Resource.h)
+# Browsers cannot load native shared libraries, so the web build links the
+# engine and the game into one WebAssembly module.
+if(BIRD_PLATFORM STREQUAL "WEB")
+  set(BIRD_CORE_LIBRARY_TYPE STATIC)
+else()
+  set(BIRD_CORE_LIBRARY_TYPE SHARED)
+endif()
 add_library(
-  Bird_core SHARED
+  Bird_core ${BIRD_CORE_LIBRARY_TYPE}
   ${BIRD_FILES} $<TARGET_OBJECTS:renders> $<TARGET_OBJECTS:opengl-renderer>
   $<TARGET_OBJECTS:scene> $<TARGET_OBJECTS:physics>)
 if(BIRD_HOST_BUILD)

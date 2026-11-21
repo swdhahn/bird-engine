@@ -31,6 +31,11 @@ PhysicsServer::PhysicsServer(const PhysicsServerSettings& settings) {
 	JPH::RegisterTypes();
 
 	int threads = settings.workerThreads;
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+	// Browsers without SharedArrayBuffer have no threads; with zero workers
+	// Jolt runs every job on the stepping thread.
+	threads = 0;
+#endif
 	if (threads < 0) {
 		threads = std::max(0, int(std::thread::hardware_concurrency()) - 1);
 	}

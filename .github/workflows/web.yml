@@ -1,0 +1,61 @@
+name: WebGL build
+
+# Builds the sample game (test/) for browsers with Emscripten, uploads the
+# page as the "bird-web" artifact, and smoke-tests it in headless Chrome.
+on:
+  push:
+    branches: [webgl]
+    paths:
+      - "src/**"
+      - "assets/**"
+      - "test/**"
+      - "web/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/web.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "assets/**"
+      - "test/**"
+      - "web/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/web.yml"
+  workflow_dispatch:
+
+jobs:
+  web:
+    name: WebGL 2 build and smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+
+      - name: Build
+        run: |
+          emcc --version | head -1
+          emcmake cmake -S web -B build-web -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-web -j4
+
+      - name: Show output
+        run: ls -la build-web/index.*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bird-web
+          path: |
+            build-web/index.html
+            build-web/index.js
+            build-web/index.wasm
+            build-web/index.data
+          if-no-files-found: error
+
+      - name: Smoke test in headless Chrome
+        run: |
+          npm install --no-save --prefix web/scripts puppeteer-core@23
+          python3 -m http.server 8000 -d build-web > /dev/null 2>&1 &
+          sleep 2
+          node web/scripts/smoke-test.mjs http://localhost:8000/index.html

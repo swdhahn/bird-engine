@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Bird Engine</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #101418; overflow: hidden; }
+    #canvas { display: block; width: 100vw; height: 100vh; outline: none; touch-action: none; }
+    #status {
+      position: fixed; left: 0; right: 0; bottom: 24px; text-align: center;
+      font: 14px system-ui, sans-serif; color: #c8d0d8; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+  <div id="status">Loading…</div>
+  <script>
+    var statusElement = document.getElementById('status');
+    var Module = {
+      canvas: document.getElementById('canvas'),
+      print: function (text) { console.log(text); },
+      printErr: function (text) { console.error(text); },
+      setStatus: function (text) {
+        statusElement.textContent = text;
+        statusElement.style.display = text ? 'block' : 'none';
+      },
+      monitorRunDependencies: function (left) {
+        Module.setStatus(left ? 'Loading assets…' : '');
+      }
+    };
+    window.addEventListener('error', function () {
+      Module.setStatus('Bird Engine stopped; see the browser console.');
+    });
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>
