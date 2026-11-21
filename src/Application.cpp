@@ -33,6 +33,13 @@ void Application::init(Script<Scene>* script) {
 
 void Application::start(Script<Scene>* script) {
 	const double startTime = platform::now();
+	auto stage = [startTime](const char* what) {
+		char elapsed[32];
+		std::snprintf(elapsed, sizeof(elapsed), "%.1f",
+					  platform::now() - startTime);
+		platform::log(platform::LogLevel::Info,
+					  std::string("Startup +") + elapsed + " s: " + what);
+	};
 	// The pipeline loads its shaders through the cache during init(); the
 	// cache's own init() needs the context that the pipeline creates.
 	RESOURCE_MANAGER = new ResourceManager();
@@ -40,6 +47,7 @@ void Application::start(Script<Scene>* script) {
 	m_graphicsPipeline->init();
 	RESOURCE_MANAGER->init();
 	APPLICATION = this;
+	stage("graphics ready");
 
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	m_uiManager = new UIManager();
@@ -47,20 +55,19 @@ void Application::start(Script<Scene>* script) {
 					  m_graphicsPipeline->getWindow().get());
 	// The compositor may already have resized the window (e.g. tiling).
 	handleResize();
+	stage("UI ready");
 
 	// Before the scene: bodies are created as soon as objects are added.
 	m_physicsServer = _own_mk<PhysicsServer>();
 
 	m_scene = new Scene();
 	m_scene->addComponent(std::unique_ptr<Script<Scene>>(script));
+	stage("loading scene");
 	m_scene->init(nullptr);
+	stage("scene ready");
 
 	m_lastFrameTime = platform::now();
 	m_fpsWindowStart = m_lastFrameTime;
-	char elapsed[32];
-	std::snprintf(elapsed, sizeof(elapsed), "%.1f", m_lastFrameTime - startTime);
-	platform::log(platform::LogLevel::Info,
-				  std::string("Engine started in ") + elapsed + " s");
 }
 
 void Application::run() {
