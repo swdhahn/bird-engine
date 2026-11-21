@@ -30,9 +30,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned: newer libc++ drops transitive includes that Jolt 5.4.0
+      # relies on (std::is_trivial without <type_traits>).
       - uses: mymindstorm/setup-emsdk@v14
         with:
-          version: latest
+          version: 4.0.10
 
       - name: Build
         run: |
