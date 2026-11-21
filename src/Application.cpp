@@ -4,6 +4,8 @@
 
 #include "Application.h"
 
+#include <cstdio>
+
 #include "platform/Clock.h"
 #include "platform/Log.h"
 #include "renders/Window.h"
@@ -30,6 +32,7 @@ void Application::init(Script<Scene>* script) {
 }
 
 void Application::start(Script<Scene>* script) {
+	const double startTime = platform::now();
 	// The pipeline loads its shaders through the cache during init(); the
 	// cache's own init() needs the context that the pipeline creates.
 	RESOURCE_MANAGER = new ResourceManager();
@@ -54,6 +57,10 @@ void Application::start(Script<Scene>* script) {
 
 	m_lastFrameTime = platform::now();
 	m_fpsWindowStart = m_lastFrameTime;
+	char elapsed[32];
+	std::snprintf(elapsed, sizeof(elapsed), "%.1f", m_lastFrameTime - startTime);
+	platform::log(platform::LogLevel::Info,
+				  std::string("Engine started in ") + elapsed + " s");
 }
 
 void Application::run() {

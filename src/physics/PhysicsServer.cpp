@@ -31,19 +31,22 @@ PhysicsServer::PhysicsServer(const PhysicsServerSettings& settings) {
 	JPH::RegisterTypes();
 
 	int threads = settings.workerThreads;
-#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
-	// Browsers without SharedArrayBuffer have no threads; with zero workers
-	// Jolt runs every job on the stepping thread.
-	threads = 0;
-#endif
 	if (threads < 0) {
 		threads = std::max(0, int(std::thread::hardware_concurrency()) - 1);
 	}
 	m_impl = std::make_unique<PhysicsServerImpl>();
 	m_impl->tempAllocator =
 		std::make_unique<JPH::TempAllocatorImplWithMallocFallback>(settings.tempAllocatorBytes);
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+	// Without threads (browsers lacking SharedArrayBuffer) the pool's
+	// semaphores could never be signalled; run jobs inline instead.
+	(void)threads;
+	m_impl->jobSystem =
+		std::make_unique<JPH::JobSystemSingleThreaded>(kMaxPhysicsJobs);
+#else
 	m_impl->jobSystem = std::make_unique<JPH::JobSystemThreadPool>(
 		kMaxPhysicsJobs, kMaxPhysicsBarriers, threads);
+#endif
 
 	s_instance = this;
 }

@@ -13,6 +13,8 @@ const chrome = process.env.CHROME_PATH ?? '/usr/bin/google-chrome';
 const browser = await puppeteer.launch({
   executablePath: chrome,
   headless: true,
+  // Software WebGL can hold the page's main thread for a long frame.
+  protocolTimeout: 120000,
   args: [
     '--no-sandbox',
     '--use-angle=swiftshader',
@@ -22,13 +24,15 @@ const browser = await puppeteer.launch({
   ],
 });
 
+const startedAt = Date.now();
 let frames = 0;
 let failure = null;
 const page = await browser.newPage();
 await page.setViewport({ width: 1280, height: 720 });
 page.on('console', (message) => {
   const text = message.text();
-  console.log(`[page ${message.type()}] ${text}`);
+  const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+  console.log(`[page ${message.type()} +${seconds}s] ${text}`);
   if (text.startsWith('FPS:')) frames++;
   if (text.includes('Fatal:') || text.includes('Aborted(')) failure = text;
 });
@@ -43,10 +47,14 @@ while (frames < 2 && !failure && Date.now() < deadline) {
   await new Promise((resolve) => setTimeout(resolve, 1000));
 }
 
-const screenshot = await page.screenshot({ type: 'png', encoding: 'base64' });
-console.log(`Screenshot: ${screenshot.length} base64 characters`);
-for (let i = 0; i < screenshot.length; i += 1000) {
-  console.log(`SCREENSHOT_PNG_BASE64 ${screenshot.slice(i, i + 1000)}`);
+try {
+  const screenshot = await page.screenshot({ type: 'png', encoding: 'base64' });
+  console.log(`Screenshot: ${screenshot.length} base64 characters`);
+  for (let i = 0; i < screenshot.length; i += 1000) {
+    console.log(`SCREENSHOT_PNG_BASE64 ${screenshot.slice(i, i + 1000)}`);
+  }
+} catch (error) {
+  console.log(`No screenshot: ${error.message}`);
 }
 await browser.close();
 
