@@ -42,5 +42,7 @@ target_link_options(bird_web PRIVATE
     -sINITIAL_MEMORY=256MB
     # Scene loading and physics recurse deeper than the 64 KB default.
     -sSTACK_SIZE=4MB)
+list(TRANSFORM BIRD_BAKED_ASSETS PREPEND "${BIRD_WEB_STAGE}/"
+     OUTPUT_VARIABLE BIRD_STAGED_ASSETS)
 set_property(TARGET bird_web APPEND PROPERTY LINK_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/shell.html" ${BIRD_BAKED_ASSETS})
+    "${CMAKE_CURRENT_SOURCE_DIR}/shell.html" ${BIRD_STAGED_ASSETS})
