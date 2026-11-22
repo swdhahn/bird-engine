@@ -16,6 +16,7 @@
  *   UBO 1  Material        per-material PBR parameters
  *   UBO 2  Lights          forward light list / directional lights
  *   UBO 3  Shadows         shadow matrices and atlas rectangles
+ *   UBO 4  Skinning        joint palette of the skinned draw
  *   Samplers 0..4          material texture slots (TextureSlot order)
  *   Samplers 5..           pass inputs (G-buffer, shadow atlases)
  */
@@ -25,6 +26,7 @@ constexpr uint32_t UBO_BINDING_GLOBAL = 0;
 constexpr uint32_t UBO_BINDING_MATERIAL = 1;
 constexpr uint32_t UBO_BINDING_LIGHTS = 2;
 constexpr uint32_t UBO_BINDING_SHADOWS = 3;
+constexpr uint32_t UBO_BINDING_SKINNING = 4;
 
 constexpr uint32_t SAMPLER_BINDING_GBUFFER_ALBEDO = 5;
 constexpr uint32_t SAMPLER_BINDING_GBUFFER_NORMAL = 6;
@@ -106,6 +108,25 @@ struct ObjectPushConstants {
 	}
 };
 static_assert(sizeof(ObjectPushConstants) == 112, "push constant drift");
+
+/**
+ * Joints addressable by one skinned draw. 256 palette entries of 48 bytes
+ * fill 12 KB, inside the 16 KB uniform block minimum that OpenGL ES 3 and
+ * WebGL 2 guarantee. Must equal Skeleton::kMaxJoints.
+ */
+constexpr uint32_t MAX_SKINNING_JOINTS = 256;
+
+/**
+ * Skinning palette (binding 4): per joint, model * inverseBind with the
+ * affine matrix's three rows stored as glm::mat3x4 columns. GLSL declares
+ * `mat3x4 joints[256]` and transforms with `vec4(p, 1.0) * joints[j]`.
+ */
+struct SkinningUBOData {
+	Matrix3x4 joints[MAX_SKINNING_JOINTS];
+};
+static_assert(sizeof(Matrix3x4) == 48, "std140 drift");
+static_assert(sizeof(SkinningUBOData) == 48 * MAX_SKINNING_JOINTS,
+			  "std140 drift");
 
 /** Light type codes stored in GpuLight::colorType.w. */
 constexpr float GPU_LIGHT_DIRECTIONAL = 0.0f;

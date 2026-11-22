@@ -10,6 +10,7 @@
 #include "../GLFrameBuffer.h"
 #include "../GLRenderState.h"
 #include "../GLShader.h"
+#include "../GLSkinning.h"
 
 namespace bird {
 class ResourceManager;
@@ -29,7 +30,8 @@ class GLShadowPass {
 	 * @param resources Shared cache through which the program loads.
 	 * @param settings Atlas sizes; fixed for the pass's lifetime.
 	 */
-	GLShadowPass(ResourceManager& resources, const ShadowSettings& settings);
+	GLShadowPass(ResourceManager& resources, const ShadowSettings& settings,
+				 GLSkinningBlock& skinning);
 
 	/**
 	 * Uploads the plan's GPU block and renders every planned view.
@@ -51,7 +53,7 @@ class GLShadowPass {
 	std::shared_ptr<Texture> m_localDepth;
 	std::unique_ptr<GLFrameBuffer> m_directionalTarget;
 	std::unique_ptr<GLFrameBuffer> m_localTarget;
-	std::shared_ptr<Shader> m_depthShader;
+	GLMeshPrograms m_depthPrograms;
 	std::unique_ptr<Buffer<ShadowUBOData>> m_shadowBlock;
 };
 

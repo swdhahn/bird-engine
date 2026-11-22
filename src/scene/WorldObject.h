@@ -35,6 +35,9 @@ extern BIRD_API Input* INPUT;
 extern BIRD_API ResourceManager* RESOURCE_MANAGER;
 class Application;
 extern BIRD_API Application* APPLICATION;
+class AnimationSystem;
+/** Engine-wide animation system for world animation (null when headless). */
+extern BIRD_API AnimationSystem* ANIMATION_SYSTEM;
 class Component;
 class Scene;
 
@@ -51,7 +54,8 @@ class WorldObject : public Object {
    public:
 	BIRD_NO_EXPORT WorldObject(uint16_t type);
 	WorldObject();
-	virtual ~WorldObject() {};
+	/** Cancels any world animations still targeting this object. */
+	virtual ~WorldObject();
 
 	/**
 	 * Associates this entity with a parent Scene and initializes its components.

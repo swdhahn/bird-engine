@@ -131,7 +131,8 @@ endif()
 add_library(
   Bird_core ${BIRD_CORE_LIBRARY_TYPE}
   ${BIRD_FILES} $<TARGET_OBJECTS:renders> $<TARGET_OBJECTS:opengl-renderer>
-  $<TARGET_OBJECTS:scene> $<TARGET_OBJECTS:physics>)
+  $<TARGET_OBJECTS:scene> $<TARGET_OBJECTS:physics>
+  $<TARGET_OBJECTS:animation>)
 if(BIRD_HOST_BUILD)
   add_executable(Bird src/main.cpp)
   target_link_libraries(Bird Bird_core)
@@ -338,6 +339,7 @@ add_subdirectory(src/scene)
 include_directories(src/scene)
 add_subdirectory(src/physics)
 include_directories(src/physics)
+add_subdirectory(src/animation)
 
 target_link_libraries(
   Bird_core

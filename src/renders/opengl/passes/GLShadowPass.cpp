@@ -19,8 +19,15 @@ std::shared_ptr<Texture> makeAtlas(uint32_t size) {
 }  // namespace
 
 GLShadowPass::GLShadowPass(ResourceManager& resources,
-						   const ShadowSettings& settings)
-	: m_settings(settings) {
+						   const ShadowSettings& settings,
+						   GLSkinningBlock& skinning)
+	: m_settings(settings),
+	  m_depthPrograms(
+		  resources.loadShader("assets/shaders/shadow_depth.vert",
+							   "assets/shaders/shadow_depth.frag"),
+		  resources.loadShader("assets/shaders/shadow_depth_skinned.vert",
+							   "assets/shaders/shadow_depth.frag"),
+		  skinning) {
 	m_directionalDepth = makeAtlas(settings.directionalAtlasSize);
 	m_localDepth = makeAtlas(settings.localAtlasSize);
 	m_directionalTarget = std::make_unique<GLFrameBuffer>(
@@ -31,8 +38,6 @@ GLShadowPass::GLShadowPass(ResourceManager& resources,
 		settings.localAtlasSize, settings.localAtlasSize,
 		std::vector<std::shared_ptr<Texture>>{}, m_localDepth, nullptr,
 		FRAMEBUFFER_OPT_NONE);
-	m_depthShader = resources.loadShader("assets/shaders/shadow_depth.vert",
-										 "assets/shaders/shadow_depth.frag");
 
 	auto initial = std::make_unique<ShadowUBOData[]>(1);
 	m_shadowBlock = BufferBuilder<ShadowUBOData>(BUFFER_UNIFORM |
@@ -49,8 +54,7 @@ void GLShadowPass::execute(const ShadowPlan& plan,
 	m_shadowBlock->update(&data, 1, 0);
 	if (plan.views.empty()) return;
 
-	auto& shader = static_cast<GLShader&>(*m_depthShader);
-	shader.bind();
+	m_depthPrograms.reset();
 	state.setBlend(GLBlend::None);
 	state.setDepthTest(true);
 	state.setDepthWrite(true);
@@ -79,6 +83,7 @@ void GLShadowPass::execute(const ShadowPlan& plan,
 
 		for (const RenderItem& caster : casters) {
 			if (!view.frustum.intersects(caster.worldBounds)) continue;
+			GLShader& shader = m_depthPrograms.prepare(caster);
 			const ShadowPushConstants push{caster.model, view.viewProjection};
 			shader.setPushConstants(&push, sizeof(push));
 			drawMesh(*caster.mesh);

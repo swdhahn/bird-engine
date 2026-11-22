@@ -4,9 +4,15 @@
 
 #include "WorldObject.h"
 
+#include "../animation/AnimationSystem.h"
 #include "Scene.h"
 
 namespace bird {
+
+WorldObject::~WorldObject() {
+	// Tweens hold raw pointers to their target; none may outlive it.
+	if (ANIMATION_SYSTEM) ANIMATION_SYSTEM->cancelOwner(this);
+}
 
 WorldObject::WorldObject()
 	: m_worldPosition(),

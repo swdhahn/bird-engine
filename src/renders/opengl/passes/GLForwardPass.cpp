@@ -7,10 +7,13 @@
 
 namespace bird::gl {
 
-GLForwardPass::GLForwardPass(ResourceManager& resources) {
-	m_shader = resources.loadShader("assets/shaders/mesh.vert",
-									"assets/shaders/forward.frag");
-}
+GLForwardPass::GLForwardPass(ResourceManager& resources,
+							 GLSkinningBlock& skinning)
+	: m_programs(resources.loadShader("assets/shaders/mesh.vert",
+									  "assets/shaders/forward.frag"),
+				 resources.loadShader("assets/shaders/mesh_skinned.vert",
+									  "assets/shaders/forward.frag"),
+				 skinning) {}
 
 void GLForwardPass::execute(const RenderQueue& queue, GLRenderTargets& targets,
 							GLRenderState& state) {
@@ -19,14 +22,13 @@ void GLForwardPass::execute(const RenderQueue& queue, GLRenderTargets& targets,
 	if (opaque.empty() && transparent.empty()) return;
 
 	targets.hdr().bindForDrawing();
-	auto& shader = static_cast<GLShader&>(*m_shader);
-	shader.bind();
+	m_programs.reset();
 	state.setDepthTest(true);
 	state.setDepthFunc(GLDepthFunc::LessEqual);
 
 	state.setBlend(GLBlend::None);
 	state.setDepthWrite(true);
-	drawItems(opaque, shader, state);
+	drawItems(opaque, m_programs, state);
 
 	// Blended surfaces test against depth but never write it, so that
 	// overlapping transparent layers all remain visible.
@@ -40,6 +42,7 @@ void GLForwardPass::execute(const RenderQueue& queue, GLRenderTargets& targets,
 							   : GLBlend::Alpha);
 			bound = item.material;
 		}
+		GLShader& shader = m_programs.prepare(item);
 		const ObjectPushConstants object{item.model};
 		shader.setPushConstants(&object, sizeof(object));
 		drawMesh(*item.mesh);

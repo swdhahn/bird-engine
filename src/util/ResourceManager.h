@@ -22,6 +22,7 @@
 #include "../renders/generic/Material.h"
 #include "../build-tools/MaterialFormat.h"
 #include "Resource.h"
+#include "../animation/skeletal/SkeletalAsset.h"
 
 namespace bird {
 
@@ -108,6 +109,16 @@ class ResourceManager {
 	 */
 	std::shared_ptr<Font> loadFont(const std::string& path);
 
+	/**
+	 * Loads the skeleton, clips and skins BuildTools baked for a skinned
+	 * model (<path>.skel.bird); cached per path and shared by instances.
+	 * @param path Source model path, e.g. "assets/models/hero.glb".
+	 * @return The asset, or nullptr when the model has no skeleton bake.
+	 * @throws std::runtime_error when the baked file is malformed.
+	 */
+	BIRD_NO_EXPORT std::shared_ptr<const SkeletalAsset> loadSkeletalAsset(
+		const std::string& path);
+
 	void loadSound(std::string path);
 	void loadCustom(std::string path);
 
@@ -141,6 +152,8 @@ class ResourceManager {
 	std::unordered_map<std::string, std::shared_ptr<Resource>>* m_resources;
 	std::unordered_map<std::string, std::vector<std::shared_ptr<Mesh>>>
 		m_meshes;
+	std::unordered_map<std::string, std::shared_ptr<const SkeletalAsset>>
+		m_skeletalAssets;
 };
 
 }  // namespace bird

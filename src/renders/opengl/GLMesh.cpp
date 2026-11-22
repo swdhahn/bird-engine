@@ -54,6 +54,18 @@ GLMesh::~GLMesh() {
 	glDeleteVertexArrays(1, &m_vao);
 }
 
+void GLMesh::onSkinAttached() {
+	glBindVertexArray(m_vao);
+	bindAttribute(m_weightBuffer.get(), ATTRIBUTE_WEIGHTS);
+	// Joint indices stay integers in the shader (uvec4): no normalization
+	// and no float conversion.
+	m_jointBuffer->initialize();
+	glEnableVertexAttribArray(ATTRIBUTE_JOINTS);
+	glVertexAttribIPointer(ATTRIBUTE_JOINTS, 4, GL_UNSIGNED_SHORT,
+						   4 * sizeof(uint16_t), nullptr);
+	glBindVertexArray(0);
+}
+
 void GLMesh::updateMesh() {}
 
 const uint32_t& GLMesh::getVAO() const {

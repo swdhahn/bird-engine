@@ -6,6 +6,7 @@
 #include "../../generic/RenderQueue.h"
 #include "../GLRenderState.h"
 #include "../GLRenderTargets.h"
+#include "../GLSkinning.h"
 
 namespace bird {
 class ResourceManager;
@@ -25,13 +26,16 @@ class GLForwardPass {
 	 * Loads the pass's shader programs.
 	 * @param resources Shared cache through which the programs load.
 	 */
-	explicit GLForwardPass(ResourceManager& resources);
+	/**
+	 * @param skinning Shared palette block used by skinned draws.
+	 */
+	GLForwardPass(ResourceManager& resources, GLSkinningBlock& skinning);
 
 	void execute(const RenderQueue& queue, GLRenderTargets& targets,
 				 GLRenderState& state);
 
    private:
-	std::shared_ptr<Shader> m_shader;
+	GLMeshPrograms m_programs;
 };
 
 }  // namespace bird::gl

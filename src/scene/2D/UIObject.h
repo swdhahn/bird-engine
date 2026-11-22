@@ -1,22 +1,26 @@
 #ifndef BIRD_UIOBJECT_H
 #define BIRD_UIOBJECT_H
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "../../util/Constants.h"
 #include "ScreenObject.h"
 #include "UIEvents.h"
 #include "UILayout.h"
 #include "UIMenu.h"
 #include "UIPlatform.h"
 #include "UITheme.h"
+#include "UIVisualTransform.h"
 
 namespace bird {
 
 class UIManager;
 class UIDrawList;
+class UIAnimator;
 class Font;
 
 /** Fractions of the parent's content box, for anchors and pivots. */
@@ -96,6 +100,8 @@ class UIObject : public ScreenObject {
 	/** Text shown after hovering for UITheme::tooltipDelaySeconds. */
 	UIObject& setTooltip(std::string tooltip);
 	UIObject& setTheme(std::shared_ptr<UITheme> theme);
+	/** Effective theme (shared with ancestors unless overridden). */
+	const UITheme& getTheme() const { return *m_theme; }
 	/** Clips descendants to childClipRect() (scroll areas, panes). */
 	UIObject& setClipChildren(bool clip);
 	/** Menu opened at the cursor on a right click inside this node. */
@@ -121,6 +127,38 @@ class UIObject : public ScreenObject {
 	bool isEffectivelyEnabled() const;
 	/** @return the size rule along one axis. */
 	const UISizeRule& sizeRule(UIAxis axis) const;
+
+	// -------------------------------------------- visual transform (post-layout)
+	/** Pixel translation applied after layout (never triggers relayout). */
+	UIObject& setVisualOffset(Vector2 offset);
+	/** Scale around the visual origin; a zero axis disables hit testing. */
+	UIObject& setVisualScale(Vector2 scale);
+	/** Rotation in radians around the visual origin. */
+	UIObject& setVisualRotation(float radians);
+	/** Rotation/scale origin as a fraction of size (default centre). */
+	UIObject& setVisualOrigin(Vector2 fraction);
+	/** Alpha multiplier for this subtree, clamped to [0, 1]. */
+	UIObject& setOpacity(float opacity);
+	const Vector2& getVisualOffset() const { return m_visual.offset; }
+	const Vector2& getVisualScale() const { return m_visual.scale; }
+	float getVisualRotation() const { return m_rotation; }
+	const Vector2& getVisualOrigin() const { return m_visual.origin; }
+	float getOpacity() const { return m_visual.opacity; }
+
+	/**
+	 * Begins a fluent transition on this node; call start() to run it.
+	 * See UIAnimator for semantics and defaults.
+	 */
+	UIAnimator animate();
+
+	/**
+	 * Takes ownership of an animated property for a new transition.
+	 * @return Stamp the transition must present to write the property.
+	 */
+	BIRD_NO_EXPORT uint32_t claimAnimated(UIAnimatedProperty property);
+	/** True while the stamp is still the property's latest claim. */
+	BIRD_NO_EXPORT bool ownsAnimated(UIAnimatedProperty property,
+									 uint32_t stamp) const;
 
 	// ------------------------------------------------- layout (UIManager)
 	/**
@@ -202,6 +240,8 @@ class UIObject : public ScreenObject {
 
 	void markLayoutDirty();
 	void markVisualDirty();
+	/** Transform-only change: recompose transforms and redraw, no layout. */
+	void markTransformDirty();
 	const UITheme& theme() const { return *m_theme; }
 	/** @return the UI font, or nullptr when detached or headless. */
 	const Font* font() const;
@@ -241,6 +281,8 @@ class UIObject : public ScreenObject {
 	Vector2 m_layoutPosition{0.0f};
 	Matrix3 m_basis{1.0f};
 	UIRect m_clip = UIRect::unbounded();
+	UIVisualTransform m_visual;
+	uint32_t m_animationStamps[static_cast<size_t>(UIAnimatedProperty::Count)]{};
 
 	bool m_hovered = false;
 	bool m_pressed = false;

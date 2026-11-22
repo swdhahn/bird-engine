@@ -26,6 +26,8 @@ add_library(
   GLRenderTargets.cpp
   GLDrawCommands.h
   GLDrawCommands.cpp
+  GLSkinning.h
+  GLSkinning.cpp
   passes/GLShadowPass.h
   passes/GLShadowPass.cpp
   passes/GLGBufferPass.h
