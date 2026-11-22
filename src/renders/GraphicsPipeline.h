@@ -14,10 +14,12 @@
 #include "../scene/Scene.h"
 #include "../scene/components/LightComponent.h"
 #include "../scene/components/MeshComponent.h"
+#include "../scene/components/ParticleEmitter.h"
 #include "DebugDraw.h"
 #include "Window.h"
 #include "generic/Buffer.h"
 #include "generic/FrameBuffer.h"
+#include "generic/FrustumCuller.h"
 #include "generic/GpuLayouts.h"
 #include "generic/LightList.h"
 #include "generic/RenderQueue.h"
@@ -86,11 +88,41 @@ class GraphicsPipeline {
 	/** Removes an active light. */
 	void removeLight(LightComponent* light);
 
+	/** Registers an active particle emitter to be drawn in the forward pass. */
+	void addParticleEmitter(ParticleEmitter* emitter);
+
+	/** Removes an active particle emitter from the drawing list. */
+	void removeParticleEmitter(ParticleEmitter* emitter);
+
 	/**
 	 * World-space debug lines drawn over this frame's 3D scene. The
 	 * Application clears the list at the start of each frame.
 	 */
 	DebugDrawList& getDebugDraw() { return m_debugDraw; }
+
+	/**
+	 * Returns the per-frame frustum culling statistics (culled vs. rendered
+	 * counts broken down by deferred, forward opaque, transparent, and
+	 * particle emitters) collected during the most recent frame.
+	 */
+	const CullingStats& getCullingStats() const {
+		return m_frustumCuller.getStats();
+	}
+
+	/**
+	 * Enables or disables frustum culling for meshes and particle emitters.
+	 * Disabling culling is useful for debugging bounds or profiling culling
+	 * savings.
+	 * @param enabled True to cull off-screen renderables (default).
+	 */
+	void setFrustumCullingEnabled(bool enabled) {
+		m_frustumCuller.setEnabled(enabled);
+	}
+
+	/** @return True when frustum culling is enabled. */
+	bool isFrustumCullingEnabled() const {
+		return m_frustumCuller.isEnabled();
+	}
 
 	/** Shared full-screen quad mesh used for post-processing passes. */
 	static std::shared_ptr<Mesh> s_quad_mesh;
@@ -118,6 +150,9 @@ class GraphicsPipeline {
 
 	std::vector<MeshComponent*> m_meshes;
 	std::vector<LightComponent*> m_lights;
+	std::vector<ParticleEmitter*> m_particleEmitters;
+	std::vector<ParticleEmitter*> m_visibleParticleEmitters;
+	FrustumCuller m_frustumCuller;
 	RenderQueue m_renderQueue;
 	std::vector<RenderItem> m_shadowCasters;
 	std::vector<std::unique_ptr<FrameBuffer>> m_framebuffers;

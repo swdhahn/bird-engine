@@ -40,6 +40,9 @@ flowchart TD
     Arch --> A12["Asset Hot-Reloading"]
     Arch --> A13["Audio System (miniaudio)"]
     Arch --> A14["Navigation & AI Pathfinding (Recast & Detour)"]
+    Arch --> A15["Image-Based Lighting & Skybox"]
+    Arch --> A16["Frustum Culling"]
+    Arch --> A17["CPU Billboard Particle System"]
 ```
 
 ---
@@ -82,3 +85,6 @@ Under-the-hood technical references detailing internal mechanics and design deci
 - **[Scene Serialization, Prefabs & Save Games](architecture/serialization_and_prefabs.md)**: Format-agnostic `Archive` & JSON schema, `ComponentRegistry` reflection, stable `UUID` & `EntityRef` remapping, `PrefabManager` / `InstantiatePrefab(AssetID)`, property delta overrides, and cross-platform `SaveGame` directory resolution.
 - **[Diagnostics (Logging, Profiling & Crash Handling)](architecture/diagnostics.md)**: Thread-safe structured logger with console/rotating-file/ring-buffer sinks, Dart logging bridge, Tracy & internal frame/section profiler, native stack traces, OS crash dumps, Dart script error boundary, and graceful fallback assets.
 - **[Asset Hot-Reloading](architecture/hot_reloading.md)**: Background `FileWatcher` with debouncing, async `BuildTools` recompilation, main-thread GPU/CPU handle swapping in `ResourceManager`, `EntityHandleRegistry` for Dart hot-reload safety, and `BIRD_ENABLE_HOT_RELOAD` release stripping.
+- **[Image-Based Lighting (IBL) & Skybox](architecture/ibl_and_skybox.md)**: HDR environment cubemaps (procedural sky, equirectangular `.hdr`, or 6 cubemap faces), diffuse irradiance convolution, GGX specular prefiltering, the 2D split-sum BRDF LUT, and `GLSkyboxPass`.
+- **[Frustum Culling](architecture/frustum_culling.md)**: Gribb/Hartmann 6-plane extraction, local and Arvo-transformed world `AABB` / `BoundingSphere` bounds, deferred & forward pass culling, and `CullingStats` runtime profiling.
+- **[CPU Billboard Particle & VFX System](architecture/particle_system.md)**: Zero-allocation fixed-capacity `ParticleEmitter` simulation, spawn rates and scheduled bursts, color/size-over-life curves, and batched camera-facing quad rendering in the forward transparency pass.

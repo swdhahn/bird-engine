@@ -40,15 +40,36 @@ vec3 evaluateBRDF(vec3 N, vec3 V, vec3 L, vec3 albedo, float metallic,
     return (diffuse * (vec3(1.0) - F) + specular) * NoL;
 }
 
-// Ambient approximation: diffuse irradiance plus a Fresnel-weighted
-// specular term, both scaled by occlusion.
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 f0, float roughness) {
+    return f0 + (max(vec3(1.0 - roughness), f0) - f0) *
+                    pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+// Ambient approximation used when no IBL environment map is bound:
+// diffuse irradiance plus a Fresnel-weighted specular term, scaled by occlusion.
 vec3 evaluateAmbient(vec3 N, vec3 V, vec3 albedo, float metallic,
                      float perceptualRoughness, float occlusion,
                      vec3 ambient) {
     float NoV = clamp(dot(N, V), 0.0, 1.0);
     vec3 f0 = mix(vec3(0.04), albedo, metallic);
-    vec3 F = f0 + (max(vec3(1.0 - perceptualRoughness), f0) - f0) *
-                      pow(1.0 - NoV, 5.0);
+    vec3 F = fresnelSchlickRoughness(NoV, f0, perceptualRoughness);
     vec3 diffuse = (1.0 - metallic) * albedo * (vec3(1.0) - F);
     return (diffuse + F * 0.5) * ambient * occlusion;
+}
+
+// Image-Based Lighting (split-sum approximation): combines diffuse irradiance
+// with roughness-prefiltered specular environment reflections and the 2D BRDF
+// integration LUT so metallic and dielectric surfaces reflect the environment.
+vec3 evaluateIBL(vec3 N, vec3 V, vec3 albedo, float metallic,
+                 float perceptualRoughness, float occlusion,
+                 vec3 irradiance, vec3 prefilteredColor, vec2 brdf,
+                 float iblIntensity) {
+    float NoV = clamp(dot(N, V), 0.0, 1.0);
+    vec3 f0 = mix(vec3(0.04), albedo, metallic);
+    vec3 F = fresnelSchlickRoughness(NoV, f0, perceptualRoughness);
+    vec3 kS = F;
+    vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
+    vec3 diffuse = irradiance * albedo * kD;
+    vec3 specular = prefilteredColor * (F * brdf.x + brdf.y);
+    return (diffuse + specular) * occlusion * iblIntensity;
 }

@@ -5,22 +5,27 @@
 #ifndef BIRD_CAMERA_H
 #define BIRD_CAMERA_H
 
+#include <memory>
+
 #include "../util/Math.h"
 #include "WorldObject.h"
 
 namespace bird {
 
+class EnvironmentMap;
+
 /**
  * Environmental rendering settings associated with a camera view,
- * including viewport clear color and ambient background.
+ * including viewport clear color, ambient fallback, IBL environment map,
+ * skybox toggle, exposure, and G-buffer debug visualization.
  */
 class WorldEnvironment {
    public:
-	/** Background color in linear HDR space, shown where no geometry lies. */
+	/** Background color in linear HDR space, shown when no skybox is rendered. */
 	Vector3 clearColor;
-	/** Uniform ambient light color (linear). */
+	/** Uniform ambient light color (linear), used when environmentMap is null. */
 	Vector3 ambientColor;
-	/** Ambient light multiplier. */
+	/** Ambient light multiplier, used when environmentMap is null. */
 	float ambientIntensity;
 	/** Linear exposure multiplier applied before tone mapping. */
 	float exposure;
@@ -30,13 +35,32 @@ class WorldEnvironment {
 	 * 6 local shadow atlas.
 	 */
 	int debugView;
+	/**
+	 * Optional precomputed IBL environment (skybox + diffuse irradiance +
+	 * specular prefilter cubemaps). When non-null, replaces flat ambient
+	 * lighting with physically-based IBL in deferred and forward passes.
+	 */
+	std::shared_ptr<EnvironmentMap> environmentMap;
+	/**
+	 * Multiplier applied to diffuse + specular IBL contribution (>= 0).
+	 * Set to 0.0f to keep the skybox visible while disabling IBL shading.
+	 */
+	float iblIntensity;
+	/**
+	 * When true and environmentMap is non-null, renders the environment
+	 * cubemap as a background skybox before the forward transparency pass.
+	 */
+	bool renderSkybox;
 
 	WorldEnvironment()
 		: clearColor(0, 0, 0),
 		  ambientColor(0.6f, 0.7f, 0.9f),
 		  ambientIntensity(0.15f),
 		  exposure(1.0f),
-		  debugView(0) {}
+		  debugView(0),
+		  environmentMap(nullptr),
+		  iblIntensity(1.0f),
+		  renderSkybox(true) {}
 };
 
 /**

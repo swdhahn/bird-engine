@@ -18,6 +18,7 @@
 #include "../generic/FrameBuffer.h"
 #include "GLCapabilities.h"
 #include "GLFrameBuffer.h"
+#include "GLIBLEnvironment.h"
 #include "GLMesh.h"
 #include "GLShader.h"
 #include "GLUIRenderer.h"
@@ -68,6 +69,7 @@ void GLPipeline::init() {
 												  *m_skinning);
 	m_gBufferPass = std::make_unique<GLGBufferPass>(resources, *m_skinning);
 	m_lightingPass = std::make_unique<GLLightingPass>(resources);
+	m_skyboxPass = std::make_unique<GLSkyboxPass>(resources);
 	m_forwardPass = std::make_unique<GLForwardPass>(resources, *m_skinning);
 	m_postProcessPass = std::make_unique<GLPostProcessPass>(resources);
 	createRenderTargets();
@@ -165,11 +167,16 @@ void GLPipeline::renderWorld() {
 	m_shadowPass->bindForSampling();
 
 	const WorldEnvironment& env = m_camera->getWorldEnvironment();
+	GLIBLEnvironment::bindForSampling(env.environmentMap.get());
 	m_gBufferPass->execute(m_renderQueue.bucket(RenderBucket::Deferred),
 						   *m_targets, env.clearColor, m_state);
 	m_targets->gBuffer().blitDepthTo(m_targets->hdr());
 	m_lightingPass->execute(lights, frustum, *m_targets, m_state);
-	m_forwardPass->execute(m_renderQueue, *m_targets, m_state);
+	if (env.renderSkybox && env.environmentMap) {
+		m_skyboxPass->execute(env.environmentMap.get(), *m_targets, m_state);
+	}
+	m_forwardPass->execute(m_renderQueue, m_visibleParticleEmitters,
+						   global.view, *m_targets, m_state);
 
 	m_targets->hdr().bindForDrawing();
 	renderDebugLines();
@@ -214,10 +221,12 @@ void GLPipeline::cleanUp() {
 	m_debugRenderer.reset();
 	m_postProcessPass.reset();
 	m_forwardPass.reset();
+	m_skyboxPass.reset();
 	m_lightingPass.reset();
 	m_gBufferPass.reset();
 	m_shadowPass.reset();
 	m_skinning.reset();	 // after the passes that reference it
+	GLIBLEnvironment::releaseSharedResources();
 	m_targets.reset();
 	m_lightsBlock.reset();
 	m_pWindow.reset();

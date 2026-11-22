@@ -137,6 +137,20 @@ void GraphicsPipeline::removeLight(LightComponent* light) {
 				   m_lights.end());
 }
 
+void GraphicsPipeline::addParticleEmitter(ParticleEmitter* emitter) {
+	if (std::find(m_particleEmitters.begin(), m_particleEmitters.end(),
+				  emitter) == m_particleEmitters.end()) {
+		m_particleEmitters.push_back(emitter);
+	}
+}
+
+void GraphicsPipeline::removeParticleEmitter(ParticleEmitter* emitter) {
+	m_particleEmitters.erase(
+		std::remove(m_particleEmitters.begin(), m_particleEmitters.end(),
+					emitter),
+		m_particleEmitters.end());
+}
+
 GlobalUBOData GraphicsPipeline::buildGlobalData() const {
 	const WorldEnvironment& env = m_camera->getWorldEnvironment();
 	GlobalUBOData global{};
@@ -150,9 +164,11 @@ GlobalUBOData GraphicsPipeline::buildGlobalData() const {
 	global.screenSize = Vector4(width, height, 1.0f / width, 1.0f / height);
 	global.ambientAndExposure =
 		Vector4(env.ambientColor * env.ambientIntensity, env.exposure);
+	const float iblIntensity =
+		env.environmentMap ? std::max(env.iblIntensity, 0.0f) : 0.0f;
 	global.cameraParams =
 		Vector4(m_camera->getNearPlane(), m_camera->getFarPlane(),
-				static_cast<float>(env.debugView), 0.0f);
+				static_cast<float>(env.debugView), iblIntensity);
 	return global;
 }
 
@@ -174,6 +190,8 @@ SkeletalAnimationComponent* findSkeletalAnimation(WorldObject* object) {
 void GraphicsPipeline::buildRenderQueue(const Frustum& frustum) {
 	m_renderQueue.clear();
 	m_shadowCasters.clear();
+	m_visibleParticleEmitters.clear();
+	m_frustumCuller.beginFrame(frustum);
 	const Matrix4 view = m_camera->getViewMatrix();
 	for (MeshComponent* component : m_meshes) {
 		WorldObject* object = component->world_object();
@@ -198,13 +216,22 @@ void GraphicsPipeline::buildRenderQueue(const Frustum& frustum) {
 			}
 			item.worldBounds = localBounds.transformed(model);
 			if (material->castsShadows()) m_shadowCasters.push_back(item);
-			if (!frustum.intersects(item.worldBounds)) continue;
+			const RenderBucket bucket = classifyMaterial(*material);
+			if (!m_frustumCuller.testMesh(item.worldBounds, bucket)) continue;
 			item.viewDepth =
 				-(view * Vector4(item.worldBounds.center(), 1.0f)).z;
 			m_renderQueue.submit(item);
 		}
 	}
 	m_renderQueue.sort();
+
+	for (ParticleEmitter* emitter : m_particleEmitters) {
+		if (emitter == nullptr || emitter->getActiveCount() == 0) continue;
+		if (!m_frustumCuller.testParticleEmitter(emitter->getWorldBounds())) {
+			continue;
+		}
+		m_visibleParticleEmitters.push_back(emitter);
+	}
 }
 
 std::vector<LightSnapshot> GraphicsPipeline::snapshotLights() {

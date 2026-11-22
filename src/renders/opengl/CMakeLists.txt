@@ -16,6 +16,8 @@ add_library(
   GLShader.h
   GLFrameBuffer.h
   GLFrameBuffer.cpp
+  GLIBLEnvironment.h
+  GLIBLEnvironment.cpp
   GLUIRenderer.h
   GLUIRenderer.cpp
   GLDebugRenderer.h
@@ -28,12 +30,16 @@ add_library(
   GLDrawCommands.cpp
   GLSkinning.h
   GLSkinning.cpp
+  GLParticleRenderer.h
+  GLParticleRenderer.cpp
   passes/GLShadowPass.h
   passes/GLShadowPass.cpp
   passes/GLGBufferPass.h
   passes/GLGBufferPass.cpp
   passes/GLLightingPass.h
   passes/GLLightingPass.cpp
+  passes/GLSkyboxPass.h
+  passes/GLSkyboxPass.cpp
   passes/GLForwardPass.h
   passes/GLForwardPass.cpp
   passes/GLPostProcessPass.h
