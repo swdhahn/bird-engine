@@ -37,8 +37,16 @@ PhysicsServer::PhysicsServer(const PhysicsServerSettings& settings) {
 	m_impl = std::make_unique<PhysicsServerImpl>();
 	m_impl->tempAllocator =
 		std::make_unique<JPH::TempAllocatorImplWithMallocFallback>(settings.tempAllocatorBytes);
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+	// Without threads (browsers lacking SharedArrayBuffer) the pool's
+	// semaphores could never be signalled; run jobs inline instead.
+	(void)threads;
+	m_impl->jobSystem =
+		std::make_unique<JPH::JobSystemSingleThreaded>(kMaxPhysicsJobs);
+#else
 	m_impl->jobSystem = std::make_unique<JPH::JobSystemThreadPool>(
 		kMaxPhysicsJobs, kMaxPhysicsBarriers, threads);
+#endif
 
 	s_instance = this;
 }

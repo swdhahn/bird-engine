@@ -8,6 +8,7 @@
 #include <Jolt/Jolt.h>
 
 #include <Jolt/Core/Factory.h>
+#include <Jolt/Core/JobSystemSingleThreaded.h>
 #include <Jolt/Core/JobSystemThreadPool.h>
 #include <Jolt/Core/TempAllocator.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
@@ -203,7 +204,7 @@ class DebugLineSink final : public JPH::DebugRendererSimple {
 struct PhysicsServerImpl {
 	// Falls back to malloc when a step outgrows the arena, instead of aborting.
 	std::unique_ptr<JPH::TempAllocatorImplWithMallocFallback> tempAllocator;
-	std::unique_ptr<JPH::JobSystemThreadPool> jobSystem;
+	std::unique_ptr<JPH::JobSystem> jobSystem;
 	BroadPhaseLayers broadPhaseLayers;
 	ObjectVsBroadPhaseFilter objectVsBroadPhase;
 	ObjectPairFilter objectPairs;

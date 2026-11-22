@@ -136,9 +136,11 @@ const GLCapabilities& GLCapabilities::current() {
 		if (const char* disabled = std::getenv("BIRD_GL_CAPS_DISABLE")) {
 			detected.disable(disabled);
 		}
+		// WebGL 2 reports the ES 3.0 API version it implements.
 		platform::log(platform::LogLevel::Info,
 					  std::string("GL context: ") +
-						  familyName(detected.family) + " " +
+						  familyName(detected.family) +
+						  (detected.family == GLApiFamily::WebGL ? " 2, ES " : " ") +
 						  std::to_string(detected.major) + "." +
 						  std::to_string(detected.minor) + " (" +
 						  glString(GL_RENDERER) + ")");
