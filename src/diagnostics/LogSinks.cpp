@@ -68,7 +68,7 @@ std::string LogRecord::formatTimestamp() const {
 	int64_t ms = epochMillis % 1000;
 	if (ms < 0) ms += 1000;
 	const std::tm utc = toUtcTm(static_cast<std::time_t>(secs));
-	char buf[32];
+	char buf[80];
 	std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d.%03d",
 				  utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday, utc.tm_hour,
 				  utc.tm_min, utc.tm_sec, static_cast<int>(ms));

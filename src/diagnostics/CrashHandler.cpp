@@ -55,7 +55,7 @@ std::string formatFileTimestamp() {
 #else
 	gmtime_r(&secs, &utc);
 #endif
-	char buf[32];
+	char buf[64];
 	std::snprintf(buf, sizeof(buf), "%04d%02d%02d_%02d%02d%02d",
 				  utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday, utc.tm_hour,
 				  utc.tm_min, utc.tm_sec);
