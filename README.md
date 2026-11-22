@@ -77,7 +77,35 @@ cd test && cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build -j$(np
 ./build/Bird test/build/libBird_test
 ```
 
-### 3. Run Unit Tests
+### 3. Demo Scene and Level Editor
+The sample plugin (`test/main.cpp`) exercises most engine systems in one scene:
+deferred PBR lighting with a procedural IBL sky, physics, a skinned knight, a
+patrolling guard (Recast navmesh agent, Idle/Walk blend tree, footstep notifies
+with 3D audio), a campfire and spark fountain (particles, flickering light,
+looping 3D sound), event-bus counters, culling and profiler readouts, and
+save/load through the serialization module.
+
+| Key | Action |
+|---|---|
+| Right mouse, `WASD`, `Space`/`Shift` | Look and fly |
+| `C` / `F` / `R` / `G` | Walk mode / push a crate / drop crates again / collider wireframes |
+| `N` / `B` / `M` | Navmesh debug draw / spark burst / mute audio |
+| `F9` / `F10` | Save the scene (JSON) and camera / restore the saved camera |
+| `V` | Cycle G-buffer debug views |
+
+Launch the **level editor** on the same scene with `BIRD_EDITOR=1` (or
+`./run_test.sh run editor`):
+```bash
+BIRD_EDITOR=1 ./build/Bird test/build/libBird_test
+```
+It opens in Edit mode with the simulation paused: pick entities in the viewport
+or the hierarchy, use the `W`/`E`/`R` gizmos, edit values in the inspector, and
+press `F1` (or the toolbar's Play) to run the game; `F7` stops and restores the
+scene. `Ctrl+S` saves the scene as JSON. See
+[docs/architecture/level_editor.md](docs/architecture/level_editor.md) for every
+shortcut. Debug builds also hot-reload anything edited under `assets/`.
+
+### 4. Run Unit Tests
 ```bash
 ctest --test-dir build --output-on-failure
 ```
