@@ -22,6 +22,7 @@
 namespace bird {
 
 class UIManager;
+class AudioSystem;
 
 /**
  * Central engine orchestrator.
@@ -113,6 +114,8 @@ class Application {
 
 	GraphicsPipeline* getGraphicsPipeline();
 	UIManager* getUIManager();
+	/** Engine-wide audio subsystem (2D/3D playback and mixing buses). */
+	AudioSystem* getAudioSystem();
 
 	/** Global physics state; every scene's PhysicsWorld is stepped through it. */
 	PhysicsServer* getPhysicsServer();
