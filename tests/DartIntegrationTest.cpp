@@ -7,6 +7,7 @@
 
 #include "c_wrapper.h"
 #include "dart/DartRuntime.h"
+#include "navigation/NavMesh.h"
 #include "scene/Scene.h"
 #include "scene/WorldObject.h"
 #include "scene/components/ProcessScript.h"
@@ -126,6 +127,34 @@ TEST(DartIntegrationTest, EmbeddedDartVmExecutesScriptEndToEnd) {
 	// Run Pass 3 Jolt Physics + raycast + contact callbacks from Dart
 	ASSERT_TRUE(runtime.invokeTopLevelVoid("runPhysicsIntegrationChecks"))
 		<< runtime.lastError();
+
+	// Bake a small floor NavMesh to a temp .bnav file and verify Dart NavMesh
+	// loading, pathfinding queries, and NavAgent crowd movement end-to-end.
+	{
+		std::vector<bird::Vector3> verts = {
+			{-15.0f, -1.0f, -15.0f}, {15.0f, -1.0f, -15.0f},
+			{15.0f, 0.0f, -15.0f},   {-15.0f, 0.0f, -15.0f},
+			{-15.0f, -1.0f, 15.0f},  {15.0f, -1.0f, 15.0f},
+			{15.0f, 0.0f, 15.0f},    {-15.0f, 0.0f, 15.0f},
+		};
+		std::vector<uint32_t> indices = {
+			3, 7, 6, 3, 6, 2,  // Top
+			0, 1, 5, 0, 5, 4,  // Bottom
+			4, 5, 6, 4, 6, 7,  // Front
+			1, 0, 3, 1, 3, 2,  // Back
+			5, 1, 2, 5, 2, 6,  // Right
+			0, 4, 7, 0, 7, 3,  // Left
+		};
+		auto navMesh = bird::NavMesh::build(verts, indices);
+		const fs::path tmpNavPath =
+			fs::temp_directory_path() / "bird_dart_nav_integration_test.bnav";
+		ASSERT_TRUE(navMesh->saveToFile(tmpNavPath.string()));
+
+		const bool navOk =
+			runtime.invokeTopLevelVoid("runNavigationIntegrationChecks");
+		fs::remove(tmpNavPath);
+		ASSERT_TRUE(navOk) << runtime.lastError();
+	}
 
 	// Deinit triggers Dart deinit() and closes NativeCallables cleanly before VM shutdown
 	externalScene.deinit();

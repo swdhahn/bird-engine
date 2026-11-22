@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:bird_engine/bird_engine.dart';
 
 void main() {}
@@ -279,4 +280,85 @@ void runPhysicsIntegrationChecks() {
   floorSettings.dispose();
   boxSettings.dispose();
   server.dispose();
+}
+
+/// Tests Recast/Detour NavMesh loading, pathfinding queries, and NavAgent
+/// crowd movement (`setDestination`, `stop`, `hasReachedDestination`) from Dart.
+@pragma('vm:entry-point')
+void runNavigationIntegrationChecks() {
+  final navServer = NavServer();
+  final scene = Scene();
+  final navWorld = scene.createNavWorld(NavWorldSettings())!;
+  scene.init(null);
+
+  final tmpNavPath =
+      '${Directory.systemTemp.path}/bird_dart_nav_integration_test.bnav';
+  final navMesh = NavMesh.loadFromFile(tmpNavPath);
+  if (navMesh == null) {
+    throw StateError('Failed to load baked NavMesh from $tmpNavPath');
+  }
+  navWorld.setNavMesh(navMesh);
+  if (!navWorld.hasNavMesh()) {
+    throw StateError('NavWorld should have an active NavMesh');
+  }
+
+  // Nearest-point query
+  final nearest = navWorld.findNearestPoint(
+    Vector3(0.0, 2.0, 0.0),
+    Vector3(2.0, 4.0, 2.0),
+  );
+  if (nearest == null || nearest.position.y.abs() > 0.3) {
+    throw StateError('Unexpected findNearestPoint result: $nearest');
+  }
+  nearest.dispose();
+
+  // Point-to-point path query
+  final path = navWorld.findPath(
+    Vector3(-8.0, 0.0, 0.0),
+    Vector3(8.0, 0.0, 0.0),
+    Vector3(2.0, 4.0, 2.0),
+  );
+  if (!path.isValid() || path.getPointCount() < 2 || path.getLength() < 15.0) {
+    throw StateError(
+      'Unexpected findPath result: count=${path.getPointCount()} len=${path.getLength()}',
+    );
+  }
+  path.dispose();
+
+  // NavAgent steering, arrival, and stop()
+  final npc = WorldObject();
+  npc.setWorldPosition(Vector3(-6.0, 0.0, 0.0));
+  final agentSettings = NavAgentSettings()
+    ..maxSpeed = 5.0
+    ..maxAcceleration = 12.0
+    ..stoppingDistance = 0.5;
+  final agent = NavAgent(agentSettings);
+  npc.addComponent(agent);
+  scene.addChild(npc);
+
+  if (!agent.setDestination(Vector3(6.0, 0.0, 0.0))) {
+    throw StateError('NavAgent.setDestination failed');
+  }
+  for (var i = 0; i < 300 && !agent.hasReachedDestination(); i++) {
+    navWorld.step(1.0 / 60.0);
+  }
+  if (!agent.hasReachedDestination()) {
+    throw StateError(
+      'NavAgent did not reach destination; final pos=${npc.getWorldPosition()}',
+    );
+  }
+
+  // Start a new move and immediately stop()
+  agent.setDestination(Vector3(-6.0, 0.0, 0.0));
+  navWorld.step(1.0 / 60.0);
+  agent.stop();
+  if (agent.hasDestination() || agent.hasReachedDestination()) {
+    throw StateError('NavAgent.stop() did not clear destination state');
+  }
+
+  scene.deinit();
+  scene.dispose();
+  agentSettings.dispose();
+  navMesh.dispose();
+  navServer.dispose();
 }
