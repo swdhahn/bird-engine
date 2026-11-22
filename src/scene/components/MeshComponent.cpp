@@ -21,11 +21,15 @@ MeshComponent::MeshComponent(_ref<Mesh> meshes)
 	: Component(), m_meshes({meshes}) {}
 
 void MeshComponent::init() {
-	APPLICATION->getGraphicsPipeline()->addMesh(this);
+	if (APPLICATION && APPLICATION->getGraphicsPipeline()) {
+		APPLICATION->getGraphicsPipeline()->addMesh(this);
+	}
 }
 
 void MeshComponent::deinit() {
-	APPLICATION->getGraphicsPipeline()->removeMesh(this);
+	if (APPLICATION && APPLICATION->getGraphicsPipeline()) {
+		APPLICATION->getGraphicsPipeline()->removeMesh(this);
+	}
 }
 
 void MeshComponent::process(float delta) {}
