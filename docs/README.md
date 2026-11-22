@@ -24,6 +24,7 @@ flowchart TD
     Tut --> T4["Tutorial 4: Shaders & Asset Baking"]
     Tut --> T5["Tutorial 5: Rigid-Body Physics"]
     Tut --> T6["Tutorial 6: Scripting Games in Dart"]
+    Tut --> T7["Tutorial 7: 3D NavMesh & AI Pathfinding"]
 
     Arch --> A1["Application Lifecycle & Main Loop"]
     Arch --> A2["Memory & Ownership Model"]
@@ -33,6 +34,7 @@ flowchart TD
     Arch --> A6["Resource & Asset Management"]
     Arch --> A7["Physics (Jolt Integration)"]
     Arch --> A8["Dart Scripting & FFI Codegen"]
+    Arch --> A9["Navigation & AI Pathfinding (Recast & Detour)"]
 ```
 
 ---
@@ -55,6 +57,7 @@ Hands-on walkthroughs introducing engine systems progressively with complete, ru
 - **[Tutorial 4: Shaders & Asset Baking](tutorials/04_shaders_and_baking.md)**: Writing Vulkan-compatible GLSL shaders, configuring push constants, baking with `BuildTools`, and material assignment.
 - **[Tutorial 5: Rigid-Body Physics](tutorials/05_rigid_body_physics.md)**: Static floors and falling boxes with `RigidBodyComponent`, forces in `physicsProcess`, contact and trigger events, raycast picking, collision layers, and a walking character controller.
 - **[Tutorial 6: Scripting Games in Dart](tutorials/06_dart_scripting.md)**: Writing and running full 3D, UI, and physics games in Dart with the embedded Dart VM and auto-generated FFI bindings.
+- **[Tutorial 7: 3D NavMesh & AI Pathfinding](tutorials/07_ai_navmesh_pathfinding.md)**: Baking 3D NavMeshes from scene geometry with Recast, saving and loading `.bnav` binary files, querying paths with Detour, steering `NavAgent` crowds in C++ and Dart, and 3D debug visualization.
 
 ### 3. [Architecture Deep Dives](architecture/lifecycle_and_main_loop.md)
 Under-the-hood technical references detailing internal mechanics and design decisions.
@@ -65,5 +68,6 @@ Under-the-hood technical references detailing internal mechanics and design deci
 - **[2D UI Framework](architecture/ui_framework.md)**: The two-pass layout system (measure & arrange), event bubbling, popups and focus, `UIDrawList` batching, and the widget library including virtualized lists and trees, the colour picker, and rich inputs.
 - **[Resource Management](architecture/resource_management.md)**: Asset caching in `ResourceManager`, binary `.bird` formats, and `BuildTools` compilation.
 - **[Physics](architecture/physics.md)**: Jolt integration: per-scene worlds, the fixed-step loop, transform synchronization, character controllers, main-thread contact and trigger events (characters included), collision layers, queries, joints, render interpolation, chunked level collision, and cached debug wireframes.
+- **[Navigation & AI Pathfinding](architecture/navigation.md)**: Recast & Detour integration: voxelized NavMesh baking, `.bnav` binary serialization, point-to-point funnel pathfinding, nearest-point queries, per-scene `NavWorld` Detour Crowd simulation, `NavAgent` steering, and cached 3D debug wireframes.
 - **[Animation](architecture/animation.md)**: Shared curves, easing and playback clocks; the `AnimationSystem`; UI transitions through `UIAnimator` and the post-layout visual transform; world tweens; and the skeletal runtime with Assimp-based baking.
 - **[Dart Scripting & FFI Codegen](architecture/dart_scripting_and_codegen.md)**: `libclang`-based `DartApiGenerator`, 3-tier C++/C/Dart FFI architecture, Doxygen-to-Dartdoc extraction, ownership rules, embedded `libdart_dll` VM runtime, and troubleshooting.
