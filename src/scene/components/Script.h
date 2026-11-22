@@ -37,6 +37,8 @@ class ScriptComponent : public Component {
 	ResourceManager* resource_manager();
 	/** Returns the engine Input singleton for querying actions and peripherals. */
 	Input* input();
+	/** Returns the engine EventBus singleton for emitting and subscribing to events. */
+	EventBus* event_bus();
 
 	/** Returns the component collection attached to the host entity. */
 	const std::vector<std::unique_ptr<Component>>& components();

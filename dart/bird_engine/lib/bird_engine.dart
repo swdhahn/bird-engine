@@ -7,3 +7,4 @@ library bird_engine;
 export 'src/generated/generated.dart';
 export 'src/bird_diagnostics.dart';
 export 'src/bird_script.dart';
+export 'src/events.dart';

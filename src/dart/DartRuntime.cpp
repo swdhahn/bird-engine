@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <iostream>
 
+#include "DartEventBridge.h"
 #include "../diagnostics/Logger.h"
 
 namespace fs = std::filesystem;
@@ -89,6 +90,7 @@ bool DartRuntime::loadScript(const std::string& scriptPath,
 	if (!m_vmInitialized && !init()) return false;
 
 	if (m_isolate != nullptr) {
+		bird_events_unregister_callbacks();
 		Dart_EnterIsolate(m_isolate);
 		if (m_rootLibrary != nullptr) {
 			Dart_DeletePersistentHandle(m_rootLibrary);
@@ -221,6 +223,7 @@ bool DartRuntime::drainMicrotasks() {
 
 void DartRuntime::shutdown() {
 	if (m_isolate != nullptr) {
+		bird_events_unregister_callbacks();
 		Dart_EnterIsolate(m_isolate);
 		if (m_rootLibrary != nullptr) {
 			Dart_DeletePersistentHandle(m_rootLibrary);

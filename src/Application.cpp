@@ -7,6 +7,7 @@
 #include <cstdio>
 
 #include "animation/AnimationSystem.h"
+#include "events/EventBus.h"
 #include "diagnostics/Logger.h"
 #include "diagnostics/Profiler.h"
 #include "platform/Clock.h"
@@ -25,6 +26,7 @@ Input* INPUT = nullptr;
 ResourceManager* RESOURCE_MANAGER = nullptr;
 Application* APPLICATION = nullptr;
 AnimationSystem* ANIMATION_SYSTEM = nullptr;
+EventBus* EVENT_BUS = nullptr;
 
 Application::Application() {}
 
@@ -58,6 +60,7 @@ void Application::start(Script<Scene>* script) {
 
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	ANIMATION_SYSTEM = new AnimationSystem();
+	EVENT_BUS = new EventBus();
 	m_uiManager = new UIManager();
 	m_uiManager->init(RESOURCE_MANAGER->loadFont(UIManager::kDefaultFontPath),
 					  m_graphicsPipeline->getWindow().get());
@@ -120,6 +123,9 @@ void Application::tick() {
 			}
 		}
 	}
+
+	// EVENT BUS SECTION: dispatch queued events after physics, before scripts.
+	if (EVENT_BUS) EVENT_BUS->dispatchQueued();
 
 	// PROCESS SECTION
 	{
@@ -199,7 +205,10 @@ void Application::deinit() {
 	delete m_scene;
 	m_scene = nullptr;
 	m_physicsServer.reset();
-	// After the scene: destroyed objects cancel their own animations.
+	// After the scene: destroyed objects cancel their own animations and
+	// unsubscribe their event listeners.
+	delete EVENT_BUS;
+	EVENT_BUS = nullptr;
 	delete ANIMATION_SYSTEM;
 	ANIMATION_SYSTEM = nullptr;
 

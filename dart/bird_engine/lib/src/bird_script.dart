@@ -1,8 +1,9 @@
+import 'dart:async';
 import 'dart:ffi' as ffi;
-
-import 'package:ffi/ffi.dart';
+import 'package:ffi/ffi.dart' as pkg_ffi;
 
 import 'bird_diagnostics.dart';
+import 'events.dart';
 import 'generated/bindings.dart' as b;
 import 'generated/component.dart';
 import 'generated/globals.dart';
@@ -34,13 +35,54 @@ late final _CreateDartScriptDart _createDartScriptComponent = b.nativeLib
     .lookupFunction<_CreateDartScriptNative, _CreateDartScriptDart>(
         'bird_DartScriptComponent_new');
 
+typedef _SetScriptMetadataNative = ffi.Void Function(
+    ffi.Pointer<ffi.Void>, ffi.Pointer<pkg_ffi.Utf8>, ffi.Pointer<pkg_ffi.Utf8>);
+typedef _SetScriptMetadataDart = void Function(
+    ffi.Pointer<ffi.Void>, ffi.Pointer<pkg_ffi.Utf8>, ffi.Pointer<pkg_ffi.Utf8>);
+
+typedef _SetPropBoolNative = ffi.Void Function(
+    ffi.Pointer<ffi.Void>, ffi.Pointer<pkg_ffi.Utf8>, ffi.Bool);
+typedef _SetPropBoolDart = void Function(
+    ffi.Pointer<ffi.Void>, ffi.Pointer<pkg_ffi.Utf8>, bool);
+
+typedef _SetPropIntNative = ffi.Void Function(
+    ffi.Pointer<ffi.Void>, ffi.Pointer<pkg_ffi.Utf8>, ffi.Int64);
+typedef _SetPropIntDart = void Function(
+    ffi.Pointer<ffi.Void>, ffi.Pointer<pkg_ffi.Utf8>, int);
+
+typedef _SetPropDoubleNative = ffi.Void Function(
+    ffi.Pointer<ffi.Void>, ffi.Pointer<pkg_ffi.Utf8>, ffi.Double);
+typedef _SetPropDoubleDart = void Function(
+    ffi.Pointer<ffi.Void>, ffi.Pointer<pkg_ffi.Utf8>, double);
+
+typedef _SetPropStringNative = ffi.Void Function(
+    ffi.Pointer<ffi.Void>, ffi.Pointer<pkg_ffi.Utf8>, ffi.Pointer<pkg_ffi.Utf8>);
+typedef _SetPropStringDart = void Function(
+    ffi.Pointer<ffi.Void>, ffi.Pointer<pkg_ffi.Utf8>, ffi.Pointer<pkg_ffi.Utf8>);
+
+late final _SetScriptMetadataDart _setScriptMetadata = b.nativeLib
+    .lookupFunction<_SetScriptMetadataNative, _SetScriptMetadataDart>(
+        'bird_DartScriptComponent_setMetadata');
+late final _SetPropBoolDart _setPropBool = b.nativeLib
+    .lookupFunction<_SetPropBoolNative, _SetPropBoolDart>(
+        'bird_DartScriptComponent_setPropertyBool');
+late final _SetPropIntDart _setPropInt = b.nativeLib
+    .lookupFunction<_SetPropIntNative, _SetPropIntDart>(
+        'bird_DartScriptComponent_setPropertyInt');
+late final _SetPropDoubleDart _setPropDouble = b.nativeLib
+    .lookupFunction<_SetPropDoubleNative, _SetPropDoubleDart>(
+        'bird_DartScriptComponent_setPropertyDouble');
+late final _SetPropStringDart _setPropString = b.nativeLib
+    .lookupFunction<_SetPropStringNative, _SetPropStringDart>(
+        'bird_DartScriptComponent_setPropertyString');
+
 typedef _DisableDartScriptNative = ffi.Void Function(
   ffi.Pointer<ffi.Void> componentPtr,
-  ffi.Pointer<Utf8> reason,
+  ffi.Pointer<pkg_ffi.Utf8> reason,
 );
 typedef _DisableDartScriptDart = void Function(
   ffi.Pointer<ffi.Void> componentPtr,
-  ffi.Pointer<Utf8> reason,
+  ffi.Pointer<pkg_ffi.Utf8> reason,
 );
 
 late final _DisableDartScriptDart _disableDartScriptComponent = b.nativeLib
@@ -75,8 +117,23 @@ abstract class BirdScript<T extends WorldObject> {
       try {
         _disableDartScriptComponent(ptr, reasonPtr);
       } finally {
-        calloc.free(reasonPtr);
+        pkg_ffi.calloc.free(reasonPtr);
       }
+    }
+  }
+
+  /// Runs one lifecycle [body] inside the host entity's event-ownership zone,
+  /// disabling this script instead of crashing the engine when it throws.
+  void _runGuarded(String phase, void Function() body) {
+    try {
+      runZoned(
+        body,
+        zoneValues: <Object?, Object?>{
+          birdActiveEntityIdZoneKey: _host!.getID(),
+        },
+      );
+    } catch (error, stackTrace) {
+      _handleScriptError(phase, error, stackTrace);
     }
   }
 
@@ -109,6 +166,17 @@ abstract class BirdScript<T extends WorldObject> {
   /// Called when the component is removed or its host entity is deinitialized.
   void deinit() {}
 
+  /// Serialized class name for scene/prefab persistence. Defaults to
+  /// [runtimeType.toString()].
+  String get scriptClassName => runtimeType.toString();
+
+  /// Optional Dart source or package path recorded during scene serialization.
+  String get scriptPath => '';
+
+  /// Exposed serializable properties (`bool`, `int`, `double`, `String`)
+  /// synchronized onto the native `DartScriptComponent` when attached.
+  Map<String, Object?> get exposedProperties => const {};
+
   /// Creates the native `Component` bridge backed by this Dart script instance.
   ///
   /// Pass the returned [Component] directly to `worldObject.addComponent(...)`.
@@ -117,45 +185,33 @@ abstract class BirdScript<T extends WorldObject> {
     _initCb = ffi.NativeCallable<_NativeInitSig>.isolateLocal(
       (ffi.Pointer<ffi.Void> hostPtr) {
         if (_disabled) return;
-        try {
-          _host = wrapHost(hostPtr);
-          init();
-        } catch (error, stackTrace) {
-          _handleScriptError('init', error, stackTrace);
-        }
+        _host = wrapHost(hostPtr);
+        _runGuarded('init', init);
       },
     );
     _processCb = ffi.NativeCallable<_NativeProcessSig>.isolateLocal(
       (ffi.Pointer<ffi.Void> hostPtr, double delta) {
         if (_disabled) return;
-        try {
-          _host ??= wrapHost(hostPtr);
-          process(delta);
-        } catch (error, stackTrace) {
-          _handleScriptError('process', error, stackTrace);
-        }
+        _host ??= wrapHost(hostPtr);
+        _runGuarded('process', () => process(delta));
       },
     );
     _physicsProcessCb = ffi.NativeCallable<_NativeProcessSig>.isolateLocal(
       (ffi.Pointer<ffi.Void> hostPtr, double fixedDelta) {
         if (_disabled) return;
-        try {
-          _host ??= wrapHost(hostPtr);
-          physicsProcess(fixedDelta);
-        } catch (error, stackTrace) {
-          _handleScriptError('physicsProcess', error, stackTrace);
-        }
+        _host ??= wrapHost(hostPtr);
+        _runGuarded('physicsProcess', () => physicsProcess(fixedDelta));
       },
     );
     _deinitCb = ffi.NativeCallable<_NativeDeinitSig>.isolateLocal(
       (ffi.Pointer<ffi.Void> hostPtr) {
+        _host ??= wrapHost(hostPtr);
         try {
           if (!_disabled) {
-            deinit();
+            _runGuarded('deinit', deinit);
           }
-        } catch (error, stackTrace) {
-          _handleScriptError('deinit', error, stackTrace);
         } finally {
+          Events.unsubscribeByOwner(ownerEntityId: _host!.getID());
           _nativeComponentPtr = null;
           _initCb?.close();
           _processCb?.close();
@@ -176,6 +232,39 @@ abstract class BirdScript<T extends WorldObject> {
       _deinitCb!.nativeFunction,
     );
     _nativeComponentPtr = ptr;
+
+    final classPtr = scriptClassName.toNativeUtf8();
+    final pathPtr = scriptPath.toNativeUtf8();
+    try {
+      _setScriptMetadata(ptr, classPtr, pathPtr);
+    } finally {
+      pkg_ffi.calloc.free(classPtr);
+      pkg_ffi.calloc.free(pathPtr);
+    }
+
+    for (final entry in exposedProperties.entries) {
+      final namePtr = entry.key.toNativeUtf8();
+      try {
+        final val = entry.value;
+        if (val is bool) {
+          _setPropBool(ptr, namePtr, val);
+        } else if (val is int) {
+          _setPropInt(ptr, namePtr, val);
+        } else if (val is double) {
+          _setPropDouble(ptr, namePtr, val);
+        } else if (val is String) {
+          final valPtr = val.toNativeUtf8();
+          try {
+            _setPropString(ptr, namePtr, valPtr);
+          } finally {
+            pkg_ffi.calloc.free(valPtr);
+          }
+        }
+      } finally {
+        pkg_ffi.calloc.free(namePtr);
+      }
+    }
+
     return Component.fromHandle(ptr, owned: true);
   }
 }

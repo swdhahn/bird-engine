@@ -5,6 +5,7 @@
 #include "WorldObject.h"
 
 #include "../animation/AnimationSystem.h"
+#include "../events/EventBus.h"
 #include "Scene.h"
 
 namespace bird {
@@ -12,19 +13,23 @@ namespace bird {
 WorldObject::~WorldObject() {
 	// Tweens hold raw pointers to their target; none may outlive it.
 	if (ANIMATION_SYSTEM) ANIMATION_SYSTEM->cancelOwner(this);
+	// Event listeners owned by this entity must never fire after destruction.
+	if (EVENT_BUS) EVENT_BUS->unsubscribeByOwner(m_id);
 }
 
 WorldObject::WorldObject()
-	: m_worldPosition(),
-	  m_worldRotation(glm::quat(1.0, 0.0, 0.0, 0.0)),
+	: m_id(++s_uniqueIdentificationIndex),
+	  m_uuid(UUID::generate()),
+	  m_name(),
+	  m_worldPosition(),
 	  m_localPosition(),
-	  m_localRotation(glm::quat(1.0, 0.0, 0.0, 0.0)),
 	  m_scale(1),
+	  m_worldRotation(glm::quat(1.0, 0.0, 0.0, 0.0)),
+	  m_localRotation(glm::quat(1.0, 0.0, 0.0, 0.0)),
 	  m_transformMatrix(1),
-	  m_needsMatrixUpdate(true),
-	  m_isInitiated(false),
 	  m_parent(nullptr),
-	  m_id(++s_uniqueIdentificationIndex) {}
+	  m_needsMatrixUpdate(true),
+	  m_isInitiated(false) {}
 
 void WorldObject::init(Scene* parent) {
 	m_parent = parent;
@@ -41,6 +46,7 @@ void WorldObject::deinit() {
 		m_components[i]->deinit();
 		m_components[i]->_deinit();
 	}
+	if (EVENT_BUS) EVENT_BUS->unsubscribeByOwner(m_id);
 	m_isInitiated = false;
 }
 
@@ -54,6 +60,30 @@ const uint64_t& WorldObject::getID() const {
 
 bool WorldObject::operator==(const WorldObject& e) {
 	return e.getID() == m_id;
+}
+
+const UUID& WorldObject::getUUID() const {
+	return m_uuid;
+}
+
+void WorldObject::setUUID(const UUID& uuid) {
+	m_uuid = uuid;
+}
+
+std::string WorldObject::getUUIDString() const {
+	return m_uuid.toString();
+}
+
+void WorldObject::setUUIDString(const std::string& uuid) {
+	m_uuid = UUID::fromString(uuid);
+}
+
+const std::string& WorldObject::getName() const {
+	return m_name;
+}
+
+void WorldObject::setName(const std::string& name) {
+	m_name = name;
 }
 
 void WorldObject::translate(const Vector3& delta) {
