@@ -8,7 +8,9 @@
 
 #include "animation/skeletal/AnimationNotify.h"
 #include "animation/skeletal/AnimationParameters.h"
+#include "animation/skeletal/BlendTree.h"
 #include "animation/skeletal/BoneMask.h"
+#include "animation/skeletal/PoseNode.h"
 #include "animation/skeletal/PoseOps.h"
 #include "animation/skeletal/SkeletalClip.h"
 #include "animation/skeletal/Skeleton.h"
@@ -192,4 +194,139 @@ TEST(SkeletalClipNotifies, CollectsForwardAndWrapAround) {
 	EXPECT_THROW(clip.addNotify(-0.1f, "Bad"), std::invalid_argument);
 	EXPECT_THROW(clip.addNotify(1.5f, "Bad"), std::invalid_argument);
 	EXPECT_THROW(clip.addNotify(0.5f, ""), std::invalid_argument);
+}
+
+// ============================================================================
+// PoseNode & BlendTree1D / BlendTree2D Tests
+// ============================================================================
+
+namespace {
+
+/** Creates a constant-translation clip on joint 0 for predictable blend tests. */
+std::shared_ptr<SkeletalClip> makeConstClip(const std::string& name,
+											Vector3 pos, float duration = 1.0f) {
+	auto clip = std::make_shared<SkeletalClip>(name, duration);
+	JointTrack tr;
+	tr.joint = 0;
+	tr.translation.addKey(0.0f, pos);
+	tr.translation.addKey(duration, pos);
+	clip->addTrack(std::move(tr));
+	return clip;
+}
+
+}  // namespace
+
+TEST(PoseNodeTests, ClipPoseNodeSamplesAndDispatchesNotifiesOnLoop) {
+	auto skel = makeHumanoidLite();
+	auto clip = makeConstClip("Walk", Vector3(1, 2, 3), 1.0f);
+	clip->addNotify(0.5f, "Step");
+
+	ClipPoseNode node(clip, LoopMode::Loop);
+	std::vector<AnimationNotifyEvent> notifies;
+	PoseEvalContext ctx{skel.get(), nullptr, &notifies, 0.6f};
+	Pose out;
+
+	node.evaluate(ctx, out);
+	EXPECT_NEAR(out.joints[0].translation.x, 1.0f, kEps);
+	ASSERT_EQ(notifies.size(), 1u);
+	EXPECT_EQ(notifies[0].eventName, "Step");
+	EXPECT_EQ(notifies[0].clipName, "Walk");
+
+	// Advance another 1.0s -> wraps and crosses 0.5 again.
+	notifies.clear();
+	ctx.deltaTime = 1.0f;
+	node.evaluate(ctx, out);
+	ASSERT_EQ(notifies.size(), 1u);
+	EXPECT_EQ(notifies[0].eventName, "Step");
+}
+
+TEST(BlendTreeTests, BlendTree1DBlendsSortedClipsByParameter) {
+	auto skel = makeHumanoidLite();
+	BlendTree1D tree("speed");
+	// Intentionally add out of order to verify sorting.
+	tree.addClip(makeConstClip("Run", Vector3(6, 0, 0)), 6.0f);
+	tree.addClip(makeConstClip("Idle", Vector3(0, 0, 0)), 0.0f);
+	tree.addClip(makeConstClip("Walk", Vector3(2, 0, 0)), 2.0f);
+
+	AnimationParameters params;
+	PoseEvalContext ctx{skel.get(), &params, nullptr, 0.1f};
+	Pose out;
+
+	// Below minimum clamps to Idle.
+	params.setFloat("speed", -1.0f);
+	tree.evaluate(ctx, out);
+	EXPECT_NEAR(out.joints[0].translation.x, 0.0f, kEps);
+
+	// Halfway between Idle (0) and Walk (2) -> x = 1.
+	params.setFloat("speed", 1.0f);
+	tree.evaluate(ctx, out);
+	EXPECT_NEAR(out.joints[0].translation.x, 1.0f, kEps);
+
+	// Halfway between Walk (2) and Run (6) -> speed = 4 -> x = 4.
+	params.setFloat("speed", 4.0f);
+	tree.evaluate(ctx, out);
+	EXPECT_NEAR(out.joints[0].translation.x, 4.0f, kEps);
+
+	// Above maximum clamps to Run.
+	params.setFloat("speed", 12.0f);
+	tree.evaluate(ctx, out);
+	EXPECT_NEAR(out.joints[0].translation.x, 6.0f, kEps);
+}
+
+TEST(BlendTreeTests, BlendTree2DInverseDistanceAndBarycentric) {
+	auto skel = makeHumanoidLite();
+	auto idle = makeConstClip("Idle", Vector3(0, 0, 0));
+	auto fwd = makeConstClip("Forward", Vector3(0, 0, 1));
+	auto back = makeConstClip("Back", Vector3(0, 0, -1));
+	auto left = makeConstClip("Left", Vector3(-1, 0, 0));
+	auto right = makeConstClip("Right", Vector3(1, 0, 0));
+
+	// Inverse-Distance mode
+	BlendTree2D idwTree("moveX", "moveY", BlendTree2DMode::InverseDistance);
+	idwTree.addClip(idle, Vector2(0, 0));
+	idwTree.addClip(fwd, Vector2(0, 1));
+	idwTree.addClip(back, Vector2(0, -1));
+	idwTree.addClip(left, Vector2(-1, 0));
+	idwTree.addClip(right, Vector2(1, 0));
+
+	AnimationParameters params;
+	PoseEvalContext ctx{skel.get(), &params, nullptr, 0.1f};
+	Pose out;
+
+	// Exact sample point returns 100% Forward.
+	params.setFloat("moveX", 0.0f);
+	params.setFloat("moveY", 1.0f);
+	idwTree.evaluate(ctx, out);
+	EXPECT_NEAR(out.joints[0].translation.z, 1.0f, kEps);
+	EXPECT_NEAR(out.joints[0].translation.x, 0.0f, kEps);
+
+	// Diagonal (0.5, 0.5) blends symmetrically between Forward and Right.
+	params.setFloat("moveX", 0.5f);
+	params.setFloat("moveY", 0.5f);
+	idwTree.evaluate(ctx, out);
+	EXPECT_GT(out.joints[0].translation.x, 0.1f);
+	EXPECT_NEAR(out.joints[0].translation.x, out.joints[0].translation.z, kEps);
+
+	// Barycentric mode
+	BlendTree2D baryTree("moveX", "moveY", BlendTree2DMode::Barycentric);
+	baryTree.addClip(idle, Vector2(0, 0));
+	baryTree.addClip(fwd, Vector2(0, 1));
+	baryTree.addClip(right, Vector2(1, 0));
+	baryTree.addClip(left, Vector2(-1, 0));
+	baryTree.addClip(back, Vector2(0, -1));
+
+	// Inside triangle (Idle, Forward, Right) at (0.25, 0.5):
+	// exact barycentric weights -> Idle=0.25, Forward=0.5, Right=0.25.
+	params.setFloat("moveX", 0.25f);
+	params.setFloat("moveY", 0.5f);
+	baryTree.evaluate(ctx, out);
+	EXPECT_NEAR(out.joints[0].translation.x, 0.25f, kEps);
+	EXPECT_NEAR(out.joints[0].translation.z, 0.5f, kEps);
+
+	// Outside convex hull at (2, 2) clamps onto edge (Forward, Right) midpoint (0.5, 0.5).
+	params.setFloat("moveX", 2.0f);
+	params.setFloat("moveY", 2.0f);
+	baryTree.evaluate(ctx, out);
+	EXPECT_NEAR(out.joints[0].translation.x, 0.5f, kEps);
+	EXPECT_NEAR(out.joints[0].translation.z, 0.5f, kEps);
 }
