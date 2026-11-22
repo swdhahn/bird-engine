@@ -132,7 +132,7 @@ add_library(
   Bird_core ${BIRD_CORE_LIBRARY_TYPE}
   ${BIRD_FILES} $<TARGET_OBJECTS:renders> $<TARGET_OBJECTS:opengl-renderer>
   $<TARGET_OBJECTS:scene> $<TARGET_OBJECTS:physics>
-  $<TARGET_OBJECTS:animation>)
+  $<TARGET_OBJECTS:navigation> $<TARGET_OBJECTS:animation>)
 if(BIRD_HOST_BUILD)
   add_executable(Bird src/main.cpp)
   target_link_libraries(Bird Bird_core)
@@ -245,10 +245,11 @@ if(BIRD_HOST_BUILD)
   find_package(spirv_cross_cpp CONFIG REQUIRED)
   find_package(SPIRV-Tools CONFIG REQUIRED)
   find_package(Jolt CONFIG REQUIRED)
+  find_package(recastnavigation CONFIG REQUIRED)
   set(BIRD_GLM_INCLUDE_DIR "${INSTALLED_LIB_PATH}/include")
 else()
-  # Device builds fetch their two runtime dependencies from source, with
-  # the versions and Jolt options libs/CMakeLists.txt uses on the host.
+  # Device builds fetch their runtime dependencies from source, with
+  # the versions and options libs/CMakeLists.txt uses on the host.
   include(FetchContent)
   FetchContent_Declare(bird_glm
       GIT_REPOSITORY https://github.com/g-truc/glm.git
@@ -269,11 +270,26 @@ else()
       GIT_TAG v5.4.0
       GIT_SHALLOW TRUE
       SOURCE_SUBDIR Build)
-  FetchContent_MakeAvailable(bird_glm bird_jolt)
+  set(RECASTNAVIGATION_DEMO OFF CACHE BOOL "" FORCE)
+  set(RECASTNAVIGATION_TESTS OFF CACHE BOOL "" FORCE)
+  set(RECASTNAVIGATION_EXAMPLES OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(bird_recastnavigation
+      GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
+      GIT_TAG v1.6.0
+      GIT_SHALLOW TRUE)
+  FetchContent_MakeAvailable(bird_glm bird_jolt bird_recastnavigation)
   set_target_properties(Jolt PROPERTIES POSITION_INDEPENDENT_CODE ON)
   if(NOT TARGET Jolt::Jolt)
     add_library(Jolt::Jolt ALIAS Jolt)
   endif()
+  foreach(_rc_tgt Recast Detour DetourCrowd)
+    if(TARGET ${_rc_tgt})
+      set_target_properties(${_rc_tgt} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+      if(NOT TARGET RecastNavigation::${_rc_tgt})
+        add_library(RecastNavigation::${_rc_tgt} ALIAS ${_rc_tgt})
+      endif()
+    endif()
+  endforeach()
   set(BIRD_GLM_INCLUDE_DIR "${bird_glm_SOURCE_DIR}")
 endif()
 
@@ -339,6 +355,8 @@ add_subdirectory(src/scene)
 include_directories(src/scene)
 add_subdirectory(src/physics)
 include_directories(src/physics)
+add_subdirectory(src/navigation)
+include_directories(src/navigation)
 add_subdirectory(src/animation)
 
 target_link_libraries(
@@ -347,7 +365,10 @@ target_link_libraries(
   PRIVATE ${BIRD_PLATFORM_LIBRARIES}
           ${BIRD_GL_LIBRARIES}
           ${BIRD_HOST_ONLY_LIBRARIES}
-          Jolt::Jolt)
+          Jolt::Jolt
+          RecastNavigation::Recast
+          RecastNavigation::Detour
+          RecastNavigation::DetourCrowd)
 # Shader compilation (shaderc, SPIRV-Cross) lives in BirdBake/BuildTools;
 # the runtime only loads baked .bird shaders.
 
