@@ -33,6 +33,12 @@ constexpr uint32_t SAMPLER_BINDING_GBUFFER_NORMAL = 6;
 constexpr uint32_t SAMPLER_BINDING_GBUFFER_DEPTH = 7;
 constexpr uint32_t SAMPLER_BINDING_SHADOW_DIRECTIONAL = 8;
 constexpr uint32_t SAMPLER_BINDING_SHADOW_LOCAL = 9;
+constexpr uint32_t SAMPLER_BINDING_IBL_IRRADIANCE = 10;
+constexpr uint32_t SAMPLER_BINDING_IBL_PREFILTER = 11;
+constexpr uint32_t SAMPLER_BINDING_IBL_BRDF_LUT = 12;
+
+/** Number of roughness mip levels in the specular prefiltered cubemap. */
+constexpr uint32_t IBL_PREFILTER_MIP_LEVELS = 5;
 
 /**
  * Camera and frame constants (binding 0). The first three members form the
@@ -48,7 +54,7 @@ struct GlobalUBOData {
 	Vector4 screenSize;
 	/** rgb = ambient color premultiplied by intensity, w = exposure. */
 	Vector4 ambientAndExposure;
-	/** x = near, y = far, z = debug view mode, w = unused. */
+	/** x = near, y = far, z = debug view mode, w = IBL intensity (0 = disabled). */
 	Vector4 cameraParams;
 };
 static_assert(offsetof(GlobalUBOData, viewPos) == 128, "std140 drift");
@@ -202,6 +208,35 @@ struct ShadowPushConstants {
 	Matrix4 lightViewProjection;
 };
 static_assert(sizeof(ShadowPushConstants) == 128, "push constant drift");
+
+/** Per-face push constants for cubemap capture and irradiance passes (64 bytes). */
+struct IBLCubemapPushConstants {
+	Matrix4 viewProjection;
+};
+static_assert(sizeof(IBLCubemapPushConstants) == 64, "push constant drift");
+
+/** Per-face push constants for GGX specular prefilter convolution (80 bytes). */
+struct IBLPrefilterPushConstants {
+	Matrix4 viewProjection;
+	/** x = roughness in [0, 1], y = source cubemap face resolution, zw = unused. */
+	Vector4 params;
+};
+static_assert(sizeof(IBLPrefilterPushConstants) == 80, "push constant drift");
+
+/** Uniform block for procedural HDR sky generation (binding 1, 80 bytes). */
+struct ProceduralSkyUBOData {
+	/** xyz = normalized direction toward sun, w = cos(sunAngularRadius). */
+	Vector4 sunDirAndCosRadius;
+	/** rgb = linear sun color, w = sun intensity. */
+	Vector4 sunColorAndIntensity;
+	/** rgb = linear zenith sky color, w = unused. */
+	Vector4 zenithColor;
+	/** rgb = linear horizon sky color, w = unused. */
+	Vector4 horizonColor;
+	/** rgb = linear ground bounce color, w = unused. */
+	Vector4 groundColor;
+};
+static_assert(sizeof(ProceduralSkyUBOData) == 80, "std140 drift");
 
 }  // namespace bird
 

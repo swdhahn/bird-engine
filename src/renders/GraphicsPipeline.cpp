@@ -150,9 +150,11 @@ GlobalUBOData GraphicsPipeline::buildGlobalData() const {
 	global.screenSize = Vector4(width, height, 1.0f / width, 1.0f / height);
 	global.ambientAndExposure =
 		Vector4(env.ambientColor * env.ambientIntensity, env.exposure);
+	const float iblIntensity =
+		env.environmentMap ? std::max(env.iblIntensity, 0.0f) : 0.0f;
 	global.cameraParams =
 		Vector4(m_camera->getNearPlane(), m_camera->getFarPlane(),
-				static_cast<float>(env.debugView), 0.0f);
+				static_cast<float>(env.debugView), iblIntensity);
 	return global;
 }
 

@@ -3,7 +3,7 @@ add_executable(Bird_unit_tests
   UITextEditTest.cpp UIWidgetTest.cpp UIDrawListTest.cpp UIPopupTest.cpp
   UIInputsV2Test.cpp UITextAreaTest.cpp UIMenuTest.cpp UIListTreeTest.cpp
   UIColorTest.cpp UIRichInputsTest.cpp PhysicsTest.cpp
-  MaterialTest.cpp RenderQueueTest.cpp FrustumCullingTest.cpp ShadowTest.cpp ResourceConventionTest.cpp
+  MaterialTest.cpp RenderQueueTest.cpp FrustumCullingTest.cpp IBLTest.cpp ShadowTest.cpp ResourceConventionTest.cpp
   GLCapabilitiesTest.cpp PlatformTest.cpp
   AnimationCoreTest.cpp UIAnimationTest.cpp SkeletalAnimationTest.cpp)
 target_include_directories(Bird_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)

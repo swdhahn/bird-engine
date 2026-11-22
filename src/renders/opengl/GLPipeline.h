@@ -22,6 +22,7 @@
 #include "passes/GLLightingPass.h"
 #include "passes/GLPostProcessPass.h"
 #include "passes/GLShadowPass.h"
+#include "passes/GLSkyboxPass.h"
 
 namespace bird::gl {
 
@@ -89,6 +90,7 @@ class GLPipeline : public GraphicsPipeline {
 	std::unique_ptr<GLShadowPass> m_shadowPass;
 	std::unique_ptr<GLGBufferPass> m_gBufferPass;
 	std::unique_ptr<GLLightingPass> m_lightingPass;
+	std::unique_ptr<GLSkyboxPass> m_skyboxPass;
 	std::unique_ptr<GLForwardPass> m_forwardPass;
 	std::unique_ptr<GLPostProcessPass> m_postProcessPass;
 	std::unique_ptr<GLUIRenderer> m_uiRenderer;

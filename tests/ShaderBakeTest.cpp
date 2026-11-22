@@ -345,7 +345,11 @@ INSTANTIATE_TEST_SUITE_P(
 					  "light_volume.frag", "shadow_depth.vert",
 					  "shadow_depth.frag", "tonemap.frag", "passthrough.vert",
 					  "fxaa.frag", "ui.vert", "ui.frag", "debug_line.vert",
-					  "mesh_skinned.vert", "shadow_depth_skinned.vert"));
+					  "mesh_skinned.vert", "shadow_depth_skinned.vert",
+					  "skybox.vert", "skybox.frag", "ibl_cubemap.vert",
+					  "ibl_equirect_to_cube.frag", "ibl_procedural_sky.frag",
+					  "ibl_irradiance.frag", "ibl_prefilter.frag",
+					  "ibl_brdf_lut.frag"));
 
 TEST(EngineShaderBindings, MatchGpuLayoutConventions) {
 	const auto root = std::filesystem::path(BIRD_SOURCE_DIR) / "assets/shaders";
@@ -359,6 +363,16 @@ TEST(EngineShaderBindings, MatchGpuLayoutConventions) {
 	EXPECT_EQ(bindingOf(forward, "Shadows"), 3u);
 	EXPECT_EQ(bindingOf(forward, "normalMap"), 2u);
 	EXPECT_EQ(bindingOf(forward, "localShadowAtlas"), 9u);
+	EXPECT_EQ(bindingOf(forward, "uIrradianceMap"), 10u);
+	EXPECT_EQ(bindingOf(forward, "uPrefilterMap"), 11u);
+	EXPECT_EQ(bindingOf(forward, "uBrdfLut"), 12u);
+
+	const ShaderBinary directional =
+		bakeShader((root / "light_directional.frag").string(),
+				   readFile(root / "light_directional.frag"));
+	EXPECT_EQ(bindingOf(directional, "uIrradianceMap"), 10u);
+	EXPECT_EQ(bindingOf(directional, "uPrefilterMap"), 11u);
+	EXPECT_EQ(bindingOf(directional, "uBrdfLut"), 12u);
 
 	const ShaderBinary volume =
 		bakeShader((root / "light_volume.frag").string(),
