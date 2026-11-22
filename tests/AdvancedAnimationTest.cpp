@@ -6,8 +6,10 @@
 #include <string>
 #include <vector>
 
+#include "animation/skeletal/AnimationLayer.h"
 #include "animation/skeletal/AnimationNotify.h"
 #include "animation/skeletal/AnimationParameters.h"
+#include "animation/skeletal/AnimationStateMachine.h"
 #include "animation/skeletal/BlendTree.h"
 #include "animation/skeletal/BoneMask.h"
 #include "animation/skeletal/PoseNode.h"
@@ -329,4 +331,78 @@ TEST(BlendTreeTests, BlendTree2DInverseDistanceAndBarycentric) {
 	baryTree.evaluate(ctx, out);
 	EXPECT_NEAR(out.joints[0].translation.x, 0.5f, kEps);
 	EXPECT_NEAR(out.joints[0].translation.z, 0.5f, kEps);
+}
+
+// ============================================================================
+// AnimationStateMachine Tests
+// ============================================================================
+
+TEST(AnimationStateMachineTests, TransitionsCrossFadeExitTimeAndTriggers) {
+	auto skel = makeHumanoidLite();
+	auto idleClip = makeConstClip("Idle", Vector3(0, 0, 0), 1.0f);
+	auto runClip = makeConstClip("Run", Vector3(4, 0, 0), 1.0f);
+	auto attackClip = makeConstClip("Attack", Vector3(0, 5, 0), 1.0f);
+	auto hitClip = makeConstClip("Hit", Vector3(-3, 0, 0), 0.5f);
+
+	AnimationStateMachine sm;
+	sm.addClipState("Idle", idleClip, LoopMode::Loop);
+	sm.addClipState("Run", runClip, LoopMode::Loop);
+	sm.addClipState("Attack", attackClip, LoopMode::Once);
+	sm.addClipState("Hit", hitClip, LoopMode::Once);
+	sm.setEntryState("Idle");
+
+	// Idle -> Run when speed > 0.5 (crossfade 0.5s)
+	sm.addTransition({"Idle", "Run", 0.5f, false, 1.0f, 0, false,
+					  {TransitionCondition::floatGreater("speed", 0.5f)}});
+	// Run -> Attack on trigger "attack" (instant cut)
+	sm.addTransition({"Run", "Attack", 0.0f, false, 1.0f, 1, false,
+					  {TransitionCondition::trigger("attack")}});
+	// Attack -> Idle via exit time >= 0.8 (crossfade 0.2s)
+	sm.addTransition({"Attack", "Idle", 0.2f, true, 0.8f, 0, false, {}});
+	// Any-State -> Hit on trigger "hurt" (high priority 10)
+	sm.addTransition({"", "Hit", 0.0f, false, 1.0f, 10, false,
+					  {TransitionCondition::trigger("hurt")}});
+
+	AnimationParameters params;
+	PoseEvalContext ctx{skel.get(), &params, nullptr, 0.25f};
+	Pose out;
+
+	// Starts in Idle.
+	sm.evaluate(ctx, out);
+	EXPECT_EQ(sm.getCurrentStateName(), "Idle");
+	EXPECT_NEAR(out.joints[0].translation.x, 0.0f, kEps);
+
+	// Set speed > 0.5 -> transitions to Run over 0.5s; after 0.25s it's 50% blended (x = 2).
+	params.setFloat("speed", 3.0f);
+	sm.evaluate(ctx, out);
+	EXPECT_EQ(sm.getCurrentStateName(), "Run");
+	EXPECT_TRUE(sm.isTransitioning());
+	EXPECT_NEAR(out.joints[0].translation.x, 2.0f, kEps);
+
+	// After another 0.25s -> crossfade completes (x = 4).
+	sm.evaluate(ctx, out);
+	EXPECT_FALSE(sm.isTransitioning());
+	EXPECT_NEAR(out.joints[0].translation.x, 4.0f, kEps);
+
+	// Arm trigger "attack" -> transitions to Attack and consumes trigger.
+	params.setTrigger("attack");
+	sm.evaluate(ctx, out);
+	EXPECT_EQ(sm.getCurrentStateName(), "Attack");
+	EXPECT_FALSE(params.isTriggerSet("attack"));
+	EXPECT_NEAR(out.joints[0].translation.y, 5.0f, kEps);
+
+	// Advance Attack to 0.85 normalized time, then next tick triggers exit-time -> Idle.
+	ctx.deltaTime = 0.6f;
+	sm.evaluate(ctx, out);
+	EXPECT_EQ(sm.getCurrentStateName(), "Attack");
+	ctx.deltaTime = 0.1f;
+	sm.evaluate(ctx, out);
+	EXPECT_EQ(sm.getCurrentStateName(), "Idle");
+	EXPECT_TRUE(sm.isTransitioning());
+
+	// Any-State high-priority trigger "hurt" interrupts immediately.
+	params.setTrigger("hurt");
+	sm.evaluate(ctx, out);
+	EXPECT_EQ(sm.getCurrentStateName(), "Hit");
+	EXPECT_NEAR(out.joints[0].translation.x, -3.0f, kEps);
 }
