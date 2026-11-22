@@ -33,6 +33,9 @@ flowchart TD
     Arch --> A6["Resource & Asset Management"]
     Arch --> A7["Physics (Jolt Integration)"]
     Arch --> A8["Dart Scripting & FFI Codegen"]
+    Arch --> A9["Image-Based Lighting & Skybox"]
+    Arch --> A10["Frustum Culling"]
+    Arch --> A11["CPU Billboard Particle System"]
 ```
 
 ---
@@ -67,3 +70,6 @@ Under-the-hood technical references detailing internal mechanics and design deci
 - **[Physics](architecture/physics.md)**: Jolt integration: per-scene worlds, the fixed-step loop, transform synchronization, character controllers, main-thread contact and trigger events (characters included), collision layers, queries, joints, render interpolation, chunked level collision, and cached debug wireframes.
 - **[Animation](architecture/animation.md)**: Shared curves, easing and playback clocks; the `AnimationSystem`; UI transitions through `UIAnimator` and the post-layout visual transform; world tweens; and the skeletal runtime with Assimp-based baking.
 - **[Dart Scripting & FFI Codegen](architecture/dart_scripting_and_codegen.md)**: `libclang`-based `DartApiGenerator`, 3-tier C++/C/Dart FFI architecture, Doxygen-to-Dartdoc extraction, ownership rules, embedded `libdart_dll` VM runtime, and troubleshooting.
+- **[Image-Based Lighting (IBL) & Skybox](architecture/ibl_and_skybox.md)**: HDR environment cubemaps (procedural sky, equirectangular `.hdr`, or 6 cubemap faces), diffuse irradiance convolution, GGX specular prefiltering, the 2D split-sum BRDF LUT, and `GLSkyboxPass`.
+- **[Frustum Culling](architecture/frustum_culling.md)**: Gribb/Hartmann 6-plane extraction, local and Arvo-transformed world `AABB` / `BoundingSphere` bounds, deferred & forward pass culling, and `CullingStats` runtime profiling.
+- **[CPU Billboard Particle & VFX System](architecture/particle_system.md)**: Zero-allocation fixed-capacity `ParticleEmitter` simulation, spawn rates and scheduled bursts, color/size-over-life curves, and batched camera-facing quad rendering in the forward transparency pass.
