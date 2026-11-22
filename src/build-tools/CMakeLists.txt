@@ -144,6 +144,11 @@ if(APPLE)
     list(APPEND _GENERATOR_PARSE_FLAGS "-isysroot" "${_MACOS_SDK}")
   endif()
 endif()
+if(WIN32)
+  # Newer MSVC STLs reject a libclang older than they expect (STL1000).
+  # The generator only reads declarations, so the official opt-out is safe.
+  list(APPEND _GENERATOR_PARSE_FLAGS "-D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH")
+endif()
 set(BIRD_DART_GENERATOR_PARSE_FLAGS "${_GENERATOR_PARSE_FLAGS}" CACHE INTERNAL
     "Flags DartApiGenerator passes to libclang")
 message(STATUS "DartApiGenerator: libclang ${_LIBCLANG_REAL}, resource dir ${BIRD_CLANG_RESOURCE_DIR}")
