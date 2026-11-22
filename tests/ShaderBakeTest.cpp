@@ -349,7 +349,7 @@ INSTANTIATE_TEST_SUITE_P(
 					  "skybox.vert", "skybox.frag", "ibl_cubemap.vert",
 					  "ibl_equirect_to_cube.frag", "ibl_procedural_sky.frag",
 					  "ibl_irradiance.frag", "ibl_prefilter.frag",
-					  "ibl_brdf_lut.frag"));
+					  "ibl_brdf_lut.frag", "particle.vert", "particle.frag"));
 
 TEST(EngineShaderBindings, MatchGpuLayoutConventions) {
 	const auto root = std::filesystem::path(BIRD_SOURCE_DIR) / "assets/shaders";

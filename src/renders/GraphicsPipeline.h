@@ -14,6 +14,7 @@
 #include "../scene/Scene.h"
 #include "../scene/components/LightComponent.h"
 #include "../scene/components/MeshComponent.h"
+#include "../scene/components/ParticleEmitter.h"
 #include "DebugDraw.h"
 #include "Window.h"
 #include "generic/Buffer.h"
@@ -87,6 +88,12 @@ class GraphicsPipeline {
 	/** Removes an active light. */
 	void removeLight(LightComponent* light);
 
+	/** Registers an active particle emitter to be drawn in the forward pass. */
+	void addParticleEmitter(ParticleEmitter* emitter);
+
+	/** Removes an active particle emitter from the drawing list. */
+	void removeParticleEmitter(ParticleEmitter* emitter);
+
 	/**
 	 * World-space debug lines drawn over this frame's 3D scene. The
 	 * Application clears the list at the start of each frame.
@@ -143,6 +150,8 @@ class GraphicsPipeline {
 
 	std::vector<MeshComponent*> m_meshes;
 	std::vector<LightComponent*> m_lights;
+	std::vector<ParticleEmitter*> m_particleEmitters;
+	std::vector<ParticleEmitter*> m_visibleParticleEmitters;
 	FrustumCuller m_frustumCuller;
 	RenderQueue m_renderQueue;
 	std::vector<RenderItem> m_shadowCasters;

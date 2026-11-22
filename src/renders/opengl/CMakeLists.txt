@@ -30,6 +30,8 @@ add_library(
   GLDrawCommands.cpp
   GLSkinning.h
   GLSkinning.cpp
+  GLParticleRenderer.h
+  GLParticleRenderer.cpp
   passes/GLShadowPass.h
   passes/GLShadowPass.cpp
   passes/GLGBufferPass.h

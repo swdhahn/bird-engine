@@ -137,6 +137,20 @@ void GraphicsPipeline::removeLight(LightComponent* light) {
 				   m_lights.end());
 }
 
+void GraphicsPipeline::addParticleEmitter(ParticleEmitter* emitter) {
+	if (std::find(m_particleEmitters.begin(), m_particleEmitters.end(),
+				  emitter) == m_particleEmitters.end()) {
+		m_particleEmitters.push_back(emitter);
+	}
+}
+
+void GraphicsPipeline::removeParticleEmitter(ParticleEmitter* emitter) {
+	m_particleEmitters.erase(
+		std::remove(m_particleEmitters.begin(), m_particleEmitters.end(),
+					emitter),
+		m_particleEmitters.end());
+}
+
 GlobalUBOData GraphicsPipeline::buildGlobalData() const {
 	const WorldEnvironment& env = m_camera->getWorldEnvironment();
 	GlobalUBOData global{};
@@ -176,6 +190,7 @@ SkeletalAnimationComponent* findSkeletalAnimation(WorldObject* object) {
 void GraphicsPipeline::buildRenderQueue(const Frustum& frustum) {
 	m_renderQueue.clear();
 	m_shadowCasters.clear();
+	m_visibleParticleEmitters.clear();
 	m_frustumCuller.beginFrame(frustum);
 	const Matrix4 view = m_camera->getViewMatrix();
 	for (MeshComponent* component : m_meshes) {
@@ -209,6 +224,14 @@ void GraphicsPipeline::buildRenderQueue(const Frustum& frustum) {
 		}
 	}
 	m_renderQueue.sort();
+
+	for (ParticleEmitter* emitter : m_particleEmitters) {
+		if (emitter == nullptr || emitter->getActiveCount() == 0) continue;
+		if (!m_frustumCuller.testParticleEmitter(emitter->getWorldBounds())) {
+			continue;
+		}
+		m_visibleParticleEmitters.push_back(emitter);
+	}
 }
 
 std::vector<LightSnapshot> GraphicsPipeline::snapshotLights() {

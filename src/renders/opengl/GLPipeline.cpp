@@ -175,7 +175,8 @@ void GLPipeline::renderWorld() {
 	if (env.renderSkybox && env.environmentMap) {
 		m_skyboxPass->execute(env.environmentMap.get(), *m_targets, m_state);
 	}
-	m_forwardPass->execute(m_renderQueue, *m_targets, m_state);
+	m_forwardPass->execute(m_renderQueue, m_visibleParticleEmitters,
+						   global.view, *m_targets, m_state);
 
 	m_targets->hdr().bindForDrawing();
 	renderDebugLines();

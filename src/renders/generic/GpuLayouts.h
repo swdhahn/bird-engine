@@ -223,6 +223,13 @@ struct IBLPrefilterPushConstants {
 };
 static_assert(sizeof(IBLPrefilterPushConstants) == 80, "push constant drift");
 
+/** Per-emitter push constants for batched particle rendering (16 bytes). */
+struct ParticlePushConstants {
+	/** x = 1.0 when sampling a sprite texture, 0.0 for procedural soft circle. */
+	Vector4 params;
+};
+static_assert(sizeof(ParticlePushConstants) == 16, "push constant drift");
+
 /** Uniform block for procedural HDR sky generation (binding 1, 80 bytes). */
 struct ProceduralSkyUBOData {
 	/** xyz = normalized direction toward sun, w = cos(sunAngularRadius). */
