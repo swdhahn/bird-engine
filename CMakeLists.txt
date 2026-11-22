@@ -351,9 +351,9 @@ option(BIRD_ENABLE_HOT_RELOAD
        "Enable background asset file watcher and hot-reloading"
        ${BIRD_DEFAULT_HOT_RELOAD})
 message(STATUS "Bird Hot-Reload: ${BIRD_ENABLE_HOT_RELOAD}")
+add_subdirectory(src/hotreload)
+target_sources(Bird_core PRIVATE $<TARGET_OBJECTS:hotreload>)
 if(BIRD_ENABLE_HOT_RELOAD)
-  add_subdirectory(src/hotreload)
-  target_sources(Bird_core PRIVATE $<TARGET_OBJECTS:hotreload>)
   target_compile_definitions(Bird_core PUBLIC BIRD_ENABLE_HOT_RELOAD)
 endif()
 

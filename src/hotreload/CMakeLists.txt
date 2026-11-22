@@ -1,10 +1,13 @@
 # Isolated asset hot-reloading module.
-# The file watcher, async BuildTools runner, and reload manager are only
-# compiled when BIRD_ENABLE_HOT_RELOAD is ON (disabled in Release/shipping and
-# device builds).
+# EntityHandleRegistry is always compiled so ID-based Dart FFI entity handles
+# remain safe in all builds. The background FileWatcher, BuildToolsRunner, and
+# HotReloadManager are compiled out when BIRD_ENABLE_HOT_RELOAD is OFF
+# (Release/shipping and device builds).
 set(BIRD_HOTRELOAD_SOURCES
     HotReloadTypes.h
-    ReloadQueue.h)
+    ReloadQueue.h
+    EntityHandleRegistry.h
+    EntityHandleRegistry.cpp)
 
 if(BIRD_ENABLE_HOT_RELOAD)
   list(APPEND BIRD_HOTRELOAD_SOURCES

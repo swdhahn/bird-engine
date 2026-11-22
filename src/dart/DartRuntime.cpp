@@ -191,6 +191,10 @@ bool DartRuntime::drainMicrotasks() {
 	return ok;
 }
 
+bool DartRuntime::notifyHotReload() {
+	return invokeTopLevelVoid("onHotReload", /*optional=*/true);
+}
+
 void DartRuntime::shutdown() {
 	if (m_isolate != nullptr) {
 		Dart_EnterIsolate(m_isolate);
