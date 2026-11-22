@@ -75,8 +75,20 @@ class Mesh : public Resource {
 	const std::vector<float>& getJointRadii() const { return m_jointRadii; }
 	Buffer<float, 4>* getWeightBuffer() { return m_weightBuffer.get(); }
 
-	/** Object-space bounds computed from the vertex positions at creation. */
+	/** Object-space AABB computed from the vertex positions at creation. */
 	const AABB& getLocalBounds() const;
+
+	/**
+	 * Object-space bounding sphere computed from the vertex positions at
+	 * creation (or after recomputeBounds()).
+	 */
+	const BoundingSphere& getLocalBoundingSphere() const;
+
+	/**
+	 * Recomputes the cached object-space AABB and bounding sphere from the
+	 * current CPU-side vertex position buffer. Call after mutating vertex data.
+	 */
+	void recomputeBounds();
 
 	void setMaterial(const std::shared_ptr<Material>& material);
 	const std::shared_ptr<Material>& getMaterial() const;
@@ -93,6 +105,7 @@ class Mesh : public Resource {
 
 	std::shared_ptr<Material> m_material = nullptr;
 	AABB m_localBounds;
+	BoundingSphere m_localSphere;
 
 	/** Backend hook: expose the new skin streams to the vertex stage. */
 	virtual void onSkinAttached() {}

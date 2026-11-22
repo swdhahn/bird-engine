@@ -23,6 +23,10 @@ add_library(
   generic/FrameBuffer.h
   generic/FrameBuffer.cpp
   generic/Bounds.h
+  generic/EnvironmentMap.h
+  generic/EnvironmentMap.cpp
+  generic/FrustumCuller.h
+  generic/FrustumCuller.cpp
   generic/GpuLayouts.h
   generic/RenderQueue.h
   generic/RenderQueue.cpp

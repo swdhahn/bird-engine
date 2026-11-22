@@ -5,6 +5,7 @@
 
 #include "../../renders/generic/Bounds.h"
 #include "../../util/Math.h"
+#include "BoneMask.h"
 #include "SkeletalAsset.h"
 #include "Skeleton.h"
 
@@ -30,6 +31,96 @@ namespace bird {
  * @throws std::invalid_argument when the poses differ in size.
  */
 void blendPoses(const Pose& from, const Pose& to, float weight, Pose& out);
+
+/**
+ * Fast pose blend using LERP for translation/scale and shortest-path NLERP
+ * (normalized linear interpolation, flipping hemisphere when dot < 0) for
+ * rotation. O(joints).
+ *
+ * @param from Pose at weight 0.
+ * @param to Pose at weight 1.
+ * @param weight Blend factor (typically in [0, 1]).
+ * @param out Result; may alias from or to.
+ * @throws std::invalid_argument when the poses differ in size.
+ */
+void blendPosesNlerp(const Pose& from, const Pose& to, float weight, Pose& out);
+
+/**
+ * Blends overlay over base per joint using effective weight
+ * `mask.getJointWeight(i) * weight`. If mask is empty, behaves like
+ * blendPoses(base, overlay, weight, out). O(joints).
+ *
+ * @param base Underlying pose (kept where effective weight is 0).
+ * @param overlay Layered pose (applied where effective weight is 1).
+ * @param mask Per-joint weights in [0, 1], or empty for uniform 1.0.
+ * @param weight Global layer weight in [0, 1].
+ * @param out Result; may alias base or overlay.
+ * @throws std::invalid_argument when pose or non-empty mask sizes differ.
+ */
+void blendPosesMasked(const Pose& base, const Pose& overlay,
+					  const BoneMask& mask, float weight, Pose& out);
+
+/**
+ * Computes an N-way weighted blend of poses (used by 2D blend trees).
+ * Weights are normalized internally to sum to 1. Translation and scale use
+ * weighted linear sums; rotations use shortest-path hemisphere-aligned NLERP
+ * relative to the dominant (first positive-weight) pose. O(poses * joints).
+ *
+ * @param poses Array of pose pointers (all must have the same joint count).
+ * @param weights Matching non-negative blend weights (at least one > 0).
+ * @param count Number of poses.
+ * @param out Result buffer; must not alias any input pose.
+ * @throws std::invalid_argument on empty input, size mismatch, or zero total weight.
+ */
+void blendPosesWeighted(const Pose* const* poses, const float* weights,
+						size_t count, Pose& out);
+
+/**
+ * Computes an additive delta pose representing `target - reference`.
+ *
+ * Per joint:
+ * - `delta.translation = target.translation - reference.translation`
+ * - `delta.rotation = normalize(target.rotation * inverse(reference.rotation))`
+ * - `delta.scale = target.scale / reference.scale` (1.0 when reference axis is 0)
+ *
+ * @param target Authored additive pose.
+ * @param reference Base/reference pose (e.g. rest pose or first frame of clip).
+ * @param out Resulting delta pose; may alias target or reference.
+ * @throws std::invalid_argument when pose sizes differ.
+ */
+void makeAdditivePose(const Pose& target, const Pose& reference, Pose& out);
+
+/**
+ * Applies an additive delta pose on top of a base pose with uniform weight.
+ *
+ * Per joint (with effective weight w):
+ * - `out.translation = base.translation + additive.translation * w`
+ * - `out.rotation = normalize(slerp(identity, additive.rotation, w) * base.rotation)`
+ * - `out.scale = base.scale * lerp(1, additive.scale, w)`
+ *
+ * @param base Base pose.
+ * @param additive Delta pose produced by makeAdditivePose().
+ * @param weight Additive strength (typically in [0, 1]).
+ * @param out Result; may alias base or additive.
+ * @throws std::invalid_argument when pose sizes differ.
+ */
+void applyAdditivePose(const Pose& base, const Pose& additive, float weight,
+					   Pose& out);
+
+/**
+ * Applies an additive delta pose on top of a base pose with per-joint masking.
+ * Effective weight per joint is `mask.getJointWeight(i) * weight` (or `weight`
+ * when mask is empty).
+ *
+ * @param base Base pose.
+ * @param additive Delta pose produced by makeAdditivePose().
+ * @param mask Per-joint weights in [0, 1], or empty for uniform 1.0.
+ * @param weight Global layer weight.
+ * @param out Result; may alias base or additive.
+ * @throws std::invalid_argument when pose or non-empty mask sizes differ.
+ */
+void applyAdditivePoseMasked(const Pose& base, const Pose& additive,
+							 const BoneMask& mask, float weight, Pose& out);
 
 /**
  * Converts joint-local transforms into model-space matrices in one

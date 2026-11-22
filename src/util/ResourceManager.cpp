@@ -9,7 +9,13 @@
 #include <vector>
 
 #include "../animation/skeletal/PoseOps.h"
+#include "../platform/Log.h"
+#include "../diagnostics/FallbackAssets.h"
+#include "../diagnostics/Logger.h"
 #include "../platform/VFS.h"
+#ifdef BIRD_ENABLE_HOT_RELOAD
+#include "../hotreload/HotReloadManager.h"
+#endif
 
 namespace bird {
 
@@ -36,6 +42,9 @@ ResourceManager::ResourceManager() {
 }
 
 ResourceManager::~ResourceManager() {
+#ifdef BIRD_ENABLE_HOT_RELOAD
+	disableHotReload();
+#endif
 	delete[] m_resources;
 }
 
@@ -53,6 +62,48 @@ std::shared_ptr<Texture> ResourceManager::loadColorTexture(
 	return loadTextureWithColorSpace(path, true);
 }
 
+std::shared_ptr<Texture> ResourceManager::buildTextureFromBaked(
+	const std::string& path, bool srgb) {
+	const auto file = openBaked(RESOURCE_PATH + path + ".bird");
+
+	if (!file) {
+		BIRD_LOG_ERROR("Assets",
+					   "Missing texture asset: " + path + ".bird");
+		return nullptr;
+	}
+
+	int32_t width = 0, height = 0, channels = 0;
+
+	file->read(reinterpret_cast<char*>(&width), sizeof(int32_t));
+	file->read(reinterpret_cast<char*>(&height), sizeof(int32_t));
+	file->read(reinterpret_cast<char*>(&channels), sizeof(int32_t));
+
+	if (!*file || width <= 0 || height <= 0 || channels <= 0 || channels > 4) {
+		BIRD_LOG_ERROR("Assets",
+					   "Invalid or corrupt texture header: " + path + ".bird");
+		return nullptr;
+	}
+
+	const size_t byteCount =
+		static_cast<size_t>(width) * static_cast<size_t>(height) *
+		static_cast<size_t>(channels);
+	uint8_t* data = new uint8_t[byteCount];
+	file->read(reinterpret_cast<char*>(data),
+			  static_cast<std::streamsize>(byteCount));
+	if (!*file) {
+		delete[] data;
+		BIRD_LOG_ERROR("Assets",
+					   "Truncated texture data: " + path + ".bird");
+		return nullptr;
+	}
+
+	TextureFormat form = (TextureFormat)(1 << (channels));
+	TextureBuilder builder(data, width, height, form);
+	builder.generateMipMaps();
+	if (srgb) builder.srgb();
+	return builder.build();
+}
+
 std::shared_ptr<Texture> ResourceManager::loadTextureWithColorSpace(
 	const std::string& path, bool srgb) {
 	const std::string cacheKey = srgb ? path + "#srgb" : path;
@@ -61,50 +112,22 @@ std::shared_ptr<Texture> ResourceManager::loadTextureWithColorSpace(
 		return std::static_pointer_cast<Texture>(textures.at(cacheKey));
 	}
 
-	const auto file = openBaked(RESOURCE_PATH + path + ".bird");
-
-	if (!file) {
-		std::cout << "Error loading file. File does not exist: " << path
-				  << std::endl;
-		return std::shared_ptr<Texture>(0);
+	std::shared_ptr<Texture> tex = buildTextureFromBaked(path, srgb);
+	if (!tex) {
+		// The shared fallback is never cached under this key, so a later
+		// hot reload cannot swap real data into the fallback texture.
+		return m_useFallbackAssets ? getFallbackTexture(srgb) : nullptr;
 	}
-
-	int32_t width = 0, height = 0, channels = 0;
-
-	file->read(reinterpret_cast<char*>(&width), sizeof(int32_t));
-	file->read(reinterpret_cast<char*>(&height), sizeof(int32_t));
-	file->read(reinterpret_cast<char*>(&channels), sizeof(int32_t));
-	uint8_t* data = new uint8_t[width * height * channels];
-	file->read(reinterpret_cast<char*>(data),
-			  width * height * channels * sizeof(uint8_t));
-
-	if (channels == 0) {
-		std::cout << "Error loading file: " << path << std::endl;
-		std::cout << "There should be more than zero channels" << std::endl;
-		return std::shared_ptr<Texture>(0);
-	}
-	TextureFormat form = (TextureFormat)(1 << (channels));
-	// std::cout << "Img: " << width << " " << height << " " << channels << " "
-	//		  << form << std::endl;
-
-	TextureBuilder builder(data, width, height, form);
-	builder.generateMipMaps();
-	if (srgb) builder.srgb();
-	std::shared_ptr<Texture> tex = builder.build();
 	addResource(cacheKey, tex, ASSET_TYPE_TEXTURE);
 	return tex;
 }
 
-std::shared_ptr<Font> ResourceManager::loadFont(const std::string& path) {
-	auto& fonts = m_resources[ASSET_TYPE_FONT];
-	if (fonts.find(path) != fonts.end()) {
-		return std::static_pointer_cast<Font>(fonts.at(path));
-	}
-
+std::shared_ptr<Font> ResourceManager::buildFontFromBaked(
+	const std::string& path) {
 	const auto file = openBaked(RESOURCE_PATH + path + ".bird");
 	if (!file) {
-		std::cerr << "Error loading font. File does not exist: " << path
-				  << ".bird (run BuildTools)" << std::endl;
+		BIRD_LOG_ERROR("Assets",
+					   "Missing font asset: " + path + ".bird (run BuildTools)");
 		return nullptr;
 	}
 
@@ -112,7 +135,7 @@ std::shared_ptr<Font> ResourceManager::loadFont(const std::string& path) {
 	file->read(reinterpret_cast<char*>(&header), sizeof(header));
 	std::vector<format::FontGlyph> glyphs(header.glyphCount);
 	file->read(reinterpret_cast<char*>(glyphs.data()),
-			  glyphs.size() * sizeof(format::FontGlyph));
+			   glyphs.size() * sizeof(format::FontGlyph));
 	const size_t texelCount =
 		static_cast<size_t>(header.atlasWidth) * header.atlasHeight;
 	std::vector<uint8_t> distance(texelCount);
@@ -136,7 +159,19 @@ std::shared_ptr<Font> ResourceManager::loadFont(const std::string& path) {
 			.generateMipMaps()
 			.build();
 
-	auto font = std::make_shared<Font>(header, std::move(glyphs), atlas);
+	return std::make_shared<Font>(header, std::move(glyphs), atlas);
+}
+
+std::shared_ptr<Font> ResourceManager::loadFont(const std::string& path) {
+	auto& fonts = m_resources[ASSET_TYPE_FONT];
+	if (fonts.find(path) != fonts.end()) {
+		return std::static_pointer_cast<Font>(fonts.at(path));
+	}
+
+	auto font = buildFontFromBaked(path);
+	if (!font) {
+		return nullptr;
+	}
 	addResource(path, font, ASSET_TYPE_FONT);
 	return font;
 }
@@ -204,7 +239,13 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(
 	const auto file = openBaked(RESOURCE_PATH + path + ".bird");
 
 	if (!file) {
-		std::cout << "Error loading file: " << path << std::endl;
+		BIRD_LOG_ERROR("Assets",
+					   "Missing mesh asset: " + path + ".bird");
+		if (m_useFallbackAssets) {
+			if (auto fallback = getFallbackMesh()) {
+				return {fallback};
+			}
+		}
 		return std::vector<std::shared_ptr<Mesh>>(0);
 	}
 
@@ -333,20 +374,15 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(
 	return meshes;
 }
 
-std::shared_ptr<Material> ResourceManager::loadMaterial(
+std::shared_ptr<Material> ResourceManager::buildMaterialFromBaked(
 	const std::string& path) {
-	if (m_resources[ASSET_TYPE_MATERIAL].find(path) !=
-		m_resources[ASSET_TYPE_MATERIAL].end()) {
-		return std::static_pointer_cast<Material>(
-			m_resources[ASSET_TYPE_MATERIAL].at(path));
-	}
-
 	// load material from file
 	const auto file = openBaked(RESOURCE_PATH + path + ".bird");
 
 	if (!file) {
-		std::cout << "Error loading file: " << path << std::endl;
-		return std::shared_ptr<Material>(0);
+		BIRD_LOG_ERROR("Assets",
+					   "Missing material asset: " + path + ".bird");
+		return nullptr;
 	}
 
 	const format::MaterialFileData data = format::readMaterialFile(*file);
@@ -386,6 +422,21 @@ std::shared_ptr<Material> ResourceManager::loadMaterial(
 		mat->setBaseColor(Vector4(1.0f, 1.0f, 1.0f, data.baseColor[3]));
 	}
 
+	return mat;
+}
+
+std::shared_ptr<Material> ResourceManager::loadMaterial(
+	const std::string& path) {
+	if (m_resources[ASSET_TYPE_MATERIAL].find(path) !=
+		m_resources[ASSET_TYPE_MATERIAL].end()) {
+		return std::static_pointer_cast<Material>(
+			m_resources[ASSET_TYPE_MATERIAL].at(path));
+	}
+
+	auto mat = buildMaterialFromBaked(path);
+	if (!mat) {
+		return m_useFallbackAssets ? getFallbackMaterial() : nullptr;
+	}
 
 	addResource(path, mat, ASSET_TYPE_MATERIAL);
 
@@ -401,6 +452,7 @@ std::shared_ptr<Shader> ResourceManager::loadShader(
 	}
 	std::shared_ptr<Shader> shader = builder.build();
 	addResource(cacheKey, shader, ASSET_TYPE_SHADER);
+	m_shaderBuilders.emplace(cacheKey, builder);
 	return shader;
 }
 
@@ -439,5 +491,257 @@ void ResourceManager::addMesh(std::string path,
 std::shared_ptr<Shader> ResourceManager::getDefaultShader() {
 	return m_defaultShader;
 }
+
+std::shared_ptr<Texture> ResourceManager::getFallbackTexture(bool srgb) {
+	std::shared_ptr<Texture>& slot =
+		srgb ? m_fallbackTextureSrgb : m_fallbackTextureLinear;
+	if (!slot) {
+		try {
+			slot = diag::createFallbackTexture(srgb);
+		} catch (const std::exception& e) {
+			BIRD_LOG_WARN("Assets",
+						  std::string("Unable to upload fallback texture: ") +
+							  e.what());
+		}
+	}
+	return slot;
+}
+
+std::shared_ptr<Material> ResourceManager::getFallbackMaterial() {
+	if (!m_fallbackMaterial) {
+		m_fallbackMaterial =
+			diag::createFallbackMaterial(getFallbackTexture(/*srgb=*/true));
+	}
+	return m_fallbackMaterial;
+}
+
+std::shared_ptr<Mesh> ResourceManager::getFallbackMesh() {
+	if (!m_fallbackMesh) {
+		try {
+			m_fallbackMesh =
+				diag::createFallbackUnitCubeMesh(getFallbackMaterial());
+		} catch (const std::exception& e) {
+			BIRD_LOG_WARN("Assets",
+						  std::string("Unable to upload fallback unit cube: ") +
+							  e.what());
+		}
+	}
+	return m_fallbackMesh;
+}
+
+bool ResourceManager::reloadTexture(const std::string& path) {
+	auto& textures = m_resources[ASSET_TYPE_TEXTURE];
+	bool reloadedAny = false;
+
+	const std::pair<std::string, bool> variants[2] = {
+		{path, false}, {path + "#srgb", true}};
+	for (const auto& [cacheKey, srgb] : variants) {
+		auto it = textures.find(cacheKey);
+		if (it == textures.end()) continue;
+
+		try {
+			std::shared_ptr<Texture> replacement =
+				buildTextureFromBaked(path, srgb);
+			if (!replacement) {
+				platform::log(platform::LogLevel::Error,
+							  "[HotReload] Failed to reload texture '" + path +
+								  "'; keeping previous handle active.");
+				continue;
+			}
+			auto existing = std::static_pointer_cast<Texture>(it->second);
+			existing->swapFrom(*replacement);
+			reloadedAny = true;
+			platform::log(platform::LogLevel::Info,
+						  "[HotReload] Swapped texture in place: " + cacheKey);
+		} catch (const std::exception& e) {
+			platform::log(platform::LogLevel::Error,
+						  "[HotReload] Exception reloading texture '" + path +
+							  "': " + e.what());
+		}
+	}
+	return reloadedAny;
+}
+
+size_t ResourceManager::reloadShaderStage(const std::string& stagePath) {
+	auto& shaders = m_resources[ASSET_TYPE_SHADER];
+	size_t reloadedCount = 0;
+
+	for (const auto& [cacheKey, builder] : m_shaderBuilders) {
+		bool usesStage = false;
+		for (const auto& [file, _] : builder.stages()) {
+			if (file == stagePath) {
+				usesStage = true;
+				break;
+			}
+		}
+		if (!usesStage) continue;
+
+		auto it = shaders.find(cacheKey);
+		if (it == shaders.end()) continue;
+
+		try {
+			std::shared_ptr<Shader> replacement = builder.build();
+			if (!replacement) continue;
+			auto existing = std::static_pointer_cast<Shader>(it->second);
+			existing->swapFrom(*replacement);
+			reloadedCount++;
+			platform::log(platform::LogLevel::Info,
+						  "[HotReload] Swapped shader program in place: " +
+							  cacheKey);
+		} catch (const std::exception& e) {
+			platform::log(platform::LogLevel::Error,
+						  "[HotReload] Failed to relink shader '" + cacheKey +
+							  "' (keeping old program active): " + e.what());
+		}
+	}
+	return reloadedCount;
+}
+
+size_t ResourceManager::reloadAllShaders() {
+	auto& shaders = m_resources[ASSET_TYPE_SHADER];
+	size_t reloadedCount = 0;
+
+	for (const auto& [cacheKey, builder] : m_shaderBuilders) {
+		auto it = shaders.find(cacheKey);
+		if (it == shaders.end()) continue;
+
+		try {
+			std::shared_ptr<Shader> replacement = builder.build();
+			if (!replacement) continue;
+			auto existing = std::static_pointer_cast<Shader>(it->second);
+			existing->swapFrom(*replacement);
+			reloadedCount++;
+		} catch (const std::exception& e) {
+			platform::log(platform::LogLevel::Error,
+						  "[HotReload] Failed to relink shader '" + cacheKey +
+							  "' after include change (keeping old program "
+							  "active): " +
+							  e.what());
+		}
+	}
+	if (reloadedCount > 0) {
+		platform::log(platform::LogLevel::Info,
+					  "[HotReload] Relinked " + std::to_string(reloadedCount) +
+						  " shader program(s) after include edit");
+	}
+	return reloadedCount;
+}
+
+bool ResourceManager::reloadMaterial(const std::string& path) {
+	auto& materials = m_resources[ASSET_TYPE_MATERIAL];
+	auto it = materials.find(path);
+	if (it == materials.end()) return false;
+
+	try {
+		std::shared_ptr<Material> replacement = buildMaterialFromBaked(path);
+		if (!replacement) {
+			platform::log(platform::LogLevel::Error,
+						  "[HotReload] Failed to reload material '" + path +
+							  "'; keeping previous material active.");
+			return false;
+		}
+		auto existing = std::static_pointer_cast<Material>(it->second);
+		existing->swapFrom(*replacement);
+		platform::log(platform::LogLevel::Info,
+					  "[HotReload] Swapped material in place: " + path);
+		return true;
+	} catch (const std::exception& e) {
+		platform::log(platform::LogLevel::Error,
+					  "[HotReload] Exception reloading material '" + path +
+						  "': " + e.what());
+		return false;
+	}
+}
+
+bool ResourceManager::reloadFont(const std::string& path) {
+	auto& fonts = m_resources[ASSET_TYPE_FONT];
+	auto it = fonts.find(path);
+	if (it == fonts.end()) return false;
+
+	try {
+		std::shared_ptr<Font> replacement = buildFontFromBaked(path);
+		if (!replacement) {
+			platform::log(platform::LogLevel::Error,
+						  "[HotReload] Failed to reload font '" + path +
+							  "'; keeping previous font active.");
+			return false;
+		}
+		auto existing = std::static_pointer_cast<Font>(it->second);
+		existing->swapFrom(*replacement);
+		platform::log(platform::LogLevel::Info,
+					  "[HotReload] Swapped font in place: " + path);
+		return true;
+	} catch (const std::exception& e) {
+		platform::log(platform::LogLevel::Error,
+					  "[HotReload] Exception reloading font '" + path +
+						  "': " + e.what());
+		return false;
+	}
+}
+
+#ifdef BIRD_ENABLE_HOT_RELOAD
+bool ResourceManager::enableHotReload(
+	const hotreload::HotReloadConfig& config) {
+	disableHotReload();
+	m_hotReloadManager = std::make_unique<hotreload::HotReloadManager>(config);
+	if (!m_hotReloadManager->start()) {
+		m_hotReloadManager.reset();
+		return false;
+	}
+	return true;
+}
+
+void ResourceManager::disableHotReload() {
+	if (m_hotReloadManager) {
+		m_hotReloadManager->stop();
+		m_hotReloadManager.reset();
+	}
+}
+
+size_t ResourceManager::pollHotReloads() {
+	if (!m_hotReloadManager) return 0;
+
+	const auto requests = m_hotReloadManager->drainRequests();
+	size_t handled = 0;
+
+	for (const hotreload::AssetReloadRequest& req : requests) {
+		switch (req.assetId.kind) {
+			case hotreload::HotReloadAssetKind::Shader:
+				if (reloadShaderStage(req.assetId.sourcePath) > 0) handled++;
+				break;
+			case hotreload::HotReloadAssetKind::ShaderInclude:
+				if (reloadAllShaders() > 0) handled++;
+				break;
+			case hotreload::HotReloadAssetKind::Texture:
+				if (reloadTexture(req.assetId.sourcePath)) handled++;
+				break;
+			case hotreload::HotReloadAssetKind::Material:
+				if (reloadMaterial(req.assetId.sourcePath)) handled++;
+				break;
+			case hotreload::HotReloadAssetKind::Font:
+				if (reloadFont(req.assetId.sourcePath)) handled++;
+				break;
+			case hotreload::HotReloadAssetKind::DartScript:
+				if (m_dartReloadCallback) {
+					m_dartReloadCallback(req.assetId.sourcePath);
+					handled++;
+				}
+				break;
+			default:
+				break;
+		}
+	}
+	return handled;
+}
+
+void ResourceManager::setDartReloadCallback(
+	hotreload::DartReloadCallback callback) {
+	m_dartReloadCallback = std::move(callback);
+}
+
+hotreload::HotReloadManager* ResourceManager::getHotReloadManager() const {
+	return m_hotReloadManager.get();
+}
+#endif
 
 }  // namespace bird

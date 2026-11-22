@@ -5,6 +5,7 @@
 #include "Input.h"
 
 #include "../Application.h"
+#include "../events/EventBus.h"
 #include "../scene/2D/UIManager.h"
 
 namespace {
@@ -206,6 +207,19 @@ void Input::onKey(int key, InputAction action, uint8_t modifiers) {
 	if (key >= 0 && key < kKeyCount) {
 		m_keysDown.set(key, action != InputAction::Release);
 	}
+	if (EVENT_BUS) {
+		const EventTypeID evId =
+			action == InputAction::Release ? hashEventName("input.key_up")
+										   : hashEventName("input.key_down");
+		if (EVENT_BUS->hasSubscribers(evId)) {
+			EventPayload payload;
+			payload.set("key", key).set("modifiers", static_cast<int>(modifiers));
+			if (action != InputAction::Release) {
+				payload.set("repeat", action == InputAction::Repeat);
+			}
+			EVENT_BUS->emit(evId, std::move(payload));
+		}
+	}
 	if (UIManager* ui = uiManager()) {
 		ui->key(uiKey(key), action != InputAction::Release,
 				action == InputAction::Repeat, modifiers, key);
@@ -219,6 +233,20 @@ void Input::onCharacter(uint32_t codepoint) {
 void Input::onMouseButton(int button, InputAction action, uint8_t modifiers) {
 	if (button >= 0 && button < kMouseButtonCount) {
 		m_buttonsDown.set(button, action != InputAction::Release);
+	}
+	if (EVENT_BUS) {
+		const EventTypeID evId =
+			action == InputAction::Release
+				? hashEventName("input.mouse_button_up")
+				: hashEventName("input.mouse_button_down");
+		if (EVENT_BUS->hasSubscribers(evId)) {
+			EventPayload payload;
+			payload.set("button", button)
+				.set("modifiers", static_cast<int>(modifiers))
+				.set("position", Vector2(static_cast<float>(m_mx),
+										 static_cast<float>(m_my)));
+			EVENT_BUS->emit(evId, std::move(payload));
+		}
 	}
 	if (m_captured) return;	 // a captured pointer belongs to the game
 	if (UIManager* ui = uiManager()) {

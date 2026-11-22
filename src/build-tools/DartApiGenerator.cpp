@@ -1324,6 +1324,28 @@ static void finalizeModel(Model& model) {
 		}
 		cls.fields = std::move(validFields);
 
+		// Collapse const/non-const accessor pairs (`T& get()` and
+		// `const T& get() const`): Dart cannot tell them apart, and their
+		// mangled wrapper names would collide. The non-const overload wins.
+		const auto signatureKey = [](const MethodInfo& m) {
+			std::string key = m.name;
+			for (const auto& p : m.params) key += "|" + paramTag(p.type);
+			return key;
+		};
+		std::set<std::string> nonConstSignatures;
+		for (const auto& m : cls.methods) {
+			if (!m.isConst && !m.isConstructor && !m.isStatic) {
+				nonConstSignatures.insert(signatureKey(m));
+			}
+		}
+		cls.methods.erase(
+			std::remove_if(cls.methods.begin(), cls.methods.end(),
+						   [&](const MethodInfo& m) {
+							   return m.isConst && nonConstSignatures.count(
+													   signatureKey(m)) > 0;
+						   }),
+			cls.methods.end());
+
 		// Disambiguate overloads within class
 		std::map<std::string, int> counts;
 		for (const auto& m : cls.methods) {
@@ -2035,6 +2057,14 @@ static void writeFiles(const fs::path& outDir,
 				src << "BIRD_C_API void " << setFn << "(" << setParams
 					<< ") {\n";
 				emitVectorParamPrologue(src, {vp}, model);
+				if (f.type.cat == TypeCat::SharedPtr) {
+					// The Dart getter is nullable, so the setter accepts null
+					// too; a null handle resets the field instead of crashing.
+					src << "    if (_value == nullptr) {\n"
+						<< "        " << fieldAccess << " = nullptr;\n"
+						<< "        return;\n"
+						<< "    }\n";
+				}
 				src << "    " << fieldAccess << " = " << cppArgExpr(vp)
 					<< ";\n";
 				src << "}\n\n";
@@ -3363,8 +3393,11 @@ static void writeClassFile(const fs::path& outDir, const ClassInfo& cls,
 		f << "  }\n\n";
 
 		if (!field.isReadOnly) {
+			// Raw pointers and shared_ptr handles have nullable getters; Dart
+			// requires the setter to accept the getter's type.
 			bool nullablePtr = (field.type.cat == TypeCat::OpaqueClass &&
-								field.type.isPointer);
+								field.type.isPointer) ||
+							   field.type.cat == TypeCat::SharedPtr;
 			std::string setDartType =
 				nullablePtr ? getRet.dartUser : setArg.dartUser;
 			f << "  " << statKw << "set " << propName << "(" << setDartType

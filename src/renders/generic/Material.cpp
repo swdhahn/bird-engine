@@ -162,4 +162,22 @@ Buffer<MaterialUBOData>* Material::acquireUniformBuffer() {
 	return m_uniformBuffer.get();
 }
 
+void Material::swapFrom(Material& other) {
+	m_baseColor = other.m_baseColor;
+	m_emissive = other.m_emissive;
+	m_emissiveStrength = other.m_emissiveStrength;
+	m_metallic = other.m_metallic;
+	m_roughness = other.m_roughness;
+	m_alphaCutoff = other.m_alphaCutoff;
+	m_normalScale = other.m_normalScale;
+	m_occlusionStrength = other.m_occlusionStrength;
+	m_domain = other.m_domain;
+	m_blendMode = other.m_blendMode;
+	m_doubleSided = other.m_doubleSided;
+	m_forceForward = other.m_forceForward;
+	m_castsShadows = other.m_castsShadows;
+	m_textures = other.m_textures;
+	markDirty();
+}
+
 }  // namespace bird

@@ -7,6 +7,7 @@
 #include <memory>
 #include <stdexcept>
 
+#include "../navigation/NavServer.h"
 #include "../physics/PhysicsServer.h"
 #include "Camera.h"
 
@@ -87,6 +88,30 @@ PhysicsWorld* Scene::getPhysicsWorld() {
 
 bool Scene::ownsPhysicsWorld() const {
 	return m_physicsWorld != nullptr;
+}
+
+NavWorld* Scene::createNavWorld(const NavWorldSettings& settings) {
+	if (m_navWorld) {
+		throw std::logic_error("Scene::createNavWorld: scene already owns a NavWorld");
+	}
+	NavServer* server = NavServer::get();
+	if (server == nullptr) {
+		throw std::logic_error("Scene::createNavWorld: no NavServer exists");
+	}
+	m_navWorld = _own_mk<NavWorld>(*server, settings);
+	return m_navWorld.get();
+}
+
+NavWorld* Scene::getNavWorld() {
+	for (Scene* scene = this; scene != nullptr; scene = scene->getParent()) {
+		if (scene->m_navWorld) return scene->m_navWorld.get();
+		if (scene->getParent() == nullptr) return scene->createNavWorld();
+	}
+	return nullptr;	 // unreachable: the loop always reaches the root
+}
+
+bool Scene::ownsNavWorld() const {
+	return m_navWorld != nullptr;
 }
 
 }  // namespace bird

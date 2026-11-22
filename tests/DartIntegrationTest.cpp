@@ -7,6 +7,8 @@
 
 #include "c_wrapper.h"
 #include "dart/DartRuntime.h"
+#include "events/EventBus.h"
+#include "navigation/NavMesh.h"
 #include "scene/Scene.h"
 #include "scene/WorldObject.h"
 #include "scene/components/ProcessScript.h"
@@ -126,6 +128,94 @@ TEST(DartIntegrationTest, EmbeddedDartVmExecutesScriptEndToEnd) {
 	// Run Pass 3 Jolt Physics + raycast + contact callbacks from Dart
 	ASSERT_TRUE(runtime.invokeTopLevelVoid("runPhysicsIntegrationChecks"))
 		<< runtime.lastError();
+
+	// Run Pass 4 Cross-Boundary C++ <-> Dart EventBus & Lifecycle Cleanup checks
+	{
+		bird::EventBus bus;
+		bird::EventBus::setGlobal(&bus);
+
+		int cppReceivedFromDartQueued = 0;
+		int cppReceivedFromDartImmediate = 0;
+		std::string cppReceivedTag;
+		int64_t cppReceivedDamage = 0;
+		bird::Vector3 cppReceivedVec(0.0f);
+
+		bus.subscribe("dart.to_cpp.immediate",
+					  [&](const bird::EventPayload& p) {
+						  ++cppReceivedFromDartImmediate;
+						  cppReceivedTag = p.getString("tag");
+						  cppReceivedDamage = p.getInt("damage");
+						  cppReceivedVec = p.getVector3("pos");
+					  });
+		bus.subscribe("dart.to_cpp.queued", [&](const bird::EventPayload& p) {
+			++cppReceivedFromDartQueued;
+			EXPECT_TRUE(p.getBool("queued"));
+		});
+
+		ASSERT_TRUE(runtime.invokeTopLevelVoid("runEventBusIntegrationChecks"))
+			<< runtime.lastError();
+
+		// Immediate event from Dart should already have been received in C++.
+		EXPECT_EQ(cppReceivedFromDartImmediate, 1);
+		EXPECT_EQ(cppReceivedTag, "from-dart");
+		EXPECT_EQ(cppReceivedDamage, 77);
+		EXPECT_NEAR(cppReceivedVec.x, 1.5f, 1e-4f);
+		EXPECT_NEAR(cppReceivedVec.y, -2.5f, 1e-4f);
+		EXPECT_NEAR(cppReceivedVec.z, 3.5f, 1e-4f);
+
+		// Queued event from Dart is still sitting in the native ring buffer!
+		EXPECT_EQ(cppReceivedFromDartQueued, 0);
+		EXPECT_EQ(bus.queuedCount(), 1u);
+		EXPECT_EQ(bus.dispatchQueued(), 1u);
+		EXPECT_EQ(cppReceivedFromDartQueued, 1);
+
+		// Emit from C++ -> Dart (both immediate and queued) and verify in Dart.
+		bird::EventPayload cppImm;
+		cppImm.set("origin", "cpp-immediate")
+			.set("score", 500)
+			.set("flag", true)
+			.set("vec2", bird::Vector2(4.0f, 8.0f));
+		bus.emitImmediate("cpp.to_dart", cppImm);
+
+		bird::EventPayload cppQueued;
+		cppQueued.set("origin", "cpp-queued").set("score", 1000);
+		EXPECT_TRUE(bus.emit("cpp.to_dart", cppQueued));
+		EXPECT_EQ(bus.dispatchQueued(), 1u);
+
+		ASSERT_TRUE(
+			runtime.invokeTopLevelVoid("verifyCppToDartEventsAndCleanup"))
+			<< runtime.lastError();
+
+		bird::EventBus::setGlobal(nullptr);
+	}
+
+	// Bake a small floor NavMesh to a temp .bnav file and verify Dart NavMesh
+	// loading, pathfinding queries, and NavAgent crowd movement end-to-end.
+	{
+		std::vector<bird::Vector3> verts = {
+			{-15.0f, -1.0f, -15.0f}, {15.0f, -1.0f, -15.0f},
+			{15.0f, 0.0f, -15.0f},   {-15.0f, 0.0f, -15.0f},
+			{-15.0f, -1.0f, 15.0f},  {15.0f, -1.0f, 15.0f},
+			{15.0f, 0.0f, 15.0f},    {-15.0f, 0.0f, 15.0f},
+		};
+		std::vector<uint32_t> indices = {
+			3, 7, 6, 3, 6, 2,  // Top
+			0, 1, 5, 0, 5, 4,  // Bottom
+			4, 5, 6, 4, 6, 7,  // Front
+			1, 0, 3, 1, 3, 2,  // Back
+			5, 1, 2, 5, 2, 6,  // Right
+			0, 4, 7, 0, 7, 3,  // Left
+		};
+		auto navMesh = bird::NavMesh::build(verts, indices);
+		const fs::path tmpNavPath =
+			fs::temp_directory_path() / "bird_dart_nav_integration_test.bnav";
+		ASSERT_TRUE(navMesh->saveToFile(tmpNavPath.string()));
+
+		const bool navOk =
+			runtime.invokeTopLevelVoid("runNavigationIntegrationChecks");
+		fs::remove(tmpNavPath);
+		ASSERT_TRUE(navOk) << runtime.lastError();
+	}
 
 	// Deinit triggers Dart deinit() and closes NativeCallables cleanly before VM shutdown
 	externalScene.deinit();

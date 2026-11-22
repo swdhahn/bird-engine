@@ -7,7 +7,7 @@ Bird Engine renders through an abstract pipeline interface (`bird::GraphicsPipel
 ## 1. Frame Overview
 
 ```
- GraphicsPipeline::buildRenderQueue      frustum culling, bucketing, sorting
+ GraphicsPipeline::buildRenderQueue      frustum culling (FrustumCuller), bucketing, sorting
  planShadows                             cascades + atlas tiles, CPU only
         |
         v
@@ -15,13 +15,15 @@ Bird Engine renders through an abstract pipeline interface (`bird::GraphicsPipel
                                   -> local atlas (spot: 1 tile, point: 6 tiles)
  2. G-buffer pass    opaque + masked lit surfaces -> RT0, RT1, HDR (emissive), depth
  3. Depth copy       G-buffer depth -> HDR target depth renderbuffer
- 4. Lighting pass    fullscreen: ambient + directional lights (+ cascaded shadows)
+ 4. Lighting pass    fullscreen: IBL (or uniform ambient) + directional lights (+ cascaded shadows)
                      volumes: point spheres, spot cones, additive into HDR
- 5. Forward pass     unlit / force-forward opaque, then transparency back to front
- 6. Debug lines      into HDR
- 7. Post-process     exposure + ACES tone map (or G-buffer debug view) -> LDR,
+ 5. Skybox pass      HDR environment cubemap at depth = 1.0 (GL_LEQUAL, no depth write)
+ 6. Forward pass     unlit / force-forward opaque, transparency back to front,
+                     then batched CPU billboard particles (GLParticleRenderer)
+ 7. Debug lines      into HDR
+ 8. Post-process     exposure + ACES tone map (or G-buffer debug view) -> LDR,
                      then FXAA -> default framebuffer
- 8. UI               orthographic overlay, untouched by post-processing
+ 9. UI               orthographic overlay, untouched by post-processing
 ```
 
 Each pass occupies its own class under `src/renders/opengl/passes/`; `GLPipeline::renderWorld` only orchestrates them. `GLRenderState` caches fixed-function state, and each pass declares the complete state upon which the pass depends.
@@ -92,6 +94,7 @@ Every block is mirrored by a C++ struct whose std140 offsets are pinned with `st
 | samplers 0..4 | material slots | see `TextureSlot` |
 | samplers 5..7 | G-buffer | albedo, normal, depth |
 | samplers 8..9 | shadow atlases | directional, local |
+| samplers 10..12 | IBL maps | diffuse irradiance cubemap, specular prefiltered cubemap, 2D BRDF integration LUT |
 
 Shared GLSL lives in `assets/shaders/include/` (`globals`, `material`, `pbr`, `lights`, `shadows`, `gbuffer`). The BRDF is Cook-Torrance with GGX distribution, height-correlated Smith visibility, and Schlick Fresnel. Vertex inputs use fixed locations for every mesh: position 0, normal 1, uv 2, tangent 3. Meshes without tangents fall back to a derivative-based tangent frame.
 
@@ -145,7 +148,7 @@ To test the ES profile on a Linux desktop, configure with `-DBIRD_GL_PROFILE=ES`
 ## 9. Known Limitations and Next Steps
 
 - Masked (alpha-tested) materials cast fully opaque shadows; the shadow pass does not sample textures.
-- Ambient light is uniform; image-based lighting would replace `evaluateAmbient`.
+- Environment IBL is global per camera (`WorldEnvironment::environmentMap`); localized reflection probes are a future extension.
 - MSAA is unavailable with the deferred path; FXAA remains the anti-aliasing solution, and TAA is the natural successor.
 - Light volumes draw one call per light; instancing becomes worthwhile beyond a few hundred lights.
 - On OpenGL ES devices without `GL_EXT_depth_clamp`, shadow casters behind a light's near plane and light volumes past the far plane are clipped.
