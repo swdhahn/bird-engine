@@ -27,6 +27,11 @@ set(BIRD_SCRIPT_HEADERS
     ${CMAKE_SOURCE_DIR}/src/physics/PhysicsServer.h
     ${CMAKE_SOURCE_DIR}/src/physics/RigidBodyComponent.h
     ${CMAKE_SOURCE_DIR}/src/physics/CharacterControllerComponent.h
+    ${CMAKE_SOURCE_DIR}/src/navigation/NavTypes.h
+    ${CMAKE_SOURCE_DIR}/src/navigation/NavMesh.h
+    ${CMAKE_SOURCE_DIR}/src/navigation/NavServer.h
+    ${CMAKE_SOURCE_DIR}/src/navigation/NavWorld.h
+    ${CMAKE_SOURCE_DIR}/src/navigation/NavAgent.h
     ${CMAKE_SOURCE_DIR}/src/scene/2D/ScreenObject.h
     ${CMAKE_SOURCE_DIR}/src/scene/2D/UILayout.h
     ${CMAKE_SOURCE_DIR}/src/scene/2D/UIEvents.h
@@ -75,6 +80,16 @@ set(BIRD_SCRIPT_HEADERS
     ${CMAKE_SOURCE_DIR}/src/animation/skeletal/RootMotion.h
     ${CMAKE_SOURCE_DIR}/src/animation/skeletal/SkeletalDebugDraw.h
     ${CMAKE_SOURCE_DIR}/src/animation/skeletal/SkeletalAnimationComponent.h
+    ${CMAKE_SOURCE_DIR}/src/serialization/PrefabManager.h
+    ${CMAKE_SOURCE_DIR}/src/serialization/SceneSerializer.h
+    ${CMAKE_SOURCE_DIR}/src/serialization/SaveGame.h
+    ${CMAKE_SOURCE_DIR}/src/events/EventTypes.h
+    ${CMAKE_SOURCE_DIR}/src/events/EventPayload.h
+    ${CMAKE_SOURCE_DIR}/src/events/EventBus.h
+    ${CMAKE_SOURCE_DIR}/src/audio/AudioTypes.h
+    ${CMAKE_SOURCE_DIR}/src/audio/AudioSystem.h
+    ${CMAKE_SOURCE_DIR}/src/audio/AudioSourceComponent.h
+    ${CMAKE_SOURCE_DIR}/src/audio/AudioListenerComponent.h
     ${CMAKE_SOURCE_DIR}/src/Application.h
 )
 
@@ -198,6 +213,8 @@ add_library(bird_dart OBJECT
     DartRuntime.h
     DartScriptComponent.cpp
     DartScriptComponent.h
+    DartEventBridge.cpp
+    DartEventBridge.h
 )
 add_dependencies(bird_dart GenerateDartBindings)
 target_compile_definitions(bird_dart PRIVATE BIRD_ENABLE_DART)

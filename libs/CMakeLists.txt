@@ -232,6 +232,20 @@ ExternalProject_Add(
 													-DCPP_RTTI_ENABLED=ON
 													"-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}")
 
+# --- Recast & Detour Setup ---
+ExternalProject_Add(
+		RECASTNAVIGATION
+		URL "https://github.com/recastnavigation/recastnavigation/archive/refs/tags/v1.6.0.tar.gz"
+		PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/RECASTNAVIGATION
+		CMAKE_ARGS ${BIRD_DEP_BUILD_ARGS}
+													-DRECASTNAVIGATION_DEMO=OFF
+													-DRECASTNAVIGATION_TESTS=OFF
+													-DRECASTNAVIGATION_EXAMPLES=OFF
+													-DBUILD_SHARED_LIBS=OFF
+													-DCMAKE_POSITION_INDEPENDENT_CODE=ON
+													-DCMAKE_POLICY_VERSION_MINIMUM=3.5
+													"-DCMAKE_INSTALL_PREFIX=${DEPS_INSTALL_DIR}")
+
 
 
 

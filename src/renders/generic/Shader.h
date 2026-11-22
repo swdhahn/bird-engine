@@ -10,6 +10,7 @@
 #include <memory>
 #include <utility>
 
+#include "../../util/Constants.h"
 #include "../../util/File.h"
 #include "../../util/Resource.h"
 #include "../GraphicsConstants.h"
@@ -54,6 +55,12 @@ class ShaderBuilder {
 	 */
 	std::shared_ptr<Shader> build() const;
 
+	/** @return Ordered list of attached (sourcePath, stage) pairs. */
+	BIRD_NO_EXPORT const std::vector<std::pair<std::string, ShaderPipeline>>&
+	stages() const {
+		return m_shaderFiles;
+	}
+
    private:
 	std::vector<std::pair<std::string, ShaderPipeline>> m_shaderFiles;
 };
@@ -83,6 +90,18 @@ class Shader : public Resource {
 	 */
 	virtual void setPushConstants(const void* data, uint32_t size,
 								  uint32_t offset = 0) = 0;
+
+	/**
+	 * Swaps underlying GPU program handles and reflection metadata in place
+	 * with another Shader of the same backend type.
+	 *
+	 * Used by main-thread hot-reloading so every existing std::shared_ptr<Shader>
+	 * immediately uses the newly linked program while the old program is freed
+	 * when `other` is destroyed.
+	 *
+	 * @param other Freshly built Shader whose handles will be swapped into *this.
+	 */
+	BIRD_NO_EXPORT virtual void swapFrom(Shader& other);
 
    protected:
 	ShaderPipeline m_pipeline;
