@@ -11,6 +11,7 @@
 #include "events/EventBus.h"
 #include "diagnostics/Logger.h"
 #include "diagnostics/Profiler.h"
+#include "audio/AudioSystem.h"
 #include "platform/Clock.h"
 #include "platform/Log.h"
 #include "renders/Window.h"
@@ -28,6 +29,7 @@ ResourceManager* RESOURCE_MANAGER = nullptr;
 Application* APPLICATION = nullptr;
 AnimationSystem* ANIMATION_SYSTEM = nullptr;
 EventBus* EVENT_BUS = nullptr;
+AudioSystem* AUDIO_SYSTEM = nullptr;
 
 Application::Application() {}
 
@@ -69,6 +71,8 @@ void Application::start(Script<Scene>* script) {
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	ANIMATION_SYSTEM = new AnimationSystem();
 	EVENT_BUS = new EventBus();
+	AUDIO_SYSTEM = new AudioSystem();
+	AUDIO_SYSTEM->init();
 	m_uiManager = new UIManager();
 	m_uiManager->init(RESOURCE_MANAGER->loadFont(UIManager::kDefaultFontPath),
 					  m_graphicsPipeline->getWindow().get());
@@ -170,6 +174,11 @@ void Application::tick() {
 			}
 		}
 	}
+	// After scene transforms and physics interpolation: sync 3D listener and
+	// audio sources to their final frame poses and retire finished one-shots.
+	if (AUDIO_SYSTEM) {
+		AUDIO_SYSTEM->tick(delta);
+	}
 	// PROCESS SECTION END
 
 	{
@@ -220,11 +229,13 @@ void Application::deinit() {
 	m_scene = nullptr;
 	m_physicsServer.reset();
 	// After the scene: destroyed objects cancel their own animations and
-	// unsubscribe their event listeners.
+	// audio, and unsubscribe their event listeners.
 	delete EVENT_BUS;
 	EVENT_BUS = nullptr;
 	delete ANIMATION_SYSTEM;
 	ANIMATION_SYSTEM = nullptr;
+	delete AUDIO_SYSTEM;
+	AUDIO_SYSTEM = nullptr;
 
 	m_uiManager->deinit();
 	delete m_uiManager;
@@ -268,6 +279,10 @@ FixedStepClock& Application::getPhysicsClock() {
 
 UIManager* Application::getUIManager() {
 	return m_uiManager;
+}
+
+AudioSystem* Application::getAudioSystem() {
+	return AUDIO_SYSTEM;
 }
 
 }  // namespace bird

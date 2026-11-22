@@ -42,6 +42,9 @@ extern BIRD_API AnimationSystem* ANIMATION_SYSTEM;
 class EventBus;
 /** Engine-wide decoupled event bus shared by native systems and Dart scripts. */
 extern BIRD_API EventBus* EVENT_BUS;
+class AudioSystem;
+/** Engine-wide audio system for 2D/3D playback and hierarchical bus mixing. */
+extern BIRD_API AudioSystem* AUDIO_SYSTEM;
 class Component;
 class Scene;
 

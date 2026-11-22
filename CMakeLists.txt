@@ -139,6 +139,7 @@ add_library(
   $<TARGET_OBJECTS:animation>
   $<TARGET_OBJECTS:serialization>
   $<TARGET_OBJECTS:events>
+  $<TARGET_OBJECTS:audio>
 )
 if(BIRD_HOST_BUILD)
   add_executable(Bird src/main.cpp)
@@ -169,7 +170,10 @@ if(APPLE)
            "-framework OpenGL"
            "-framework AppKit"
            "-framework Metal"
-           "-framework QuartzCore")
+           "-framework QuartzCore"
+           "-framework CoreAudio"
+           "-framework AudioToolbox"
+           "-framework CoreFoundation")
 elseif(WIN32)
   if(MSVC)
     target_link_libraries(Bird_core PUBLIC user32 kernel32 opengl32 dbghelp)
@@ -179,7 +183,7 @@ elseif(WIN32)
 
   endif()
 elseif(UNIX AND NOT APPLE AND NOT ANDROID)
-  target_link_libraries(Bird_core PUBLIC -lpthread -ldl)
+  target_link_libraries(Bird_core PUBLIC -lpthread -ldl -lm)
   if(BIRD_PLATFORM STREQUAL "DESKTOP")
     # GLFW's X11 backend.
     find_package(X11 REQUIRED)
@@ -397,6 +401,7 @@ if(BIRD_ENABLE_HOT_RELOAD)
   # PUBLIC so installed consumers see the same ResourceManager layout.
   target_compile_definitions(Bird_core PUBLIC BIRD_ENABLE_HOT_RELOAD)
 endif()
+add_subdirectory(src/audio)
 
 target_link_libraries(
   Bird_core
@@ -476,7 +481,9 @@ install(
   DESTINATION include
   FILES_MATCHING
   PATTERN "*.h"
-  PATTERN "*.hpp")
+  PATTERN "*.hpp"
+  PATTERN "AudioInternal.h" EXCLUDE
+  PATTERN "third_party" EXCLUDE)
 install(
 	DIRECTORY assets/shaders/
 	DESTINATION assets/shaders

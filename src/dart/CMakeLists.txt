@@ -75,6 +75,10 @@ set(BIRD_SCRIPT_HEADERS
     ${CMAKE_SOURCE_DIR}/src/events/EventTypes.h
     ${CMAKE_SOURCE_DIR}/src/events/EventPayload.h
     ${CMAKE_SOURCE_DIR}/src/events/EventBus.h
+    ${CMAKE_SOURCE_DIR}/src/audio/AudioTypes.h
+    ${CMAKE_SOURCE_DIR}/src/audio/AudioSystem.h
+    ${CMAKE_SOURCE_DIR}/src/audio/AudioSourceComponent.h
+    ${CMAKE_SOURCE_DIR}/src/audio/AudioListenerComponent.h
     ${CMAKE_SOURCE_DIR}/src/Application.h
 )
 
