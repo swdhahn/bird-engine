@@ -130,9 +130,9 @@ else()
 endif()
 add_library(
   Bird_core ${BIRD_CORE_LIBRARY_TYPE}
-  ${BIRD_FILES} $<TARGET_OBJECTS:renders> $<TARGET_OBJECTS:opengl-renderer>
-  $<TARGET_OBJECTS:scene> $<TARGET_OBJECTS:physics>
-  $<TARGET_OBJECTS:animation>)
+  ${BIRD_FILES} $<TARGET_OBJECTS:diagnostics> $<TARGET_OBJECTS:renders>
+  $<TARGET_OBJECTS:opengl-renderer> $<TARGET_OBJECTS:scene>
+  $<TARGET_OBJECTS:physics> $<TARGET_OBJECTS:animation>)
 if(BIRD_HOST_BUILD)
   add_executable(Bird src/main.cpp)
   target_link_libraries(Bird Bird_core)
@@ -165,10 +165,10 @@ if(APPLE)
            "-framework QuartzCore")
 elseif(WIN32)
   if(MSVC)
-    target_link_libraries(Bird_core PUBLIC user32 kernel32 opengl32)
+    target_link_libraries(Bird_core PUBLIC user32 kernel32 opengl32 dbghelp)
     set_target_properties(Bird_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
   else()
-    target_link_libraries(Bird_core PUBLIC -luser32 -lkernel32 -lopengl32)
+    target_link_libraries(Bird_core PUBLIC -luser32 -lkernel32 -lopengl32 -ldbghelp)
 
   endif()
 elseif(UNIX AND NOT APPLE AND NOT ANDROID)
@@ -333,6 +333,28 @@ add_library(glm INTERFACE)
 target_include_directories(
   glm INTERFACE $<BUILD_INTERFACE:${BIRD_GLM_INCLUDE_DIR}>
                 $<INSTALL_INTERFACE:include>)
+# Diagnostics options: profiling macros, optional Tracy & cpptrace integrations.
+option(BIRD_ENABLE_PROFILING "Enable PROFILE_SCOPE/PROFILE_FRAME instrumentation" ON)
+option(BIRD_ENABLE_TRACY "Enable Tracy Profiler client integration" OFF)
+option(BIRD_ENABLE_CPPTRACE "Enable cpptrace stack trace library integration" OFF)
+
+set(BIRD_DIAGNOSTICS_LIBRARIES "")
+if(BIRD_ENABLE_TRACY)
+  find_package(Tracy CONFIG REQUIRED)
+  list(APPEND BIRD_DIAGNOSTICS_LIBRARIES Tracy::TracyClient)
+  target_compile_definitions(Bird_core PUBLIC BIRD_ENABLE_TRACY TRACY_ENABLE)
+endif()
+if(BIRD_ENABLE_CPPTRACE)
+  find_package(cpptrace CONFIG REQUIRED)
+  list(APPEND BIRD_DIAGNOSTICS_LIBRARIES cpptrace::cpptrace)
+endif()
+if(BIRD_ENABLE_PROFILING)
+  target_compile_definitions(Bird_core PUBLIC BIRD_ENABLE_PROFILING=1)
+else()
+  target_compile_definitions(Bird_core PUBLIC BIRD_ENABLE_PROFILING=0)
+endif()
+
+add_subdirectory(src/diagnostics)
 add_subdirectory(src/renders)
 include_directories(src/renders)
 add_subdirectory(src/scene)
@@ -347,6 +369,7 @@ target_link_libraries(
   PRIVATE ${BIRD_PLATFORM_LIBRARIES}
           ${BIRD_GL_LIBRARIES}
           ${BIRD_HOST_ONLY_LIBRARIES}
+          ${BIRD_DIAGNOSTICS_LIBRARIES}
           Jolt::Jolt)
 # Shader compilation (shaderc, SPIRV-Cross) lives in BirdBake/BuildTools;
 # the runtime only loads baked .bird shaders.

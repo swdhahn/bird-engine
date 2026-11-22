@@ -2,6 +2,10 @@
 
 #include <dart_api.h>
 
+#include <exception>
+
+#include "../diagnostics/Logger.h"
+
 namespace bird {
 
 namespace {
@@ -30,31 +34,63 @@ DartScriptComponent::DartScriptComponent(
 	  m_onDeinit(onDeinit),
 	  m_isolate(Dart_CurrentIsolate()) {}
 
+void DartScriptComponent::disable(const std::string& reason) {
+	if (m_disabled) return;
+	m_disabled = true;
+	m_disableReason = reason;
+	BIRD_LOG_ERROR("DartScript",
+				   "Disabling faulted DartScriptComponent: " +
+					   (reason.empty() ? "unhandled script error" : reason));
+}
+
 void DartScriptComponent::init() {
-	if (m_onInit) {
+	if (m_disabled || !m_onInit) return;
+	try {
 		ScopedIsolateEntry guard(m_isolate);
 		m_onInit(static_cast<void*>(world_object()));
+	} catch (const std::exception& e) {
+		disable(std::string("Exception in init(): ") + e.what());
+	} catch (...) {
+		disable("Unknown exception in init()");
 	}
 }
 
 void DartScriptComponent::process(float delta) {
-	if (m_onProcess) {
+	if (m_disabled || !m_onProcess) return;
+	try {
 		ScopedIsolateEntry guard(m_isolate);
 		m_onProcess(static_cast<void*>(world_object()), delta);
+	} catch (const std::exception& e) {
+		disable(std::string("Exception in process(): ") + e.what());
+	} catch (...) {
+		disable("Unknown exception in process()");
 	}
 }
 
 void DartScriptComponent::physicsProcess(float fixedDelta) {
-	if (m_onPhysicsProcess) {
+	if (m_disabled || !m_onPhysicsProcess) return;
+	try {
 		ScopedIsolateEntry guard(m_isolate);
 		m_onPhysicsProcess(static_cast<void*>(world_object()), fixedDelta);
+	} catch (const std::exception& e) {
+		disable(std::string("Exception in physicsProcess(): ") + e.what());
+	} catch (...) {
+		disable("Unknown exception in physicsProcess()");
 	}
 }
 
 void DartScriptComponent::deinit() {
-	if (m_onDeinit) {
+	if (!m_onDeinit) return;
+	// Always invoke m_onDeinit even if disabled so Dart closes its
+	// NativeCallables cleanly; Dart's error boundary skips user deinit() if
+	// already disabled and still releases native callback handles.
+	try {
 		ScopedIsolateEntry guard(m_isolate);
 		m_onDeinit(static_cast<void*>(world_object()));
+	} catch (const std::exception& e) {
+		disable(std::string("Exception in deinit(): ") + e.what());
+	} catch (...) {
+		disable("Unknown exception in deinit()");
 	}
 }
 
@@ -80,6 +116,13 @@ BIRD_DART_C_API void* bird_DartScriptComponent_new(
 	BirdDartPhysicsProcessFn onPhysicsProcess, BirdDartDeinitFn onDeinit) {
 	return new bird::DartScriptComponent(onInit, onProcess, onPhysicsProcess,
 										 onDeinit);
+}
+
+BIRD_DART_C_API void bird_DartScriptComponent_disable(void* componentPtr,
+													  const char* reason) {
+	if (!componentPtr) return;
+	auto* comp = static_cast<bird::DartScriptComponent*>(componentPtr);
+	comp->disable(reason ? std::string(reason) : std::string());
 }
 
 }  // extern "C"

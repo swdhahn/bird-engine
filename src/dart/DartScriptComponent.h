@@ -26,6 +26,16 @@ typedef void (*BirdDartDeinitFn)(void* hostWorldObject);
 BIRD_DART_C_API void* bird_DartScriptComponent_new(
 	BirdDartInitFn onInit, BirdDartProcessFn onProcess,
 	BirdDartPhysicsProcessFn onPhysicsProcess, BirdDartDeinitFn onDeinit);
+
+/**
+ * Disables a single DartScriptComponent after an unhandled Dart exception so
+ * subsequent lifecycle callbacks are skipped without crashing the engine.
+ *
+ * @param componentPtr Pointer previously returned by `bird_DartScriptComponent_new`.
+ * @param reason       Optional UTF-8 error summary (may be null).
+ */
+BIRD_DART_C_API void bird_DartScriptComponent_disable(void* componentPtr,
+													  const char* reason);
 }
 
 namespace bird {
@@ -47,12 +57,28 @@ class DartScriptComponent : public ProcessScriptComponent {
 	void physicsProcess(float fixedDelta) override;
 	void deinit() override;
 
+	/**
+	 * Marks this script component as faulted/disabled so no further `init`,
+	 * `process`, or `physicsProcess` callbacks are dispatched to Dart.
+	 *
+	 * @param reason Human-readable explanation of the fault.
+	 */
+	void disable(const std::string& reason);
+
+	/** Returns true if this script component was disabled after an error. */
+	bool isDisabled() const { return m_disabled; }
+
+	/** Returns the fault reason recorded when `disable()` was called. */
+	const std::string& disableReason() const { return m_disableReason; }
+
    private:
 	BirdDartInitFn m_onInit;
 	BirdDartProcessFn m_onProcess;
 	BirdDartPhysicsProcessFn m_onPhysicsProcess;
 	BirdDartDeinitFn m_onDeinit;
 	Dart_Isolate m_isolate;
+	bool m_disabled = false;
+	std::string m_disableReason;
 };
 
 /**

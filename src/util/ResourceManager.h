@@ -141,6 +141,28 @@ class ResourceManager {
 	 */
 	std::shared_ptr<Shader> getDefaultShader();
 
+	/**
+	 * Enables or disables automatic fallback assets (magenta checkerboard
+	 * texture, unlit fallback material, and unit cube mesh) when an asset
+	 * fails to load. Enabled by default.
+	 */
+	void setUseFallbackAssets(bool enabled) { m_useFallbackAssets = enabled; }
+
+	/** Returns true if missing/corrupt assets return graceful fallbacks. */
+	bool usesFallbackAssets() const { return m_useFallbackAssets; }
+
+	/**
+	 * Returns the lazily created magenta/black checkerboard fallback texture.
+	 * @param srgb When true, returns the sRGB variant for color slots.
+	 */
+	std::shared_ptr<Texture> getFallbackTexture(bool srgb = false);
+
+	/** Returns the lazily created fallback material using the checkerboard texture. */
+	std::shared_ptr<Material> getFallbackMaterial();
+
+	/** Returns the lazily created fallback 1x1x1 unit cube mesh. */
+	std::shared_ptr<Mesh> getFallbackMesh();
+
 	/** Root working directory prepended to relative asset paths. */
 	static inline std::string RESOURCE_PATH = "";
 
@@ -149,6 +171,11 @@ class ResourceManager {
 													   bool srgb);
 
 	std::shared_ptr<Shader> m_defaultShader;
+	std::shared_ptr<Texture> m_fallbackTextureLinear;
+	std::shared_ptr<Texture> m_fallbackTextureSrgb;
+	std::shared_ptr<Material> m_fallbackMaterial;
+	std::shared_ptr<Mesh> m_fallbackMesh;
+	bool m_useFallbackAssets = true;
 	std::unordered_map<std::string, std::shared_ptr<Resource>>* m_resources;
 	std::unordered_map<std::string, std::vector<std::shared_ptr<Mesh>>>
 		m_meshes;
