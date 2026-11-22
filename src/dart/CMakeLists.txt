@@ -69,6 +69,10 @@ set(BIRD_SCRIPT_HEADERS
     ${CMAKE_SOURCE_DIR}/src/animation/Curves.h
     ${CMAKE_SOURCE_DIR}/src/animation/WorldTweens.h
     ${CMAKE_SOURCE_DIR}/src/animation/skeletal/SkeletalAnimationComponent.h
+    ${CMAKE_SOURCE_DIR}/src/audio/AudioTypes.h
+    ${CMAKE_SOURCE_DIR}/src/audio/AudioSystem.h
+    ${CMAKE_SOURCE_DIR}/src/audio/AudioSourceComponent.h
+    ${CMAKE_SOURCE_DIR}/src/audio/AudioListenerComponent.h
     ${CMAKE_SOURCE_DIR}/src/Application.h
 )
 
