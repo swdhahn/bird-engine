@@ -6,6 +6,7 @@
 #define BIRD_APPLICATION_H
 
 #include <algorithm>
+#include <functional>
 #include <vector>
 
 #include "navigation/NavServer.h"
@@ -120,6 +121,28 @@ class Application {
 	UIManager* getUIManager();
 	/** Engine-wide audio subsystem (2D/3D playback and mixing buses). */
 	AudioSystem* getAudioSystem();
+	/** Returns the active root scene hierarchy owned by the application. */
+	Scene* getRootScene() const { return m_scene; }
+
+	/**
+	 * Pauses or resumes game simulation (physics stepping, ProcessScript
+	 * callbacks, and world animations). UI, editor callbacks, scene matrix
+	 * updates, and rendering continue to run while paused.
+	 * @param paused True to freeze simulation (Edit/Pause mode), false to run.
+	 */
+	void setSimulationPaused(bool paused) { m_simulationPaused = paused; }
+	/** @return True when game simulation is currently paused. */
+	bool isSimulationPaused() const { return m_simulationPaused; }
+
+	/**
+	 * Registers an optional per-frame editor callback invoked during tick()
+	 * even when simulation is paused (after UI processing, before scene
+	 * matrix resolution and rendering).
+	 */
+	BIRD_NO_EXPORT void setEditorTickCallback(
+		std::function<void(float)> callback) {
+		m_editorTickCallback = std::move(callback);
+	}
 
 	/** Global physics state; every scene's PhysicsWorld is stepped through it. */
 	PhysicsServer* getPhysicsServer();
@@ -160,10 +183,12 @@ class Application {
 	FixedStepClock m_physicsClock;
 	bool m_physicsDebugDraw = false;
 	bool m_physicsInterpolation = true;
+	bool m_simulationPaused = false;
 	PhysicsDebugSettings m_physicsDebugSettings;
 	bool m_navDebugDraw = false;
 	NavDebugSettings m_navDebugSettings;
 	Scene* m_scene;
+	std::function<void(float)> m_editorTickCallback;
 
 	std::vector<ProcessScriptComponent*> m_processableScripts;
 

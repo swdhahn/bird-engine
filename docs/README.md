@@ -43,6 +43,7 @@ flowchart TD
     Arch --> A15["Image-Based Lighting & Skybox"]
     Arch --> A16["Frustum Culling"]
     Arch --> A17["CPU Billboard Particle System"]
+    Arch --> A18["Level Editor & Gizmos"]
 ```
 
 ---
@@ -88,3 +89,4 @@ Under-the-hood technical references detailing internal mechanics and design deci
 - **[Image-Based Lighting (IBL) & Skybox](architecture/ibl_and_skybox.md)**: HDR environment cubemaps (procedural sky, equirectangular `.hdr`, or 6 cubemap faces), diffuse irradiance convolution, GGX specular prefiltering, the 2D split-sum BRDF LUT, and `GLSkyboxPass`.
 - **[Frustum Culling](architecture/frustum_culling.md)**: Gribb/Hartmann 6-plane extraction, local and Arvo-transformed world `AABB` / `BoundingSphere` bounds, deferred & forward pass culling, and `CullingStats` runtime profiling.
 - **[CPU Billboard Particle & VFX System](architecture/particle_system.md)**: Zero-allocation fixed-capacity `ParticleEmitter` simulation, spawn rates and scheduled bursts, color/size-over-life curves, and batched camera-facing quad rendering in the forward transparency pass.
+- **[Level Editor](architecture/level_editor.md)**: Edit/Play/Pause mode switching, free-fly viewport camera, custom UI panels (`HierarchyPanel`, `InspectorPanel`, `EditorToolbar`), 3D raycast picking, interactive Translate/Rotate/Scale gizmos, Undo/Redo command stack, and exposing custom components via `ComponentInspectorRegistry`.

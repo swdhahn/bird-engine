@@ -47,6 +47,19 @@ class DebugDrawList {
 		m_vertices.push_back({to, color});
 	}
 
+	/**
+	 * Transient world-space line always drawn on top of scene geometry
+	 * (depth test disabled), used for editor gizmos and x-ray handles.
+	 * @param from World-space start point.
+	 * @param to World-space end point.
+	 * @param color RGBA line color.
+	 */
+	void overlayLine(const Vector3& from, const Vector3& to,
+					 const Vector4& color) {
+		m_overlayVertices.push_back({from, color});
+		m_overlayVertices.push_back({to, color});
+	}
+
 	/** Twelve edges of an axis-aligned box. */
 	void box(const Vector3& min, const Vector3& max, const Vector4& color) {
 		const Vector3 c[8] = {{min.x, min.y, min.z}, {max.x, min.y, min.z},
@@ -82,6 +95,7 @@ class DebugDrawList {
 	/** Starts a frame: drops transient lines and layers unused last frame. */
 	void clear() {
 		m_vertices.clear();
+		m_overlayVertices.clear();
 		for (auto it = m_layers.begin(); it != m_layers.end();) {
 			if (!it->second.used) {
 				it = m_layers.erase(it);
@@ -94,7 +108,7 @@ class DebugDrawList {
 
 	/** True when nothing would be drawn this frame. */
 	bool empty() const {
-		if (!m_vertices.empty()) return false;
+		if (!m_vertices.empty() || !m_overlayVertices.empty()) return false;
 		for (const auto& [key, layer] : m_layers) {
 			if (layer.used && !layer.vertices.empty()) return false;
 		}
@@ -102,9 +116,13 @@ class DebugDrawList {
 	}
 	/** Transient vertices, two per line. */
 	const std::vector<DebugVertex>& vertices() const { return m_vertices; }
-	/** Transient lines plus lines in used cached layers. */
+	/** Always-on-top transient overlay vertices, two per line. */
+	const std::vector<DebugVertex>& overlayVertices() const {
+		return m_overlayVertices;
+	}
+	/** Transient lines plus overlay lines plus lines in used cached layers. */
 	size_t lineCount() const {
-		size_t count = m_vertices.size();
+		size_t count = m_vertices.size() + m_overlayVertices.size();
 		for (const auto& [key, layer] : m_layers) {
 			if (layer.used) count += layer.vertices.size();
 		}
@@ -116,6 +134,7 @@ class DebugDrawList {
 
    private:
 	std::vector<DebugVertex> m_vertices;
+	std::vector<DebugVertex> m_overlayVertices;
 	std::unordered_map<const void*, DebugDrawLayer> m_layers;
 };
 

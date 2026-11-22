@@ -121,16 +121,18 @@ void Application::tick() {
 	// Debug lines are rebuilt every frame (physics first, then scripts).
 	m_graphicsPipeline->getDebugDraw().clear();
 
-	// PHYSICS SECTION: zero or more fixed steps
+	// PHYSICS SECTION: zero or more fixed steps (skipped while paused)
 	{
 		PROFILE_SCOPE("Physics");
-		const int physicsSteps = m_physicsClock.advance(delta);
-		const float fixedStep = m_physicsClock.getStep();
-		for (int step = 0; step < physicsSteps; step++) {
-			for (size_t i = 0; i < m_processableScripts.size(); i++) {
-				m_processableScripts[i]->physicsProcess(fixedStep);
+		if (!m_simulationPaused) {
+			const int physicsSteps = m_physicsClock.advance(delta);
+			const float fixedStep = m_physicsClock.getStep();
+			for (int step = 0; step < physicsSteps; step++) {
+				for (size_t i = 0; i < m_processableScripts.size(); i++) {
+					m_processableScripts[i]->physicsProcess(fixedStep);
+				}
+				m_physicsServer->step(fixedStep);
 			}
-			m_physicsServer->step(fixedStep);
 		}
 		if (m_physicsDebugDraw) {
 			Camera* camera = m_graphicsPipeline->getCamera();
@@ -151,7 +153,12 @@ void Application::tick() {
 		PROFILE_SCOPE("UI");
 		m_uiManager->process(delta);
 	}
-	{
+	if (m_editorTickCallback) {
+		m_editorTickCallback(delta);
+	}
+	// Simulation (scripts, navigation and world animations) freezes while
+	// paused; UI, the editor, matrices, audio and rendering keep running.
+	if (!m_simulationPaused) {
 		PROFILE_SCOPE("Scripts");
 		for (size_t i = 0; i < m_processableScripts.size(); i++) {
 			m_processableScripts[i]->process(delta);
@@ -161,7 +168,9 @@ void Application::tick() {
 	// for the frame), before matrices update and skinning palettes upload.
 	{
 		PROFILE_SCOPE("Navigation");
-		m_navServer->step(delta);
+		if (!m_simulationPaused) {
+			m_navServer->step(delta);
+		}
 		if (m_navDebugDraw) {
 			for (NavWorld* world : m_navServer->getWorlds()) {
 				world->debugDraw(m_graphicsPipeline->getDebugDraw(),
@@ -169,7 +178,7 @@ void Application::tick() {
 			}
 		}
 	}
-	{
+	if (!m_simulationPaused) {
 		PROFILE_SCOPE("Animation");
 		ANIMATION_SYSTEM->tick(delta);
 	}
@@ -179,7 +188,7 @@ void Application::tick() {
 		processScene(m_scene, delta);
 		// After matrix updates: draw moving bodies between their last two
 		// physics poses so motion is smooth at any frame rate.
-		if (m_physicsInterpolation) {
+		if (!m_simulationPaused && m_physicsInterpolation) {
 			for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
 				world->interpolate(m_physicsClock.getAlpha());
 			}

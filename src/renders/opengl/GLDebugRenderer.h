@@ -44,6 +44,7 @@ class GLDebugRenderer {
 	};
 
 	std::unique_ptr<LineBuffer> m_transient;
+	std::unique_ptr<LineBuffer> m_overlay;
 	std::unordered_map<const void*, std::unique_ptr<LineBuffer>> m_layers;
 };
 

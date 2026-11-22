@@ -141,6 +141,7 @@ add_library(
   $<TARGET_OBJECTS:serialization>
   $<TARGET_OBJECTS:events>
   $<TARGET_OBJECTS:audio>
+  $<TARGET_OBJECTS:editor>
 )
 if(BIRD_HOST_BUILD)
   add_executable(Bird src/main.cpp)
@@ -421,6 +422,7 @@ if(BIRD_ENABLE_HOT_RELOAD)
   target_compile_definitions(Bird_core PUBLIC BIRD_ENABLE_HOT_RELOAD)
 endif()
 add_subdirectory(src/audio)
+add_subdirectory(src/editor)
 
 target_link_libraries(
   Bird_core
