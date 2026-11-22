@@ -132,7 +132,7 @@ add_library(
   Bird_core ${BIRD_CORE_LIBRARY_TYPE}
   ${BIRD_FILES} $<TARGET_OBJECTS:renders> $<TARGET_OBJECTS:opengl-renderer>
   $<TARGET_OBJECTS:scene> $<TARGET_OBJECTS:physics>
-  $<TARGET_OBJECTS:animation>)
+  $<TARGET_OBJECTS:animation> $<TARGET_OBJECTS:audio>)
 if(BIRD_HOST_BUILD)
   add_executable(Bird src/main.cpp)
   target_link_libraries(Bird Bird_core)
@@ -162,7 +162,10 @@ if(APPLE)
            "-framework OpenGL"
            "-framework AppKit"
            "-framework Metal"
-           "-framework QuartzCore")
+           "-framework QuartzCore"
+           "-framework CoreAudio"
+           "-framework AudioToolbox"
+           "-framework CoreFoundation")
 elseif(WIN32)
   if(MSVC)
     target_link_libraries(Bird_core PUBLIC user32 kernel32 opengl32)
@@ -172,7 +175,7 @@ elseif(WIN32)
 
   endif()
 elseif(UNIX AND NOT APPLE AND NOT ANDROID)
-  target_link_libraries(Bird_core PUBLIC -lpthread -ldl)
+  target_link_libraries(Bird_core PUBLIC -lpthread -ldl -lm)
   if(BIRD_PLATFORM STREQUAL "DESKTOP")
     # GLFW's X11 backend.
     find_package(X11 REQUIRED)
@@ -340,6 +343,7 @@ include_directories(src/scene)
 add_subdirectory(src/physics)
 include_directories(src/physics)
 add_subdirectory(src/animation)
+add_subdirectory(src/audio)
 
 target_link_libraries(
   Bird_core
@@ -418,7 +422,9 @@ install(
   DESTINATION include
   FILES_MATCHING
   PATTERN "*.h"
-  PATTERN "*.hpp")
+  PATTERN "*.hpp"
+  PATTERN "AudioInternal.h" EXCLUDE
+  PATTERN "third_party" EXCLUDE)
 install(
 	DIRECTORY assets/shaders/
 	DESTINATION assets/shaders
