@@ -15,11 +15,15 @@ constexpr float MIN_CONE_ANGLE = 0.001f;
 LightComponent::LightComponent(LightType type) : Component(), m_type(type) {}
 
 void LightComponent::init() {
-	APPLICATION->getGraphicsPipeline()->addLight(this);
+	if (APPLICATION && APPLICATION->getGraphicsPipeline()) {
+		APPLICATION->getGraphicsPipeline()->addLight(this);
+	}
 }
 
 void LightComponent::deinit() {
-	APPLICATION->getGraphicsPipeline()->removeLight(this);
+	if (APPLICATION && APPLICATION->getGraphicsPipeline()) {
+		APPLICATION->getGraphicsPipeline()->removeLight(this);
+	}
 }
 
 void LightComponent::setColor(const Vector3& color) {

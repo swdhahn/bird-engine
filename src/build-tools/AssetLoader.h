@@ -35,9 +35,23 @@ class AssetLoader {
 	/**
 	 * Compiles every supported asset under assetPath into .bird files,
 	 * continuing past failures so that one run reports all of them.
+	 * @param assetPath Root directory to recursively scan.
+	 * @param force When true, recompiles assets even if their .bird cache is up to date.
 	 * @return The number of assets that failed to compile.
 	 */
-	size_t init(std::string assetPath);
+	size_t init(std::string assetPath, bool force = false);
+
+	/**
+	 * Compiles a single supported source asset into its corresponding .bird
+	 * binary representation. Used by the hot-reload pipeline to recompile only
+	 * the modified file without rescanning the entire asset tree.
+	 *
+	 * @param filePath Path to the source asset file.
+	 * @param force When true, ignores staleness checks and always overwrites .bird.
+	 * @return True on success (or if the file extension is unsupported/ignored);
+	 *         false if compilation failed (error is written to std::cerr).
+	 */
+	bool compileFile(const std::string& filePath, bool force = false);
 
 	void loadAsset();
 
@@ -85,6 +99,7 @@ class AssetLoader {
 
    private:
 	Assimp::Importer importer;
+	bool m_forceRebuild = false;
 };
 }  // namespace bird
 

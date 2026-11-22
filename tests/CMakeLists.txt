@@ -5,9 +5,17 @@ add_executable(Bird_unit_tests
   UIColorTest.cpp UIRichInputsTest.cpp PhysicsTest.cpp NavigationTest.cpp
   MaterialTest.cpp RenderQueueTest.cpp ShadowTest.cpp ResourceConventionTest.cpp
   GLCapabilitiesTest.cpp PlatformTest.cpp
-  AnimationCoreTest.cpp UIAnimationTest.cpp SkeletalAnimationTest.cpp)
+  AnimationCoreTest.cpp UIAnimationTest.cpp SkeletalAnimationTest.cpp
+  SerializationTest.cpp
+  EventBusTest.cpp
+  DiagnosticsTest.cpp
+  AudioTest.cpp
+)
 target_include_directories(Bird_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(Bird_unit_tests PRIVATE Bird_core GTest::gtest_main)
+if(BIRD_ENABLE_HOT_RELOAD)
+  target_sources(Bird_unit_tests PRIVATE HotReloadTest.cpp)
+endif()
 
 include(GoogleTest)
 gtest_discover_tests(Bird_unit_tests)

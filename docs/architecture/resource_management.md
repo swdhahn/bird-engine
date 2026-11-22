@@ -115,3 +115,9 @@ auto block = bird::BufferBuilder<MyBlock>(bird::BUFFER_UNIFORM | bird::BUFFER_ST
 ```
 
 `BufferBuilder::build()` uploads uniform buffers immediately and applies their binding point. Vertex and index streams remain CPU-side until the `MeshBuilder` that receives them builds the mesh, because attribute setup requires the mesh's vertex array object.
+
+---
+
+## 4. Development Hot-Reloading
+
+In development builds (`BIRD_ENABLE_HOT_RELOAD=ON`), `ResourceManager` integrates with `bird::hotreload::HotReloadManager` to watch raw source assets, invoke `BuildTools` asynchronously on modified files, and swap GPU/CPU handles in place once per frame via `ResourceManager::pollHotReloads()`. See **[Asset Hot-Reloading](hot_reloading.md)** for full details.

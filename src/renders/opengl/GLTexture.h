@@ -29,6 +29,12 @@ class GLTexture : public Texture {
 
 	uint32_t getTextureID();
 
+	/**
+	 * Swaps the OpenGL texture object ID alongside base pixel/dimension state
+	 * in place. Called on the main GL thread during hot-reload.
+	 */
+	void swapFrom(Texture& other) override;
+
    private:
 	uint32_t m_textureID;
 };

@@ -137,6 +137,18 @@ class Texture : public Resource {
 	uint32_t getWidth();
 	uint32_t getHeight();
 
+	/**
+	 * Swaps CPU pixel storage, dimensions, format, and backend GPU handle in
+	 * place with another Texture.
+	 *
+	 * Existing std::shared_ptr<Texture> holders (materials, UI, user scripts)
+	 * observe the updated image immediately on the next draw while `other`'s
+	 * destructor releases the previous GPU handle and pixel buffer.
+	 *
+	 * @param other Freshly uploaded Texture to swap into *this.
+	 */
+	BIRD_NO_EXPORT virtual void swapFrom(Texture& other);
+
    protected:
 	uint8_t* m_pData;
 	uint32_t m_width, m_height;

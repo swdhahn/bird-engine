@@ -25,6 +25,7 @@
 namespace bird {
 
 class UIManager;
+class AudioSystem;
 
 /**
  * Central engine orchestrator.
@@ -80,11 +81,12 @@ class Application {
 	 * 1. Computes delta time from the platform clock.
 	 * 2. Updates camera matrices if dirty.
 	 * 3. Steps physics at its fixed rate.
-	 * 4. Ticks UIManager layout, animations, and modals.
-	 * 5. Calls process(delta) on all registered ProcessScript instances.
-	 * 6. Recursively updates dirty scene transform matrices via processScene().
-	 * 7. Renders the active scene and overlays UI via the graphics pipeline.
-	 * 8. Ticks input, presents the frame, and polls platform window events.
+	 * 4. Dispatches queued events on EVENT_BUS.
+	 * 5. Ticks UIManager layout, animations, and modals.
+	 * 6. Calls process(delta) on all registered ProcessScript instances.
+	 * 7. Recursively updates dirty scene transform matrices via processScene().
+	 * 8. Renders the active scene and overlays UI via the graphics pipeline.
+	 * 9. Ticks input, presents the frame, and polls platform window events.
 	 */
 	void tick();
 
@@ -116,6 +118,8 @@ class Application {
 
 	GraphicsPipeline* getGraphicsPipeline();
 	UIManager* getUIManager();
+	/** Engine-wide audio subsystem (2D/3D playback and mixing buses). */
+	AudioSystem* getAudioSystem();
 
 	/** Global physics state; every scene's PhysicsWorld is stepped through it. */
 	PhysicsServer* getPhysicsServer();

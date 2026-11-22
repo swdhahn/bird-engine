@@ -124,6 +124,15 @@ class Material : public Resource {
 	 */
 	Buffer<MaterialUBOData>* acquireUniformBuffer() BIRD_NO_EXPORT;
 
+	/**
+	 * Replaces all PBR scalar parameters, flags, and texture bindings in place
+	 * from `other` and marks the GPU uniform buffer dirty for re-upload on the
+	 * next draw call.
+	 *
+	 * @param other Freshly loaded Material whose properties replace *this.
+	 */
+	BIRD_NO_EXPORT void swapFrom(Material& other);
+
    private:
 	Material& markDirty();
 

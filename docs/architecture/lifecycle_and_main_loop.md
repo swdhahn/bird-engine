@@ -44,7 +44,8 @@ flowchart TD
     CamCheck -- Yes --> CamUpdate["Camera::updateTransformationMatrix()"]
     CamCheck -- No --> Physics["3. Fixed steps: physicsProcess(fixedDelta), then PhysicsServer::step()"]
     CamUpdate --> Physics
-    Physics --> UITick["3b. UIManager::process(delta)"]
+    Physics --> Events["3a. EVENT_BUS->dispatchQueued()"]
+    Events --> UITick["3b. UIManager::process(delta)"]
     UITick --> Scripts["4. ProcessScript::process(delta) on all registered scripts"]
     Scripts --> SceneProc["5. Application::processScene() (Recurse dirty WorldObjects)"]
     SceneProc --> Render["6. GraphicsPipeline::renderRootScene()"]

@@ -282,6 +282,232 @@ void runPhysicsIntegrationChecks() {
   server.dispose();
 }
 
+int _cppToDartImmediateScore = 0;
+int _cppToDartQueuedScore = 0;
+int _cppToDartSubId = 0;
+
+class _EventListenerScript extends BirdScript<WorldObject> {
+  int hits = 0;
+  int lastAmount = 0;
+
+  @override
+  void init() {
+    // Subscribed inside BirdScript.init() without explicit owner:
+    // automatically bound to object.getID() via Zone and cleaned up on deinit!
+    Events.subscribe('entity.ping', (payload) {
+      hits++;
+      lastAmount = (payload['amount'] as int?) ?? 0;
+    });
+  }
+}
+
+/// Tests Dart Events API: queued vs immediate dispatch, self-unsubscribe during
+/// dispatch, cross-boundary Dart -> C++ emission, C++ -> Dart reception,
+/// native physics -> Dart event bus delivery, and automatic entity cleanup.
+@pragma('vm:entry-point')
+void runEventBusIntegrationChecks() {
+  // 1. Queued vs Immediate order in Dart
+  final order = <String>[];
+  final subOrder = Events.subscribe('dart.order', (payload) {
+    order.add(payload['step'] as String);
+  });
+
+  Events.emit('dart.order', {'step': 'queued-1'});
+  Events.emit('dart.order', {'step': 'queued-2'});
+  if (order.isNotEmpty) {
+    throw StateError('Queued events must not fire before dispatchQueued()');
+  }
+
+  Events.emitImmediate('dart.order', {'step': 'immediate-1'});
+  if (order.length != 1 || order[0] != 'immediate-1') {
+    throw StateError('Expected immediate-1 first, got $order');
+  }
+
+  final dispatched = Events.dispatchQueued();
+  if (dispatched != 2 ||
+      order.length != 3 ||
+      order[1] != 'queued-1' ||
+      order[2] != 'queued-2') {
+    throw StateError('Unexpected queued dispatch order: $order');
+  }
+  Events.unsubscribe(subOrder);
+
+  // 2. Full payload types round-trip (null, bool, int, double, String, Vector2/3/4)
+  Map<String, Object?>? receivedPayload;
+  final subTypes = Events.subscribe('dart.types', (payload) {
+    receivedPayload = payload;
+  });
+  Events.emitImmediate('dart.types', {
+    'nil': null,
+    'b': true,
+    'i': -123456789,
+    'd': 3.14159,
+    's': 'feather',
+    'v2': Vector2(1.0, 2.0),
+    'v3': Vector3(3.0, 4.0, 5.0),
+    'v4': Vector4(6.0, 7.0, 8.0, 9.0),
+  });
+  Events.unsubscribe(subTypes);
+
+  final p = receivedPayload;
+  if (p == null ||
+      !p.containsKey('nil') ||
+      p['nil'] != null ||
+      p['b'] != true ||
+      p['i'] != -123456789 ||
+      ((p['d'] as double) - 3.14159).abs() > 1e-6 ||
+      p['s'] != 'feather' ||
+      (p['v2'] as Vector2).y != 2.0 ||
+      (p['v3'] as Vector3).z != 5.0 ||
+      (p['v4'] as Vector4).w != 9.0) {
+    throw StateError('Payload round-trip mismatch: $p');
+  }
+
+  // 3. Safe unsubscribe during dispatch
+  var selfUnsubCalls = 0;
+  var siblingCalls = 0;
+  late int selfId;
+  late int siblingId;
+  selfId = Events.subscribe('dart.unsub', (_) {
+    selfUnsubCalls++;
+    Events.unsubscribe(selfId);
+    Events.unsubscribe(siblingId);
+  });
+  siblingId = Events.subscribe('dart.unsub', (_) {
+    siblingCalls++;
+  });
+  Events.emitImmediate('dart.unsub');
+  Events.emitImmediate('dart.unsub');
+  if (selfUnsubCalls != 1 || siblingCalls != 0) {
+    throw StateError(
+      'Safe mid-dispatch unsubscribe failed: self=$selfUnsubCalls sibling=$siblingCalls',
+    );
+  }
+
+  // 4. Automatic lifecycle cleanup when BirdScript entity is removed / deinitialized
+  final scene = Scene();
+  scene.init(null);
+
+  final entity = WorldObject();
+  final listenerScript = _EventListenerScript();
+  entity.addComponent(listenerScript.createComponent());
+  scene.addChild(entity);
+
+  final callbacksBefore = Events.activeDartCallbackCount;
+  Events.emitImmediate('entity.ping', {'amount': 42});
+  if (listenerScript.hits != 1 || listenerScript.lastAmount != 42) {
+    throw StateError(
+      'Expected _EventListenerScript to receive entity.ping once, got ${listenerScript.hits}',
+    );
+  }
+
+  // Removing the child runs WorldObject::deinit(), which unsubscribes all
+  // listeners owned by entity.getID() and invokes the Dart unsubscribe hook.
+  scene.removeChild(entity);
+  if (Events.activeDartCallbackCount >= callbacksBefore) {
+    throw StateError(
+      'Expected Dart callback map to shrink on entity deinit '
+      '(before=$callbacksBefore, after=${Events.activeDartCallbackCount})',
+    );
+  }
+
+  Events.emitImmediate('entity.ping', {'amount': 99});
+  if (listenerScript.hits != 1 || listenerScript.lastAmount != 42) {
+    throw StateError(
+      'Destroyed entity must NOT receive events after removeChild/deinit!',
+    );
+  }
+
+  scene.deinit();
+  scene.dispose();
+
+  // 5. Native Physics -> Dart EventBus subscription ('physics.contact_begin')
+  final physServer = PhysicsServer(PhysicsServerSettings());
+  final physScene = Scene();
+  final physWorld = physScene.createPhysicsWorld(PhysicsWorldSettings())!;
+  physScene.init(null);
+
+  final floorObj = WorldObject()..setWorldPosition(Vector3(0.0, -0.5, 0.0));
+  final floorSettings = RigidBodySettings()..motionType = MotionType.Static;
+  floorObj.addComponent(
+    RigidBodyComponent(
+      CollisionShape.box(Vector3(10.0, 0.5, 10.0)),
+      floorSettings,
+    ),
+  );
+  physScene.addChild(floorObj);
+
+  final boxObj = WorldObject()..setWorldPosition(Vector3(0.0, 1.5, 0.0));
+  final boxSettings = RigidBodySettings()..motionType = MotionType.Dynamic;
+  boxObj.addComponent(
+    RigidBodyComponent(
+      CollisionShape.box(Vector3(0.5, 0.5, 0.5)),
+      boxSettings,
+    ),
+  );
+  physScene.addChild(boxObj);
+
+  var busContactCount = 0;
+  final physSub = Events.subscribe('physics.contact_begin', (payload) {
+    if (payload.containsKey('selfEntityId') &&
+        payload.containsKey('otherEntityId') &&
+        payload['point'] is Vector3) {
+      busContactCount++;
+    }
+  });
+
+  for (var i = 0; i < 60; i++) {
+    physWorld.step(1.0 / 60.0);
+    Events.dispatchQueued();
+  }
+  Events.unsubscribe(physSub);
+  if (busContactCount < 1) {
+    throw StateError(
+      'Expected Dart Events subscriber to receive physics.contact_begin from native Jolt step',
+    );
+  }
+
+  physScene.deinit();
+  physScene.dispose();
+  floorSettings.dispose();
+  boxSettings.dispose();
+  physServer.dispose();
+
+  // 6. Subscribe to 'cpp.to_dart' and emit 'dart.to_cpp.*' back to C++
+  _cppToDartSubId = Events.subscribe('cpp.to_dart', (payload) {
+    final origin = payload['origin'] as String?;
+    final score = (payload['score'] as int?) ?? 0;
+    if (origin == 'cpp-immediate') {
+      _cppToDartImmediateScore = score;
+    } else if (origin == 'cpp-queued') {
+      _cppToDartQueuedScore = score;
+    }
+  });
+
+  Events.emitImmediate('dart.to_cpp.immediate', {
+    'tag': 'from-dart',
+    'damage': 77,
+    'pos': Vector3(1.5, -2.5, 3.5),
+  });
+  Events.emit('dart.to_cpp.queued', {'queued': true});
+}
+
+@pragma('vm:entry-point')
+void verifyCppToDartEventsAndCleanup() {
+  if (_cppToDartImmediateScore != 500) {
+    throw StateError(
+      'Expected cpp-immediate score 500, got $_cppToDartImmediateScore',
+    );
+  }
+  if (_cppToDartQueuedScore != 1000) {
+    throw StateError(
+      'Expected cpp-queued score 1000, got $_cppToDartQueuedScore',
+    );
+  }
+  Events.unsubscribe(_cppToDartSubId);
+  Events.shutdown();
+}
+
 /// Tests Recast/Detour NavMesh loading, pathfinding queries, and NavAgent
 /// crowd movement (`setDestination`, `stop`, `hasReachedDestination`) from Dart.
 @pragma('vm:entry-point')

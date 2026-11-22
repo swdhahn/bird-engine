@@ -47,4 +47,10 @@ void Shader::write() {}
 
 void Shader::read() {}
 
+void Shader::swapFrom(Shader& other) {
+	std::swap(m_pipeline, other.m_pipeline);
+	std::swap(m_textureCount, other.m_textureCount);
+	std::swap(m_variableNames, other.m_variableNames);
+}
+
 }  // namespace bird

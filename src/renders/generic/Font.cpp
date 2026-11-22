@@ -113,4 +113,14 @@ Vector2 Font::measureLine(const std::string& text, float pixelHeight) const {
 	return Vector2(width * scaleFor(pixelHeight), getLineHeight(pixelHeight));
 }
 
+void Font::swapFrom(Font& other) {
+	std::swap(m_header, other.m_header);
+	std::swap(m_glyphs, other.m_glyphs);
+	if (m_atlas && other.m_atlas) {
+		m_atlas->swapFrom(*other.m_atlas);
+	} else {
+		std::swap(m_atlas, other.m_atlas);
+	}
+}
+
 }  // namespace bird

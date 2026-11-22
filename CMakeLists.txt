@@ -130,9 +130,18 @@ else()
 endif()
 add_library(
   Bird_core ${BIRD_CORE_LIBRARY_TYPE}
-  ${BIRD_FILES} $<TARGET_OBJECTS:renders> $<TARGET_OBJECTS:opengl-renderer>
-  $<TARGET_OBJECTS:scene> $<TARGET_OBJECTS:physics>
-  $<TARGET_OBJECTS:navigation> $<TARGET_OBJECTS:animation>)
+  ${BIRD_FILES}
+  $<TARGET_OBJECTS:diagnostics>
+  $<TARGET_OBJECTS:renders>
+  $<TARGET_OBJECTS:opengl-renderer>
+  $<TARGET_OBJECTS:scene>
+  $<TARGET_OBJECTS:physics>
+  $<TARGET_OBJECTS:navigation>
+  $<TARGET_OBJECTS:animation>
+  $<TARGET_OBJECTS:serialization>
+  $<TARGET_OBJECTS:events>
+  $<TARGET_OBJECTS:audio>
+)
 if(BIRD_HOST_BUILD)
   add_executable(Bird src/main.cpp)
   target_link_libraries(Bird Bird_core)
@@ -162,17 +171,20 @@ if(APPLE)
            "-framework OpenGL"
            "-framework AppKit"
            "-framework Metal"
-           "-framework QuartzCore")
+           "-framework QuartzCore"
+           "-framework CoreAudio"
+           "-framework AudioToolbox"
+           "-framework CoreFoundation")
 elseif(WIN32)
   if(MSVC)
-    target_link_libraries(Bird_core PUBLIC user32 kernel32 opengl32)
+    target_link_libraries(Bird_core PUBLIC user32 kernel32 opengl32 dbghelp)
     set_target_properties(Bird_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
   else()
-    target_link_libraries(Bird_core PUBLIC -luser32 -lkernel32 -lopengl32)
+    target_link_libraries(Bird_core PUBLIC -luser32 -lkernel32 -lopengl32 -ldbghelp)
 
   endif()
 elseif(UNIX AND NOT APPLE AND NOT ANDROID)
-  target_link_libraries(Bird_core PUBLIC -lpthread -ldl)
+  target_link_libraries(Bird_core PUBLIC -lpthread -ldl -lm)
   if(BIRD_PLATFORM STREQUAL "DESKTOP")
     # GLFW's X11 backend.
     find_package(X11 REQUIRED)
@@ -349,6 +361,46 @@ add_library(glm INTERFACE)
 target_include_directories(
   glm INTERFACE $<BUILD_INTERFACE:${BIRD_GLM_INCLUDE_DIR}>
                 $<INSTALL_INTERFACE:include>)
+# Diagnostics options: profiling macros, optional Tracy & cpptrace integrations.
+option(BIRD_ENABLE_PROFILING "Enable PROFILE_SCOPE/PROFILE_FRAME instrumentation" ON)
+option(BIRD_ENABLE_TRACY "Enable Tracy Profiler client integration" OFF)
+option(BIRD_ENABLE_CPPTRACE "Enable cpptrace stack trace library integration" OFF)
+
+set(BIRD_DIAGNOSTICS_LIBRARIES "")
+if(BIRD_ENABLE_TRACY)
+  find_package(Tracy CONFIG REQUIRED)
+  list(APPEND BIRD_DIAGNOSTICS_LIBRARIES Tracy::TracyClient)
+  target_compile_definitions(Bird_core PUBLIC BIRD_ENABLE_TRACY TRACY_ENABLE)
+endif()
+if(BIRD_ENABLE_CPPTRACE)
+  find_package(cpptrace CONFIG REQUIRED)
+  list(APPEND BIRD_DIAGNOSTICS_LIBRARIES cpptrace::cpptrace)
+endif()
+if(BIRD_ENABLE_PROFILING)
+  target_compile_definitions(Bird_core PUBLIC BIRD_ENABLE_PROFILING=1)
+else()
+  target_compile_definitions(Bird_core PUBLIC BIRD_ENABLE_PROFILING=0)
+endif()
+
+add_subdirectory(src/diagnostics)
+# Asset Hot-Reloading (compiled out in Release/MinSizeRel and device builds)
+if(BIRD_HOST_BUILD AND NOT CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$")
+  set(BIRD_DEFAULT_HOT_RELOAD ON)
+else()
+  set(BIRD_DEFAULT_HOT_RELOAD OFF)
+endif()
+option(BIRD_ENABLE_HOT_RELOAD
+       "Enable background asset file watcher and hot-reloading"
+       ${BIRD_DEFAULT_HOT_RELOAD})
+message(STATUS "Bird Hot-Reload: ${BIRD_ENABLE_HOT_RELOAD}")
+if(BIRD_ENABLE_HOT_RELOAD)
+  # Directory scope, ahead of every object library: ResourceManager.h adds
+  # members under this macro, so each translation unit that includes it must
+  # agree on the class layout (a target-scoped definition on Bird_core never
+  # reaches the renders, scene, dart or hotreload object libraries).
+  add_compile_definitions(BIRD_ENABLE_HOT_RELOAD)
+endif()
+
 add_subdirectory(src/renders)
 include_directories(src/renders)
 add_subdirectory(src/scene)
@@ -358,6 +410,17 @@ include_directories(src/physics)
 add_subdirectory(src/navigation)
 include_directories(src/navigation)
 add_subdirectory(src/animation)
+add_subdirectory(src/serialization)
+include_directories(src/serialization)
+add_subdirectory(src/events)
+
+add_subdirectory(src/hotreload)
+target_sources(Bird_core PRIVATE $<TARGET_OBJECTS:hotreload>)
+if(BIRD_ENABLE_HOT_RELOAD)
+  # PUBLIC so installed consumers see the same ResourceManager layout.
+  target_compile_definitions(Bird_core PUBLIC BIRD_ENABLE_HOT_RELOAD)
+endif()
+add_subdirectory(src/audio)
 
 target_link_libraries(
   Bird_core
@@ -365,6 +428,7 @@ target_link_libraries(
   PRIVATE ${BIRD_PLATFORM_LIBRARIES}
           ${BIRD_GL_LIBRARIES}
           ${BIRD_HOST_ONLY_LIBRARIES}
+          ${BIRD_DIAGNOSTICS_LIBRARIES}
           Jolt::Jolt
           RecastNavigation::Recast
           RecastNavigation::Detour
@@ -439,7 +503,9 @@ install(
   DESTINATION include
   FILES_MATCHING
   PATTERN "*.h"
-  PATTERN "*.hpp")
+  PATTERN "*.hpp"
+  PATTERN "AudioInternal.h" EXCLUDE
+  PATTERN "third_party" EXCLUDE)
 install(
 	DIRECTORY assets/shaders/
 	DESTINATION assets/shaders
