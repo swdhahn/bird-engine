@@ -82,4 +82,40 @@ BIRD_DART_C_API void* bird_DartScriptComponent_new(
 										 onDeinit);
 }
 
+BIRD_DART_C_API void bird_DartScriptComponent_setMetadata(
+	void* component, const char* scriptClass, const char* scriptPath) {
+	if (!component) return;
+	auto* comp = static_cast<bird::DartScriptComponent*>(component);
+	if (scriptClass) comp->setScriptClass(scriptClass);
+	if (scriptPath) comp->setScriptPath(scriptPath);
+}
+
+BIRD_DART_C_API void bird_DartScriptComponent_setPropertyBool(
+	void* component, const char* name, bool value) {
+	if (!component || !name) return;
+	static_cast<bird::DartScriptComponent*>(component)->setProperty(
+		name, bird::SerializedValue(value));
+}
+
+BIRD_DART_C_API void bird_DartScriptComponent_setPropertyInt(
+	void* component, const char* name, int64_t value) {
+	if (!component || !name) return;
+	static_cast<bird::DartScriptComponent*>(component)->setProperty(
+		name, bird::SerializedValue(value));
+}
+
+BIRD_DART_C_API void bird_DartScriptComponent_setPropertyDouble(
+	void* component, const char* name, double value) {
+	if (!component || !name) return;
+	static_cast<bird::DartScriptComponent*>(component)->setProperty(
+		name, bird::SerializedValue(value));
+}
+
+BIRD_DART_C_API void bird_DartScriptComponent_setPropertyString(
+	void* component, const char* name, const char* value) {
+	if (!component || !name) return;
+	static_cast<bird::DartScriptComponent*>(component)->setProperty(
+		name, bird::SerializedValue(value ? std::string(value) : std::string()));
+}
+
 }  // extern "C"

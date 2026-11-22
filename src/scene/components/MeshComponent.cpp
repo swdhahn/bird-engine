@@ -10,7 +10,9 @@
 namespace bird {
 
 MeshComponent::MeshComponent(std::string path)
-	: Component(), m_meshes(RESOURCE_MANAGER->loadMesh(path)) {}
+	: Component(),
+	  m_assetPath(path),
+	  m_meshes(RESOURCE_MANAGER->loadMesh(path)) {}
 
 MeshComponent::MeshComponent(std::vector<_ref<Mesh>> meshes)
 	: Component(), m_meshes(meshes) {}
