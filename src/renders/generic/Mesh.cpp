@@ -21,11 +21,7 @@ Mesh::Mesh(std::unique_ptr<Buffer<uint32_t>> indexBuffer,
 	  m_normalBuffer(std::move(normalBuffer)),
 	  m_textureCoordBuffer(std::move(textureCoordBuffer)),
 	  m_tangentBuffer(std::move(tangentBuffer)) {
-	if (m_vertexBuffer && m_vertexBuffer->m_pData &&
-		m_vertexBuffer->getAttributeSize() == 3) {
-		m_localBounds = AABB::fromPositions(
-			m_vertexBuffer->m_pData.get(), m_vertexBuffer->getBufferSize() / 3);
-	}
+	recomputeBounds();
 }
 
 Mesh::~Mesh() {}
@@ -73,6 +69,23 @@ void Mesh::setSkin(std::unique_ptr<Buffer<uint16_t, 4>> joints,
 
 const AABB& Mesh::getLocalBounds() const {
 	return m_localBounds;
+}
+
+const BoundingSphere& Mesh::getLocalBoundingSphere() const {
+	return m_localSphere;
+}
+
+void Mesh::recomputeBounds() {
+	if (m_vertexBuffer && m_vertexBuffer->m_pData &&
+		m_vertexBuffer->getAttributeSize() == 3) {
+		const float* positions = m_vertexBuffer->m_pData.get();
+		const size_t vertexCount = m_vertexBuffer->getBufferSize() / 3;
+		m_localBounds = AABB::fromPositions(positions, vertexCount);
+		m_localSphere = BoundingSphere::fromPositions(positions, vertexCount);
+	} else {
+		m_localBounds = AABB{};
+		m_localSphere = BoundingSphere{};
+	}
 }
 
 void Mesh::setMaterial(const std::shared_ptr<Material>& material) {

@@ -18,6 +18,7 @@
 #include "Window.h"
 #include "generic/Buffer.h"
 #include "generic/FrameBuffer.h"
+#include "generic/FrustumCuller.h"
 #include "generic/GpuLayouts.h"
 #include "generic/LightList.h"
 #include "generic/RenderQueue.h"
@@ -92,6 +93,30 @@ class GraphicsPipeline {
 	 */
 	DebugDrawList& getDebugDraw() { return m_debugDraw; }
 
+	/**
+	 * Returns the per-frame frustum culling statistics (culled vs. rendered
+	 * counts broken down by deferred, forward opaque, transparent, and
+	 * particle emitters) collected during the most recent frame.
+	 */
+	const CullingStats& getCullingStats() const {
+		return m_frustumCuller.getStats();
+	}
+
+	/**
+	 * Enables or disables frustum culling for meshes and particle emitters.
+	 * Disabling culling is useful for debugging bounds or profiling culling
+	 * savings.
+	 * @param enabled True to cull off-screen renderables (default).
+	 */
+	void setFrustumCullingEnabled(bool enabled) {
+		m_frustumCuller.setEnabled(enabled);
+	}
+
+	/** @return True when frustum culling is enabled. */
+	bool isFrustumCullingEnabled() const {
+		return m_frustumCuller.isEnabled();
+	}
+
 	/** Shared full-screen quad mesh used for post-processing passes. */
 	static std::shared_ptr<Mesh> s_quad_mesh;
 
@@ -118,6 +143,7 @@ class GraphicsPipeline {
 
 	std::vector<MeshComponent*> m_meshes;
 	std::vector<LightComponent*> m_lights;
+	FrustumCuller m_frustumCuller;
 	RenderQueue m_renderQueue;
 	std::vector<RenderItem> m_shadowCasters;
 	std::vector<std::unique_ptr<FrameBuffer>> m_framebuffers;

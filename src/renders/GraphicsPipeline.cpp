@@ -174,6 +174,7 @@ SkeletalAnimationComponent* findSkeletalAnimation(WorldObject* object) {
 void GraphicsPipeline::buildRenderQueue(const Frustum& frustum) {
 	m_renderQueue.clear();
 	m_shadowCasters.clear();
+	m_frustumCuller.beginFrame(frustum);
 	const Matrix4 view = m_camera->getViewMatrix();
 	for (MeshComponent* component : m_meshes) {
 		WorldObject* object = component->world_object();
@@ -198,7 +199,8 @@ void GraphicsPipeline::buildRenderQueue(const Frustum& frustum) {
 			}
 			item.worldBounds = localBounds.transformed(model);
 			if (material->castsShadows()) m_shadowCasters.push_back(item);
-			if (!frustum.intersects(item.worldBounds)) continue;
+			const RenderBucket bucket = classifyMaterial(*material);
+			if (!m_frustumCuller.testMesh(item.worldBounds, bucket)) continue;
 			item.viewDepth =
 				-(view * Vector4(item.worldBounds.center(), 1.0f)).z;
 			m_renderQueue.submit(item);
