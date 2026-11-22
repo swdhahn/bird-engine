@@ -1,5 +1,9 @@
 add_library(
   opengl-renderer OBJECT
+  GLApi.h
+  GLApi.cpp
+  GLCapabilities.h
+  GLCapabilities.cpp
   GLPipeline.cpp
   GLPipeline.h
   GLTexture.cpp

@@ -43,6 +43,7 @@ flowchart TD
 Essential guides for downloading, compiling, and configuring Bird Engine on your machine.
 - **[Introduction](getting_started/introduction.md)**: Engine philosophy, dynamic library architecture, and feature overview.
 - **[Building from Source](getting_started/building_from_source.md)**: Platform prerequisites (Linux, Windows, macOS), CMake options, asset baking, and running test suites.
+- **[Building for Android](getting_started/building_for_android.md)**: Getting the APK from GitHub Actions, local Gradle builds, and how the Android app is assembled.
 - **[Project Setup](getting_started/project_setup.md)**: How to create a game or application as a dynamic library plugin (`.so`, `.dll`, `.dylib`) and boot it with the Bird runtime.
 
 ### 2. [Step-by-Step Tutorials](tutorials/01_first_3d_scene.md)

@@ -158,9 +158,52 @@ void validateSpirv(const std::string& path, const Words& words) {
 	}
 }
 
-/** Syntax-checks generated GLSL by compiling it for OpenGL (discarded). */
+/** One GLSL dialect emitted for the OpenGL family of backends. */
+struct GlslDialect {
+	format::ShaderTarget target;
+	uint32_t version;
+	bool es;
+	const char* label;
+};
+
+/** Every GLSL variant a bake produces, in emission order. */
+constexpr GlslDialect kGlslDialects[] = {
+	{format::SHADER_TARGET_GLSL_460, 460, false, "GLSL 460"},
+	{format::SHADER_TARGET_GLSL_410, 410, false, "GLSL 410"},
+	{format::SHADER_TARGET_GLSL_ES_300, 300, true, "GLSL ES 300"},
+};
+
+/** @return true when the dialect cannot express layout(binding). */
+bool lacksBindingQualifiers(const GlslDialect& dialect) {
+	return dialect.es ? dialect.version < 310 : dialect.version < 420;
+}
+
+/**
+ * @return true when the dialect cannot place stage-to-stage varyings by
+ *         location, so vertex outputs and fragment inputs pair by name.
+ */
+bool matchesVaryingsByName(const GlslDialect& dialect) {
+	return dialect.es && dialect.version < 310;
+}
+
+/**
+ * Syntax-checks generated GLSL by compiling it for OpenGL (discarded).
+ * glslang only emits SPIR-V for ES 310 and newer, so an ES 300 variant is
+ * checked as ES 310: this catches type and syntax errors; limits specific
+ * to ES 3.0 are caught by the driver at link time.
+ */
 void validateGlsl(const std::string& path, const std::string& glsl,
-				  shaderc_shader_kind kind, const char* label) {
+				  shaderc_shader_kind kind, const GlslDialect& dialect) {
+	std::string checked = glsl;
+	if (dialect.es && dialect.version < 310) {
+		const std::string header = "#version " +
+								   std::to_string(dialect.version) + " es";
+		if (checked.rfind(header, 0) != 0) {
+			fail(path, std::string("generated ") + dialect.label +
+						   " lacks its version header");
+		}
+		checked.replace(0, header.size(), "#version 310 es");
+	}
 	shaderc::Compiler compiler;
 	shaderc::CompileOptions options;
 	options.SetTargetEnvironment(shaderc_target_env_opengl,
@@ -168,11 +211,11 @@ void validateGlsl(const std::string& path, const std::string& glsl,
 	options.SetAutoMapLocations(true);
 	options.SetAutoBindUniforms(true);
 	const auto result =
-		compiler.CompileGlslToSpv(glsl, kind, path.c_str(), options);
+		compiler.CompileGlslToSpv(checked, kind, path.c_str(), options);
 	if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
-		fail(path, std::string("generated ") + label + " is invalid:\n" +
-					   result.GetErrorMessage() + "\n--- generated ---\n" +
-					   glsl);
+		fail(path, std::string("generated ") + dialect.label +
+					   " is invalid:\n" + result.GetErrorMessage() +
+					   "\n--- generated ---\n" + glsl);
 	}
 }
 
@@ -322,26 +365,58 @@ Reflection reflect(const std::string& path, const Words& words,
 }
 
 /**
- * Cross-compiles SPIR-V to desktop GLSL. Below 420, layout(binding) does not
- * exist, so bindings are omitted and recorded for the runtime instead.
+ * Renames vertex outputs or fragment inputs to a name derived from their
+ * location, so that dialects pairing varyings by name still link.
  */
-std::string emitGlsl(spirv_cross::CompilerGLSL& compiler, uint32_t version,
-					 const Reflection& reflection) {
+void nameVaryingsByLocation(spirv_cross::CompilerGLSL& compiler,
+							format::ShaderStageKind stage) {
+	const auto resources = compiler.get_shader_resources();
+	const auto* varyings = stage == format::SHADER_STAGE_VERTEX
+							   ? &resources.stage_outputs
+						   : stage == format::SHADER_STAGE_FRAGMENT
+							   ? &resources.stage_inputs
+							   : nullptr;
+	if (varyings == nullptr) return;
+	for (const auto& varying : *varyings) {
+		const uint32_t location =
+			compiler.get_decoration(varying.id, spv::DecorationLocation);
+		compiler.set_name(varying.id,
+						  "bird_varying_" + std::to_string(location));
+	}
+}
+
+/**
+ * Cross-compiles SPIR-V to one GLSL dialect. Where layout(binding) does not
+ * exist, bindings are omitted and recorded for the runtime instead.
+ */
+std::string emitGlsl(spirv_cross::CompilerGLSL& compiler,
+					 const GlslDialect& dialect, const Reflection& reflection,
+					 format::ShaderStageKind stage) {
 	spirv_cross::CompilerGLSL::Options options;
-	options.version = version;
-	options.es = false;
+	options.version = dialect.version;
+	options.es = dialect.es;
 	options.vulkan_semantics = false;
 	options.enable_420pack_extension = false;
+	if (dialect.es) {
+		// Desktop variants compute at full precision; match them.
+		options.fragment.default_float_precision =
+			spirv_cross::CompilerGLSL::Options::Highp;
+		options.fragment.default_int_precision =
+			spirv_cross::CompilerGLSL::Options::Highp;
+	}
 	compiler.set_common_options(options);
 	if (reflection.hasPushConstants &&
 		compiler.get_name(reflection.pushConstantId).empty()) {
 		// Stable, stage-independent name so vert and frag link as one.
 		compiler.set_name(reflection.pushConstantId, "pushConstants");
 	}
-	if (version < 420) {
+	if (lacksBindingQualifiers(dialect)) {
 		for (const auto& bound : reflection.bound) {
 			compiler.unset_decoration(bound.id, spv::DecorationBinding);
 		}
+	}
+	if (matchesVaryingsByName(dialect)) {
+		nameVaryingsByLocation(compiler, stage);
 	}
 	return compiler.compile();
 }
@@ -368,20 +443,26 @@ ShaderBinary bakeShader(const std::string& path, const std::string& source) {
 	validateSpirv(path, spirv);
 	const Reflection reflection = reflect(path, spirv, info.stage);
 
-	spirv_cross::CompilerGLSL glsl460(spirv);
-	const std::string source460 = emitGlsl(glsl460, 460, reflection);
-	spirv_cross::CompilerGLSL glsl410(spirv);
-	const std::string source410 = emitGlsl(glsl410, 410, reflection);
-	validateGlsl(path, source460, info.kind, "GLSL 460");
-	validateGlsl(path, source410, info.kind, "GLSL 410");
-
 	ShaderBinary binary;
 	binary.stage = info.stage;
 	binary.sourceHash = hashShaderSource(source);
 	binary.dependencies = std::move(dependencies);
 	binary.variants[format::SHADER_TARGET_SPIRV] = toBytes(spirv);
-	binary.variants[format::SHADER_TARGET_GLSL_460] = toBytes(source460);
-	binary.variants[format::SHADER_TARGET_GLSL_410] = toBytes(source410);
+
+	// The 410 compiler also names resources for the runtime; every dialect
+	// shares those names because each compiles the same SPIR-V module.
+	spirv_cross::CompilerGLSL glsl410(spirv);
+	for (const GlslDialect& dialect : kGlslDialects) {
+		std::string text;
+		if (dialect.target == format::SHADER_TARGET_GLSL_410) {
+			text = emitGlsl(glsl410, dialect, reflection, info.stage);
+		} else {
+			spirv_cross::CompilerGLSL compiler(spirv);
+			text = emitGlsl(compiler, dialect, reflection, info.stage);
+		}
+		validateGlsl(path, text, info.kind, dialect);
+		binary.variants[dialect.target] = toBytes(text);
+	}
 
 	// Names are read back after compile(), so they match the emitted text.
 	for (const auto& bound : reflection.bound) {

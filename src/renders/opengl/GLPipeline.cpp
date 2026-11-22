@@ -4,7 +4,7 @@
 
 #include "GLPipeline.h"
 
-#include <GL/glew.h>
+#include "GLApi.h"
 
 #include <cstdlib>
 #include <fstream>
@@ -12,9 +12,11 @@
 #include <vector>
 
 #include "../../Application.h"
+#include "../../platform/Platform.h"
 #include "../../scene/2D/UIManager.h"
 #include "../generic/Font.h"
 #include "../generic/FrameBuffer.h"
+#include "GLCapabilities.h"
 #include "GLFrameBuffer.h"
 #include "GLMesh.h"
 #include "GLShader.h"
@@ -27,21 +29,17 @@ GLPipeline::GLPipeline() : GraphicsPipeline(GRAPHICS_PIPELINE_OPENGL) {}
 GLPipeline::~GLPipeline() {}
 
 void GLPipeline::init() {
-	m_pWindow = std::make_unique<Window>(WINDOW_WIDTH, WINDOW_HEIGHT,
-										 "Bird Engine - Application");
+	m_pWindow = platform::createWindow(WINDOW_WIDTH, WINDOW_HEIGHT,
+									   "Bird Engine - Application");
 
-	glewExperimental = true;
-	int code = 0;
-	if ((code = glewInit())) {
-		std::cerr << glewGetErrorString(code) << std::endl;
-		throw std::runtime_error("Couldn't initialize GLEW!");
-	}
+	loadGLFunctions();
+	const GLCapabilities& caps = GLCapabilities::current();
 
 	initializeGraphicSpecifics();
 
 	glDisable(GL_CULL_FACE);
 
-	glEnable(GL_DEBUG_OUTPUT);
+	if (caps.debugOutput) glEnable(GL_DEBUG_OUTPUT);
 
 	if (RESOURCE_MANAGER == nullptr) {
 		throw std::logic_error(
@@ -112,19 +110,27 @@ void GLPipeline::captureFrameIfRequested() {
 
 	const uint32_t width = WINDOW_WIDTH;
 	const uint32_t height = WINDOW_HEIGHT;
-	std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 3);
+	// RGBA is the one read format every desktop, ES and WebGL context
+	// accepts for the default framebuffer.
+	std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4);
 	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+	glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE,
+				 pixels.data());
 
 	std::ofstream out(path, std::ios::binary);
 	out << "P6\n" << width << " " << height << "\n255\n";
 	// GL rows run bottom to top; PPM rows run top to bottom.
+	std::vector<char> rgbRow(static_cast<size_t>(width) * 3);
 	for (uint32_t row = 0; row < height; row++) {
-		out.write(reinterpret_cast<const char*>(
-					  pixels.data() + static_cast<size_t>(height - 1 - row) *
-										  width * 3),
-				  static_cast<std::streamsize>(width) * 3);
+		const uint8_t* source =
+			pixels.data() + static_cast<size_t>(height - 1 - row) * width * 4;
+		for (uint32_t x = 0; x < width; x++) {
+			rgbRow[x * 3 + 0] = static_cast<char>(source[x * 4 + 0]);
+			rgbRow[x * 3 + 1] = static_cast<char>(source[x * 4 + 1]);
+			rgbRow[x * 3 + 2] = static_cast<char>(source[x * 4 + 2]);
+		}
+		out.write(rgbRow.data(), static_cast<std::streamsize>(rgbRow.size()));
 	}
 	std::cout << "Captured frame " << target << " to " << path << std::endl;
 }

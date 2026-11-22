@@ -1,6 +1,7 @@
 #include "GLRenderState.h"
 
-#include <GL/glew.h>
+#include "GLApi.h"
+#include "GLCapabilities.h"
 
 namespace bird::gl {
 
@@ -52,6 +53,9 @@ void GLRenderState::setDepthFunc(GLDepthFunc func) {
 }
 
 void GLRenderState::setDepthClamp(bool enabled) {
+	// Without depth clamp (most ES devices) geometry beyond the near or far
+	// plane is clipped instead; the request becomes a no-op.
+	if (!GLCapabilities::current().depthClamp) return;
 	if (changed(m_depthClamp, enabled)) toggle(GL_DEPTH_CLAMP, enabled);
 }
 

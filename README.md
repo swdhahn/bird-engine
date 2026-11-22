@@ -35,12 +35,12 @@ Full Godot-style documentation and guides are available in the **[`docs/`](docs/
 
 - **Dynamic Plugin Architecture**: Games and applications compile into standalone dynamic libraries (`.so` / `.dll` / `.dylib`), loaded at runtime by the `Bird` executable.
 - **Multi-Backend Rendering**:
-  - Production **OpenGL 4.1+/4.6** pipeline with offscreen HDR framebuffers, post-processing (FXAA), and alpha-blended UI passes.
+  - Production **OpenGL 4.1+/4.6** pipeline with offscreen HDR framebuffers, post-processing (FXAA), and alpha-blended UI passes; the same backend builds for **OpenGL ES 3.0+** (`-DBIRD_GL_PROFILE=ES`) for mobile and WebGL 2.
   - Comprehensive **Vulkan 1.x** reference pipeline and validation harness.
   - Extension points for **Metal** and **DirectX 12**.
 - **Offline Asset Compiler (`BuildTools`)**:
   - Compiles Vulkan-style GLSL to SPIR-V via `shaderc`.
-  - Generates cross-platform GLSL 460 and 410 variants via `SPIRV-Cross`.
+  - Generates cross-platform GLSL 460, 410 and ES 300 variants via `SPIRV-Cross`.
   - Bakes TrueType fonts into atlas textures and glyph metric tables.
   - Packages 3D models and textures into high-speed binary `.bird` assets.
 - **Headless 2D UI Subsystem**:

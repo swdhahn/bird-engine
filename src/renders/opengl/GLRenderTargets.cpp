@@ -1,5 +1,9 @@
 #include "GLRenderTargets.h"
 
+#include <stdexcept>
+
+#include "GLCapabilities.h"
+
 namespace bird::gl {
 
 namespace {
@@ -27,6 +31,13 @@ std::unique_ptr<GLFrameBuffer> makeFrameBuffer(
 GLRenderTargets::GLRenderTargets(uint32_t width, uint32_t height,
 								 std::shared_ptr<Shader> postShader)
 	: m_width(width), m_height(height) {
+	if (!GLCapabilities::current().halfFloatRenderTargets) {
+		// The deferred path stores signed normals and HDR color in RGBA16F.
+		throw std::runtime_error(
+			"GLRenderTargets: this context cannot render to RGBA16F "
+			"(needs ES 3.2, EXT_color_buffer_half_float or "
+			"EXT_color_buffer_float)");
+	}
 	m_albedoOcclusion = makeTarget(width, height, FORMAT_8RGBA, true);
 	m_normalRoughnessMetallic = makeTarget(width, height, FORMAT_RGBA16F);
 	m_hdrColor = makeTarget(width, height, FORMAT_RGBA16F);

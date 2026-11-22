@@ -26,8 +26,8 @@
 namespace bird::gl {
 
 /**
- * OpenGL 4.1+/4.6 graphics pipeline backend: deferred by default, with a
- * forward pass for what deferred shading cannot express.
+ * OpenGL 4.1+/4.6 and OpenGL ES 3.0+ graphics pipeline backend: deferred
+ * by default, with a forward pass for what deferred shading cannot express.
  *
  * Frame sequence:
  *  1. Shadow:   caster depth into directional cascades and a local atlas.
@@ -44,7 +44,7 @@ class GLPipeline : public GraphicsPipeline {
 	GLPipeline();
 	~GLPipeline() override;
 
-	/** Initializes GLFW context, GLEW bindings, depth testing, shaders, and FBOs. */
+	/** Creates the platform window and context, loads GL, shaders and FBOs. */
 	void init() override;
 
 	/** Frees OpenGL state and framebuffers. */

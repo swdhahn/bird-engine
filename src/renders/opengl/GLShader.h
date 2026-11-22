@@ -17,8 +17,9 @@ namespace bird::gl {
 
 /**
  * An OpenGL program linked from baked shader stages (<file>.bird). Uses the
- * GLSL 460 variant on 4.6+ contexts and GLSL 410 otherwise (macOS); the
- * BIRD_GL_SHADER_TARGET environment variable ("410" or "460") overrides.
+ * GLSL ES 300 variant on OpenGL ES and WebGL, GLSL 460 on desktop 4.6+ and
+ * GLSL 410 otherwise (macOS); the BIRD_GL_SHADER_TARGET environment
+ * variable ("410", "460" or "es300") overrides.
  */
 class GLShader : public Shader {
    public:

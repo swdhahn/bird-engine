@@ -1,6 +1,6 @@
 #include "GLDrawCommands.h"
 
-#include <GL/glew.h>
+#include "GLApi.h"
 
 #include "../GraphicsPipeline.h"
 #include "GLMesh.h"

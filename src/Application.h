@@ -49,23 +49,41 @@ class Application {
 	void init(Script<Scene>* script);
 
 	/**
+	 * Initializes every engine system and the root scene like init(), but
+	 * returns instead of entering the frame loop. Platforms that own their
+	 * event loop call start() once, then tick() per frame, then deinit().
+	 *
+	 * @param script User application entry script; ownership is transferred
+	 *               to the root Scene.
+	 */
+	void start(Script<Scene>* script);
+
+	/**
 	 * Tears down engine systems and releases allocated resources.
 	 */
 	void deinit();
 
 	/**
-	 * Executes the continuous engine frame loop.
-	 *
-	 * Each frame:
-	 * 1. Computes delta time from the window clock.
-	 * 2. Updates camera matrices if dirty.
-	 * 3. Ticks UIManager layout, animations, and modals.
-	 * 4. Calls process(delta) on all registered ProcessScript instances.
-	 * 5. Recursively updates dirty scene transform matrices via processScene().
-	 * 6. Renders the active scene and overlays UI via the graphics pipeline.
-	 * 7. Ticks the input manager and polls platform window events.
+	 * Runs tick() until the window asks to close, then calls deinit().
 	 */
 	void run();
+
+	/**
+	 * Advances the engine by exactly one frame. run() calls this in a loop
+	 * on desktop; platforms that own their event loop (Android, iOS, the
+	 * Web) call it once per display frame instead.
+	 *
+	 * Each frame:
+	 * 1. Computes delta time from the platform clock.
+	 * 2. Updates camera matrices if dirty.
+	 * 3. Steps physics at its fixed rate.
+	 * 4. Ticks UIManager layout, animations, and modals.
+	 * 5. Calls process(delta) on all registered ProcessScript instances.
+	 * 6. Recursively updates dirty scene transform matrices via processScene().
+	 * 7. Renders the active scene and overlays UI via the graphics pipeline.
+	 * 8. Ticks input, presents the frame, and polls platform window events.
+	 */
+	void tick();
 
 	/**
 	 * Recursively traverses a scene hierarchy to resolve dirty transforms.
@@ -127,6 +145,10 @@ class Application {
 	Scene* m_scene;
 
 	std::vector<ProcessScriptComponent*> m_processableScripts;
+
+	double m_lastFrameTime = 0.0;	// platform::now() at the previous tick
+	double m_fpsWindowStart = 0.0;	// start of the current FPS second
+	uint32_t m_framesThisSecond = 0;
 };
 
 }  // namespace bird

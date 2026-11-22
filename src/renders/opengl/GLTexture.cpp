@@ -4,7 +4,7 @@
 
 #include "GLTexture.h"
 
-#include <GL/glew.h>
+#include "GLApi.h"
 
 #include "../GraphicsConstants.h"
 

@@ -1,6 +1,6 @@
 #include "GLDebugRenderer.h"
 
-#include <GL/glew.h>
+#include "GLApi.h"
 
 #include <cstddef>
 
