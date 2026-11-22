@@ -44,7 +44,6 @@ std::terminate_handler g_previousTerminate = nullptr;
 // crash file paths without heap allocation.
 char g_dumpDirBuf[512] = "crashes";
 char g_prefixBuf[128] = "bird_crash";
-bool g_flushOnCrash = true;
 
 std::string formatFileTimestamp() {
 	const auto now = std::chrono::system_clock::now();
@@ -249,9 +248,11 @@ void birdSignalHandler(int sig) {
 	writeStrFd(STDERR_FILENO, pathBuf);
 	writeStrFd(STDERR_FILENO, "\n");
 
-	if (g_flushOnCrash) {
-		Logger::get().flush();
-	}
+	// The logger is deliberately not flushed here: Logger::flush() locks a
+	// mutex and allocates, neither of which is async-signal-safe, and a
+	// fault raised while that mutex is held would deadlock this handler.
+	// Error records already flush synchronously, and the frame loop flushes
+	// every tick, so at most one frame of lower-severity lines is lost.
 
 	// SA_RESETHAND restored default disposition; re-raise to exit cleanly.
 	::raise(sig);
@@ -272,7 +273,6 @@ void CrashHandler::install(const CrashHandlerConfig& config) {
 		copyToFixedBuf(g_dumpDirBuf, sizeof(g_dumpDirBuf),
 					   config.dumpDirectory);
 		copyToFixedBuf(g_prefixBuf, sizeof(g_prefixBuf), config.dumpFilePrefix);
-		g_flushOnCrash = config.flushLogger;
 	}
 
 	if (!config.dumpDirectory.empty()) {

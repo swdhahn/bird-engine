@@ -22,8 +22,9 @@ struct CrashHandlerConfig {
 	 */
 	bool writeMinidump = true;
 	/**
-	 * When true, flushes `bird::diag::Logger::get()` when a crash or
-	 * unhandled termination occurs so buffered log lines reach disk.
+	 * When true, flushes `bird::diag::Logger::get()` on unhandled C++
+	 * termination and in writeCrashReport(). POSIX fatal-signal handlers never
+	 * flush, because the logger's locking is not async-signal-safe.
 	 */
 	bool flushLogger = true;
 	/**
