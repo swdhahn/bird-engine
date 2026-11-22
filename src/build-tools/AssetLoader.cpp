@@ -16,6 +16,7 @@
 
 #include <assimp/GltfMaterial.h>
 #include "ShaderBaker.h"
+#include "SkeletalImport.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../util/stb_image.h"
@@ -184,6 +185,13 @@ bool isModelBakeCurrent(const std::string& path) {
 	const std::string baked = path + ".bird";
 	if (!fs::exists(baked)) return false;
 	if (fs::last_write_time(baked) < fs::last_write_time(path)) return false;
+	// A skinned model is current only if its skeleton bake is too; static
+	// models never write one, so its absence alone proves nothing.
+	const std::string skeleton = path + ".skel.bird";
+	if (fs::exists(skeleton) &&
+		fs::last_write_time(skeleton) < fs::last_write_time(path)) {
+		return false;
+	}
 	std::ifstream material(path + "0.mat.bird", std::ios::binary);
 	if (!material.is_open()) return true;  // model without materials
 	char magic[4] = {};
@@ -320,15 +328,36 @@ void AssetLoader::loadModel(const std::string& path) {
 	}
 
 	std::cout << "Compiling Model: " << path << std::endl;
+	// Import without flattening first: PreTransformVertices discards the
+	// node hierarchy, bones and animations that skinned models need.
 	const aiScene* scene = importer.ReadFile(
 		path, aiProcess_CalcTangentSpace | aiProcess_Triangulate |
 				  aiProcess_SortByPType | aiProcess_JoinIdenticalVertices |
-				  aiProcess_FixInfacingNormals |
-				  aiProcess_PreTransformVertices);
+				  aiProcess_FixInfacingNormals | aiProcess_LimitBoneWeights);
 	if (scene == nullptr) {
 		std::cout << "Error loading scene" << std::endl;
 		std::cout << importer.GetErrorString() << std::endl;
 		return;
+	}
+	const bool skinned = sceneHasSkinning(*scene);
+	if (skinned) {
+		// Skinned vertices stay in bind space; the skeleton positions them.
+		// Limitation: static meshes in the same file keep their local space.
+		try {
+			saveSkeletalAsset(path + ".skel.bird",
+							  extractSkeletalAsset(*scene));
+		} catch (const std::exception& e) {
+			std::cout << "Error baking skeleton: " << e.what() << std::endl;
+			return;
+		}
+	} else {
+		// Static models keep the previous behaviour: one flattened space.
+		scene = importer.ApplyPostProcessing(aiProcess_PreTransformVertices);
+		if (scene == nullptr) {
+			std::cout << importer.GetErrorString() << std::endl;
+			return;
+		}
+		std::filesystem::remove(path + ".skel.bird");  // stale skin bake
 	}
 
 	std::cout << "Model Compiled. Saving file" << std::endl;

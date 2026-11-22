@@ -27,6 +27,7 @@ Full Godot-style documentation and guides are available in the **[`docs/`](docs/
   - [Rendering Pipeline & Backends](docs/architecture/rendering_pipeline.md)
   - [2D Retained UI Framework](docs/architecture/ui_framework.md)
   - [Resource & Asset Management](docs/architecture/resource_management.md)
+  - [Animation](docs/architecture/animation.md)
 
 ---
 

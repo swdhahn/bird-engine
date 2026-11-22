@@ -4,6 +4,7 @@
 
 #include "Application.h"
 
+#include "animation/AnimationSystem.h"
 #include "platform/Clock.h"
 #include "platform/Log.h"
 #include "renders/Window.h"
@@ -19,6 +20,7 @@ namespace bird {
 Input* INPUT = nullptr;
 ResourceManager* RESOURCE_MANAGER = nullptr;
 Application* APPLICATION = nullptr;
+AnimationSystem* ANIMATION_SYSTEM = nullptr;
 
 Application::Application() {}
 
@@ -39,6 +41,7 @@ void Application::start(Script<Scene>* script) {
 	APPLICATION = this;
 
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
+	ANIMATION_SYSTEM = new AnimationSystem();
 	m_uiManager = new UIManager();
 	m_uiManager->init(RESOURCE_MANAGER->loadFont(UIManager::kDefaultFontPath),
 					  m_graphicsPipeline->getWindow().get());
@@ -99,6 +102,9 @@ void Application::tick() {
 	for (size_t i = 0; i < m_processableScripts.size(); i++) {
 		m_processableScripts[i]->process(delta);
 	}
+	// After scripts (animation wins over script-written transforms for
+	// the frame), before matrices update and skinning palettes upload.
+	ANIMATION_SYSTEM->tick(delta);
 
 	processScene(m_scene, delta);
 	// After matrix updates: draw moving bodies between their last two
@@ -151,6 +157,9 @@ void Application::deinit() {
 	delete m_scene;
 	m_scene = nullptr;
 	m_physicsServer.reset();
+	// After the scene: destroyed objects cancel their own animations.
+	delete ANIMATION_SYSTEM;
+	ANIMATION_SYSTEM = nullptr;
 
 	m_uiManager->deinit();
 	delete m_uiManager;

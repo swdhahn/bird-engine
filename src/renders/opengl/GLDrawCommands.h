@@ -6,6 +6,7 @@
 #include "../generic/RenderQueue.h"
 #include "GLRenderState.h"
 #include "GLShader.h"
+#include "GLSkinning.h"
 
 namespace bird::gl {
 
@@ -19,10 +20,10 @@ void bindMaterial(Material& material, GLRenderState& state);
 void drawMesh(const Mesh& mesh);
 
 /**
- * Draws render items with one shader, rebinding a material only when the
- * material changes between consecutive items.
+ * Draws render items, binding the rigid or skinned program each needs and
+ * rebinding a material only when it changes between consecutive items.
  */
-void drawItems(const std::vector<RenderItem>& items, GLShader& shader,
+void drawItems(const std::vector<RenderItem>& items, GLMeshPrograms& programs,
 			   GLRenderState& state);
 
 /** Binds a texture to a sampler unit. */

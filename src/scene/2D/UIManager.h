@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 
+#include "../../animation/AnimationSystem.h"
 #include "UIDrawList.h"
 #include "UIEvents.h"
 #include "UIObject.h"
@@ -118,8 +119,18 @@ class UIManager {
 	UIObject* showContextMenu(UIMenuItems items, Vector2 position,
 							  UIObject* owner = nullptr);
 
-	/** Calls node->tick(dt) every frame until it returns false. */
+	/**
+	 * Calls node->tick(dt) every frame until it returns false. Suited to
+	 * timers and hand-written widget logic; prefer UIObject::animate()
+	 * for value transitions.
+	 */
 	void animate(UIObject* node);
+
+	/**
+	 * Animation system for UI transitions, ticked by process() before
+	 * layout. Register UI nodes as owners so removal cancels them.
+	 */
+	AnimationSystem& getAnimationSystem() { return m_animations; }
 
 	/** Deepest node under a point that has a context menu, or null. */
 	UIObject* findContextMenuTarget(Vector2 position) const;
@@ -131,6 +142,8 @@ class UIManager {
 	// ---------------------------------------------- node notifications
 	void invalidateLayout();
 	void invalidateDraw();
+	/** A visual transform changed: recompose transforms, skip layout. */
+	void invalidateTransforms();
 	/** Legacy name for invalidateLayout(). */
 	void setUpdateUIFlag() { invalidateLayout(); }
 	/** Queues a node for destruction at the next safe point. */
@@ -148,7 +161,7 @@ class UIManager {
    private:
 	void flushRemovals();
 	void rebuildDrawList();
-	void drawTree(UIObject& node);
+	void drawTree(UIObject& node, float parentOpacity);
 	void setHovered(UIObject* node);
 	void updateCursor();
 	void updateTooltip(float delta);
@@ -183,6 +196,7 @@ class UIManager {
 	std::vector<PopupEntry> m_popups;
 	std::vector<UIObject*> m_animating;
 	std::vector<UIObject*> m_pendingRemovals;
+	AnimationSystem m_animations;
 
 	Vector2 m_viewport{0.0f};
 	Vector2 m_mouse{0.0f};
@@ -194,6 +208,7 @@ class UIManager {
 	UICursor m_cursor = UICursor::Arrow;
 	bool m_layoutDirty = true;
 	bool m_drawDirty = true;
+	bool m_transformsDirty = false;
 	bool m_shuttingDown = false;
 	bool m_swallowRelease = false;  // release after a light-dismiss press
 };

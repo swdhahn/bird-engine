@@ -17,6 +17,7 @@ void UIDrawList::clear() {
 	m_commands.clear();
 	m_clipStack.assign(1, UIRect::unbounded());
 	m_transform = Matrix3(1.0f);
+	m_opacity = 1.0f;
 }
 
 void UIDrawList::setWhiteUV(Vector2 whiteUV) {
@@ -25,6 +26,10 @@ void UIDrawList::setWhiteUV(Vector2 whiteUV) {
 
 void UIDrawList::setTransform(const Matrix3& transform) {
 	m_transform = transform;
+}
+
+void UIDrawList::setOpacity(float opacity) {
+	m_opacity = std::clamp(opacity, 0.0f, 1.0f);
 }
 
 Vector2 UIDrawList::toScreen(Vector2 local) const {
@@ -79,9 +84,9 @@ void UIDrawList::emit(const QuadSpec& spec, const Texture* texture) {
 	const auto base = static_cast<uint32_t>(m_vertices.size());
 	for (int i = 0; i < 4; i++) {
 		m_vertices.push_back(
-			{toScreen(spec.corners[i]), spec.uvs[i], spec.colors[i], clipBounds,
-			 Vector4(spec.shapeLocal[i], spec.halfSize), spec.style,
-			 spec.borderColor});
+			{toScreen(spec.corners[i]), spec.uvs[i], faded(spec.colors[i]),
+			 clipBounds, Vector4(spec.shapeLocal[i], spec.halfSize), spec.style,
+			 faded(spec.borderColor)});
 	}
 	appendIndices({base, base + 1, base + 2, base + 2, base + 1, base + 3},
 				  texture);
@@ -171,7 +176,7 @@ void UIDrawList::triangle(Vector2 a, Vector2 b, Vector2 c,
 	const Vector4 clipBounds(clip.position, clip.max());
 	const auto base = static_cast<uint32_t>(m_vertices.size());
 	for (const Vector2& p : {a, b, c}) {
-		m_vertices.push_back({toScreen(p), m_whiteUV, color, clipBounds,
+		m_vertices.push_back({toScreen(p), m_whiteUV, faded(color), clipBounds,
 							  Vector4(0.0f), Vector4(0.0f), Vector4(0.0f)});
 	}
 	appendIndices({base, base + 1, base + 2}, nullptr);
@@ -187,7 +192,7 @@ void UIDrawList::triangle(Vector2 a, Vector2 b, Vector2 c,
 	const Vector2 points[3] = {a, b, c};
 	const Vector4 colors[3] = {colorA, colorB, colorC};
 	for (int i = 0; i < 3; i++) {
-		m_vertices.push_back({toScreen(points[i]), m_whiteUV, colors[i],
+		m_vertices.push_back({toScreen(points[i]), m_whiteUV, faded(colors[i]),
 							  clipBounds, Vector4(0.0f), Vector4(0.0f),
 							  Vector4(0.0f)});
 	}

@@ -8,10 +8,13 @@
 
 namespace bird::gl {
 
-GLGBufferPass::GLGBufferPass(ResourceManager& resources) {
-	m_shader = resources.loadShader("assets/shaders/mesh.vert",
-									"assets/shaders/gbuffer.frag");
-}
+GLGBufferPass::GLGBufferPass(ResourceManager& resources,
+							 GLSkinningBlock& skinning)
+	: m_programs(resources.loadShader("assets/shaders/mesh.vert",
+									  "assets/shaders/gbuffer.frag"),
+				 resources.loadShader("assets/shaders/mesh_skinned.vert",
+									  "assets/shaders/gbuffer.frag"),
+				 skinning) {}
 
 void GLGBufferPass::execute(const std::vector<RenderItem>& items,
 							GLRenderTargets& targets, const Vector3& clearColor,
@@ -29,13 +32,12 @@ void GLGBufferPass::execute(const std::vector<RenderItem>& items,
 	state.setDepthTest(true);
 	state.setDepthFunc(GLDepthFunc::Less);
 
-	auto& shader = static_cast<GLShader&>(*m_shader);
-	shader.bind();
+	m_programs.reset();
 	// RT0 is sRGB storage: encoding on write keeps dark albedo precise.
 	// Without write control (ES) sRGB attachments always encode.
 	const bool srgbToggle = GLCapabilities::current().srgbWriteControl;
 	if (srgbToggle) glEnable(GL_FRAMEBUFFER_SRGB);
-	drawItems(items, shader, state);
+	drawItems(items, m_programs, state);
 	if (srgbToggle) glDisable(GL_FRAMEBUFFER_SRGB);
 }
 

@@ -4,6 +4,8 @@
 
 #include "Mesh.h"
 
+#include <stdexcept>
+
 #include "../GraphicsPipeline.h"
 #include "GLMesh.h"
 
@@ -52,6 +54,23 @@ Buffer<float, 4>* Mesh::getTangentBuffer() {
 	return m_tangentBuffer.get();
 }
 
+void Mesh::setSkin(std::unique_ptr<Buffer<uint16_t, 4>> joints,
+				   std::unique_ptr<Buffer<float, 4>> weights) {
+	if (!joints || !weights) {
+		throw std::invalid_argument("Mesh::setSkin: skin buffers are required");
+	}
+	const size_t vertexCount =
+		m_vertexBuffer ? m_vertexBuffer->getBufferSize() / 3 : 0;
+	if (joints->getBufferSize() != vertexCount * 4 ||
+		weights->getBufferSize() != vertexCount * 4) {
+		throw std::invalid_argument(
+			"Mesh::setSkin: skin streams must hold 4 values per vertex");
+	}
+	m_jointBuffer = std::move(joints);
+	m_weightBuffer = std::move(weights);
+	onSkinAttached();
+}
+
 const AABB& Mesh::getLocalBounds() const {
 	return m_localBounds;
 }
@@ -98,6 +117,14 @@ MeshBuilder& MeshBuilder::setTangentBuffer(
 	return *this;
 }
 
+MeshBuilder& MeshBuilder::setSkinBuffers(
+	std::unique_ptr<Buffer<uint16_t, 4>> joints,
+	std::unique_ptr<Buffer<float, 4>> weights) {
+	m_jointBuffer = std::move(joints);
+	m_weightBuffer = std::move(weights);
+	return *this;
+}
+
 MeshBuilder& MeshBuilder::setMaterial(std::shared_ptr<Material> material) {
 	m_material = material;
 	return *this;
@@ -118,6 +145,9 @@ std::shared_ptr<Mesh> MeshBuilder::build() {
 				"No other graphics pipelines currently support shaders...");
 	}
 	if (m_material != nullptr) ptr->setMaterial(m_material);
+	if (m_jointBuffer || m_weightBuffer) {
+		ptr->setSkin(std::move(m_jointBuffer), std::move(m_weightBuffer));
+	}
 
 	return ptr;
 }
