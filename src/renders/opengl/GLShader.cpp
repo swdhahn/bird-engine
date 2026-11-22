@@ -334,6 +334,20 @@ GLShader::~GLShader() {
 	glDeleteProgram(m_programId);
 }
 
+void GLShader::swapFrom(Shader& other) {
+	Shader::swapFrom(other);
+	auto* otherGL = dynamic_cast<GLShader*>(&other);
+	if (!otherGL) return;
+	if (s_boundProgram == m_programId ||
+		s_boundProgram == otherGL->m_programId) {
+		glUseProgram(0);
+		s_boundProgram = 0;
+	}
+	std::swap(m_programId, otherGL->m_programId);
+	std::swap(m_pushConstantSize, otherGL->m_pushConstantSize);
+	std::swap(m_pushConstants, otherGL->m_pushConstants);
+}
+
 void GLShader::bind() const {
 	glUseProgram(m_programId);
 	s_boundProgram = m_programId;

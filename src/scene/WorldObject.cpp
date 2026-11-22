@@ -6,11 +6,13 @@
 
 #include "../animation/AnimationSystem.h"
 #include "../events/EventBus.h"
+#include "../hotreload/EntityHandleRegistry.h"
 #include "Scene.h"
 
 namespace bird {
 
 WorldObject::~WorldObject() {
+	hotreload::EntityHandleRegistry::get().unregisterEntity(m_id);
 	// Tweens hold raw pointers to their target; none may outlive it.
 	if (ANIMATION_SYSTEM) ANIMATION_SYSTEM->cancelOwner(this);
 	// Event listeners owned by this entity must never fire after destruction.
@@ -29,7 +31,9 @@ WorldObject::WorldObject()
 	  m_transformMatrix(1),
 	  m_parent(nullptr),
 	  m_needsMatrixUpdate(true),
-	  m_isInitiated(false) {}
+	  m_isInitiated(false) {
+	hotreload::EntityHandleRegistry::get().registerEntity(m_id, this);
+}
 
 void WorldObject::init(Scene* parent) {
 	m_parent = parent;

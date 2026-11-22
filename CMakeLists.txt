@@ -362,6 +362,24 @@ else()
 endif()
 
 add_subdirectory(src/diagnostics)
+# Asset Hot-Reloading (compiled out in Release/MinSizeRel and device builds)
+if(BIRD_HOST_BUILD AND NOT CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$")
+  set(BIRD_DEFAULT_HOT_RELOAD ON)
+else()
+  set(BIRD_DEFAULT_HOT_RELOAD OFF)
+endif()
+option(BIRD_ENABLE_HOT_RELOAD
+       "Enable background asset file watcher and hot-reloading"
+       ${BIRD_DEFAULT_HOT_RELOAD})
+message(STATUS "Bird Hot-Reload: ${BIRD_ENABLE_HOT_RELOAD}")
+if(BIRD_ENABLE_HOT_RELOAD)
+  # Directory scope, ahead of every object library: ResourceManager.h adds
+  # members under this macro, so each translation unit that includes it must
+  # agree on the class layout (a target-scoped definition on Bird_core never
+  # reaches the renders, scene, dart or hotreload object libraries).
+  add_compile_definitions(BIRD_ENABLE_HOT_RELOAD)
+endif()
+
 add_subdirectory(src/renders)
 include_directories(src/renders)
 add_subdirectory(src/scene)
@@ -372,6 +390,13 @@ add_subdirectory(src/animation)
 add_subdirectory(src/serialization)
 include_directories(src/serialization)
 add_subdirectory(src/events)
+
+add_subdirectory(src/hotreload)
+target_sources(Bird_core PRIVATE $<TARGET_OBJECTS:hotreload>)
+if(BIRD_ENABLE_HOT_RELOAD)
+  # PUBLIC so installed consumers see the same ResourceManager layout.
+  target_compile_definitions(Bird_core PUBLIC BIRD_ENABLE_HOT_RELOAD)
+endif()
 
 target_link_libraries(
   Bird_core

@@ -36,6 +36,7 @@ flowchart TD
     Arch --> A9["Scene Serialization, Prefabs & Save Games"]
     Arch --> A10["Event & Messaging System"]
     Arch --> A11["Diagnostics (Logging, Profiling & Crash Handling)"]
+    Arch --> A12["Asset Hot-Reloading"]
 ```
 
 ---
@@ -73,3 +74,4 @@ Under-the-hood technical references detailing internal mechanics and design deci
 - **[Dart Scripting & FFI Codegen](architecture/dart_scripting_and_codegen.md)**: `libclang`-based `DartApiGenerator`, 3-tier C++/C/Dart FFI architecture, Doxygen-to-Dartdoc extraction, ownership rules, embedded `libdart_dll` VM runtime, and troubleshooting.
 - **[Scene Serialization, Prefabs & Save Games](architecture/serialization_and_prefabs.md)**: Format-agnostic `Archive` & JSON schema, `ComponentRegistry` reflection, stable `UUID` & `EntityRef` remapping, `PrefabManager` / `InstantiatePrefab(AssetID)`, property delta overrides, and cross-platform `SaveGame` directory resolution.
 - **[Diagnostics (Logging, Profiling & Crash Handling)](architecture/diagnostics.md)**: Thread-safe structured logger with console/rotating-file/ring-buffer sinks, Dart logging bridge, Tracy & internal frame/section profiler, native stack traces, OS crash dumps, Dart script error boundary, and graceful fallback assets.
+- **[Asset Hot-Reloading](architecture/hot_reloading.md)**: Background `FileWatcher` with debouncing, async `BuildTools` recompilation, main-thread GPU/CPU handle swapping in `ResourceManager`, `EntityHandleRegistry` for Dart hot-reload safety, and `BIRD_ENABLE_HOT_RELOAD` release stripping.

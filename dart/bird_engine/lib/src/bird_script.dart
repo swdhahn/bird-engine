@@ -88,6 +88,51 @@ typedef _DisableDartScriptDart = void Function(
 late final _DisableDartScriptDart _disableDartScriptComponent = b.nativeLib
     .lookupFunction<_DisableDartScriptNative, _DisableDartScriptDart>(
         'bird_DartScriptComponent_disable');
+typedef _EntityGetIdNative = ffi.Uint64 Function(ffi.Pointer<ffi.Void>);
+typedef _EntityGetIdDart = int Function(ffi.Pointer<ffi.Void>);
+typedef _EntityResolveNative = ffi.Pointer<ffi.Void> Function(ffi.Uint64);
+typedef _EntityResolveDart = ffi.Pointer<ffi.Void> Function(int);
+typedef _EntityIsValidNative = ffi.Bool Function(ffi.Uint64);
+typedef _EntityIsValidDart = bool Function(int);
+
+late final _EntityGetIdDart _entityRegistryGetId = b.nativeLib
+    .lookupFunction<_EntityGetIdNative, _EntityGetIdDart>(
+        'bird_EntityRegistry_getID');
+late final _EntityResolveDart _entityRegistryResolve = b.nativeLib
+    .lookupFunction<_EntityResolveNative, _EntityResolveDart>(
+        'bird_EntityRegistry_resolve');
+late final _EntityIsValidDart _entityRegistryIsValid = b.nativeLib
+    .lookupFunction<_EntityIsValidNative, _EntityIsValidDart>(
+        'bird_EntityRegistry_isValid');
+
+/// Hot-reload-safe entity handle backed by a stable native `EntityID`
+/// (`WorldObject::getID()`).
+///
+/// Prefer storing [EntityHandle] instead of raw [WorldObject] proxies in
+/// long-lived Dart script state so Dart hot-reloads and native entity
+/// destruction never leave dangling pointers.
+class EntityHandle {
+  /// Stable, monotonically increasing native entity ID (0 is invalid).
+  final int id;
+
+  const EntityHandle(this.id);
+
+  /// Creates an [EntityHandle] from a live native [WorldObject] pointer.
+  factory EntityHandle.fromPointer(ffi.Pointer<ffi.Void> ptr) =>
+      EntityHandle(_entityRegistryGetId(ptr));
+
+  /// Returns true if the native entity is still alive in the engine.
+  bool get isValid => id != 0 && _entityRegistryIsValid(id);
+
+  /// Resolves this handle to a borrowed [WorldObject] proxy, or `null` if the
+  /// native entity has been destroyed.
+  WorldObject? resolve() {
+    if (id == 0) return null;
+    final ptr = _entityRegistryResolve(id);
+    if (ptr == ffi.nullptr) return null;
+    return WorldObject.fromHandle(ptr, owned: false);
+  }
+}
 
 /// Base class for Dart scripts attached to a [WorldObject] (or [Scene]),
 /// mirroring C++ `bird::ProcessScript<T>`.

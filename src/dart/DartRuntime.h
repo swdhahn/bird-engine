@@ -63,6 +63,18 @@ class DartRuntime {
 	bool drainMicrotasks();
 
 	/**
+	 * Notifies the active Dart isolate that a script hot-reload has occurred by
+	 * invoking an optional top-level `onHotReload()` function.
+	 *
+	 * Scripts should hold entity references as stable `EntityID` handles
+	 * (resolved through `bird_EntityRegistry_resolve`) rather than raw native
+	 * pointers so hot-reloading never leaves dangling pointers behind.
+	 *
+	 * @return True if the hook succeeded or was not defined; false on Dart error.
+	 */
+	bool notifyHotReload();
+
+	/**
 	 * Shuts down the active isolate and tears down the embedded Dart VM.
 	 */
 	void shutdown();
