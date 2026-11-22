@@ -3,7 +3,13 @@
 #include <string>
 #include <vector>
 
+#include "animation/AnimationSystem.h"
 #include "events/EventBus.h"
+#include "physics/CollisionShape.h"
+#include "physics/PhysicsServer.h"
+#include "physics/RigidBodyComponent.h"
+#include "scene/Scene.h"
+#include "scene/WorldObject.h"
 
 namespace bird {
 namespace {
@@ -290,6 +296,130 @@ TEST(EventBusTest, UnsubscribeByOwnerDuringDispatchSkipsDeadEntity) {
 	bus.emitImmediate("boom");
 	EXPECT_EQ(victimCalls, 0);
 	EXPECT_EQ(bus.subscriberCount(hashEventName("boom")), 1u);
+}
+
+namespace {
+
+struct ScopedGlobalEventBus {
+	EventBus bus;
+	EventBus* previous = nullptr;
+	ScopedGlobalEventBus() : previous(EventBus::getGlobal()) {
+		EventBus::setGlobal(&bus);
+	}
+	~ScopedGlobalEventBus() { EventBus::setGlobal(previous); }
+};
+
+}  // namespace
+
+TEST(EventBusTest, WorldObjectDeinitAndDestructionAutoUnsubscribes) {
+	ScopedGlobalEventBus scoped;
+	Scene scene;
+	scene.init(nullptr);
+
+	int childCalls = 0;
+	int uninitCalls = 0;
+
+	// Case 1: Initialized child removed from Scene (triggers deinit()).
+	auto child = _own_mk<WorldObject>();
+	WorldObject* childPtr = child.get();
+	const EntityID childId = child->getID();
+	scene.addChild(_mv(child));
+
+	scoped.bus.subscribe(
+		"damage", [&](const EventPayload&) { ++childCalls; }, childId);
+
+	scoped.bus.emitImmediate("damage");
+	EXPECT_EQ(childCalls, 1);
+
+	scene.removeChild(childPtr);
+	scoped.bus.emitImmediate("damage");
+	EXPECT_EQ(childCalls, 1);  // Did NOT fire after deinit/removal.
+
+	// Case 2: Uninitialized WorldObject destroyed directly (destructor cleanup).
+	{
+		WorldObject ephemeral;
+		scoped.bus.subscribe(
+			"damage", [&](const EventPayload&) { ++uninitCalls; },
+			ephemeral.getID());
+		scoped.bus.emitImmediate("damage");
+		EXPECT_EQ(uninitCalls, 1);
+	}
+	scoped.bus.emitImmediate("damage");
+	EXPECT_EQ(uninitCalls, 1);	// Did NOT fire after destruction.
+
+	scene.deinit();
+}
+
+TEST(EventBusTest, NativePhysicsEmitsContactEventsToEventBus) {
+	ScopedGlobalEventBus scoped;
+	PhysicsServer server;
+	Scene scene;
+	PhysicsWorld* world = scene.createPhysicsWorld();
+	scene.init(nullptr);
+
+	auto floorObj = _own_mk<WorldObject>();
+	const EntityID floorId = floorObj->getID();
+	floorObj->setWorldPosition(Vector3(0.0f, -0.5f, 0.0f));
+	RigidBodySettings floorSettings;
+	floorSettings.motionType = MotionType::Static;
+	floorObj->addComponent(_own_mk<RigidBodyComponent>(
+		CollisionShape::box(Vector3(10.0f, 0.5f, 10.0f)), floorSettings));
+	scene.addChild(_mv(floorObj));
+
+	auto boxObj = _own_mk<WorldObject>();
+	const EntityID boxId = boxObj->getID();
+	boxObj->setWorldPosition(Vector3(0.0f, 1.5f, 0.0f));
+	RigidBodySettings boxSettings;
+	boxSettings.motionType = MotionType::Dynamic;
+	boxObj->addComponent(_own_mk<RigidBodyComponent>(
+		CollisionShape::box(Vector3(0.5f, 0.5f, 0.5f)), boxSettings));
+	scene.addChild(_mv(boxObj));
+
+	int contactEvents = 0;
+	EntityID seenA = 0;
+	EntityID seenB = 0;
+	scoped.bus.subscribe("physics.contact_begin", [&](const EventPayload& p) {
+		++contactEvents;
+		seenA = static_cast<EntityID>(p.getInt("selfEntityId"));
+		seenB = static_cast<EntityID>(p.getInt("otherEntityId"));
+	});
+
+	for (int i = 0; i < 60; ++i) {
+		world->step(1.0f / 60.0f);
+		scoped.bus.dispatchQueued();
+	}
+
+	EXPECT_GE(contactEvents, 1);
+	EXPECT_TRUE((seenA == floorId && seenB == boxId) ||
+				(seenA == boxId && seenB == floorId));
+
+	scene.deinit();
+}
+
+TEST(EventBusTest, NativeAnimationSystemEmitsCompletedEvent) {
+	ScopedGlobalEventBus scoped;
+	AnimationSystem anims;
+
+	int completedCount = 0;
+	int64_t completedIndex = -1;
+	scoped.bus.subscribe("animation.completed", [&](const EventPayload& p) {
+		++completedCount;
+		completedIndex = p.getInt("handleIndex", -1);
+	});
+
+	float value = 0.0f;
+	AnimationHandle handle = anims.tweenFloat(
+		0.0f, 1.0f, 0.25f, Ease::Linear, [&](float v) { value = v; });
+
+	anims.tick(0.1f);
+	scoped.bus.dispatchQueued();
+	EXPECT_EQ(completedCount, 0);
+
+	anims.tick(0.2f);
+	scoped.bus.dispatchQueued();
+	EXPECT_EQ(completedCount, 1);
+	EXPECT_EQ(completedIndex, static_cast<int64_t>(handle.index));
+	EXPECT_FLOAT_EQ(value, 1.0f);
 }
 
 }  // namespace

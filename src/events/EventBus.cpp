@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "../platform/Log.h"
+#include "../scene/WorldObject.h"
 
 namespace bird {
 
@@ -323,6 +324,14 @@ void EventBus::clear() {
 
 void EventBus::setUnsubscribeHook(UnsubscribeHook hook) {
 	m_unsubscribeHook = std::move(hook);
+}
+
+EventBus* EventBus::getGlobal() {
+	return EVENT_BUS;
+}
+
+void EventBus::setGlobal(EventBus* bus) {
+	EVENT_BUS = bus;
 }
 
 }  // namespace bird

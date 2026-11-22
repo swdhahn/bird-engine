@@ -231,6 +231,18 @@ class EventBus {
 	 */
 	BIRD_NO_EXPORT void setUnsubscribeHook(UnsubscribeHook hook);
 
+	/**
+	 * Returns the engine-wide global EventBus instance (same as EVENT_BUS,
+	 * safe across shared-library boundaries with -Bsymbolic).
+	 */
+	static EventBus* getGlobal();
+
+	/**
+	 * Sets the engine-wide global EventBus instance (updates EVENT_BUS inside
+	 * Bird_core). Intended for Application startup/teardown and unit tests.
+	 */
+	static void setGlobal(EventBus* bus);
+
    private:
 	struct SubscriptionEntry {
 		SubscriptionID id = kInvalidSubscriptionID;

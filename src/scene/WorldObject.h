@@ -38,6 +38,9 @@ extern BIRD_API Application* APPLICATION;
 class AnimationSystem;
 /** Engine-wide animation system for world animation (null when headless). */
 extern BIRD_API AnimationSystem* ANIMATION_SYSTEM;
+class EventBus;
+/** Engine-wide decoupled event bus shared by native systems and Dart scripts. */
+extern BIRD_API EventBus* EVENT_BUS;
 class Component;
 class Scene;
 
