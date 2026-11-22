@@ -5,6 +5,7 @@
 #include "Application.h"
 
 #include <cstdio>
+#include <cstdlib>
 
 #include "animation/AnimationSystem.h"
 #include "platform/Clock.h"
@@ -48,6 +49,13 @@ void Application::start(Script<Scene>* script) {
 	m_graphicsPipeline = new gl::GLPipeline();
 	m_graphicsPipeline->init();
 	RESOURCE_MANAGER->init();
+#ifdef BIRD_ENABLE_HOT_RELOAD
+	if (!std::getenv("BIRD_DISABLE_HOT_RELOAD")) {
+		hotreload::HotReloadConfig hrConfig;
+		hrConfig.watchDirectory = ResourceManager::RESOURCE_PATH + "assets";
+		RESOURCE_MANAGER->enableHotReload(hrConfig);
+	}
+#endif
 	APPLICATION = this;
 	stage("graphics ready");
 
@@ -82,6 +90,12 @@ void Application::run() {
 }
 
 void Application::tick() {
+#ifdef BIRD_ENABLE_HOT_RELOAD
+	if (RESOURCE_MANAGER) {
+		RESOURCE_MANAGER->pollHotReloads();
+	}
+#endif
+
 	const double frameTime = platform::now();
 	const float delta = static_cast<float>(frameTime - m_lastFrameTime);
 	m_lastFrameTime = frameTime;
@@ -178,6 +192,11 @@ void Application::deinit() {
 	m_uiManager->deinit();
 	delete m_uiManager;
 	delete INPUT;
+#ifdef BIRD_ENABLE_HOT_RELOAD
+	if (RESOURCE_MANAGER) {
+		RESOURCE_MANAGER->disableHotReload();
+	}
+#endif
 	m_graphicsPipeline->cleanUp();
 	delete m_graphicsPipeline;
 }

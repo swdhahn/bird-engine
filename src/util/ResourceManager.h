@@ -23,8 +23,17 @@
 #include "../build-tools/MaterialFormat.h"
 #include "Resource.h"
 #include "../animation/skeletal/SkeletalAsset.h"
+#ifdef BIRD_ENABLE_HOT_RELOAD
+#include "../hotreload/HotReloadTypes.h"
+#endif
 
 namespace bird {
+
+#ifdef BIRD_ENABLE_HOT_RELOAD
+namespace hotreload {
+class HotReloadManager;
+}
+#endif
 
 /**
  * Discriminator identifying the category of a loaded engine asset.
@@ -141,19 +150,116 @@ class ResourceManager {
 	 */
 	std::shared_ptr<Shader> getDefaultShader();
 
+	/**
+	 * Reloads a cached texture (both linear and sRGB variants if cached) from
+	 * its freshly compiled `.bird` binary and swaps GPU handles in place.
+	 * If loading fails, logs an error and keeps the existing texture active.
+	 *
+	 * @param path Source asset path key (e.g. "assets/textures/wood.png").
+	 * @return True if at least one cached texture variant was reloaded.
+	 */
+	BIRD_NO_EXPORT bool reloadTexture(const std::string& path);
+
+	/**
+	 * Rebuilds and swaps every cached Shader program that uses `stagePath`
+	 * (e.g. "assets/shaders/gbuffer.frag"). If compilation or linking fails,
+	 * logs the error and preserves the previously linked GPU program.
+	 *
+	 * @param stagePath Source shader stage path.
+	 * @return Number of cached shader programs reloaded.
+	 */
+	BIRD_NO_EXPORT size_t reloadShaderStage(const std::string& stagePath);
+
+	/**
+	 * Rebuilds and swaps all cached Shader programs from their `.bird` binaries.
+	 * Used when a shared `.glsl` include file changes.
+	 *
+	 * @return Number of cached shader programs successfully reloaded.
+	 */
+	BIRD_NO_EXPORT size_t reloadAllShaders();
+
+	/**
+	 * Reloads a cached Material from its `.bird` binary and swaps parameters
+	 * and texture bindings in place.
+	 *
+	 * @param path Material asset path key.
+	 * @return True if the cached material was reloaded.
+	 */
+	BIRD_NO_EXPORT bool reloadMaterial(const std::string& path);
+
+	/**
+	 * Reloads a cached Font from its `.bird` binary and swaps glyph metrics
+	 * and SDF atlas texture handles in place.
+	 *
+	 * @param path Source font path key (e.g. "assets/fonts/DejaVuSans.ttf").
+	 * @return True if the cached font was reloaded.
+	 */
+	BIRD_NO_EXPORT bool reloadFont(const std::string& path);
+
+#ifdef BIRD_ENABLE_HOT_RELOAD
+	/**
+	 * Starts the background hot-reload pipeline (FileWatcher + BuildToolsRunner).
+	 * Only compiled in development builds (`BIRD_ENABLE_HOT_RELOAD`).
+	 *
+	 * @param config Optional hot-reload configuration (watch directory,
+	 *        BuildTools executable path, debounce interval).
+	 * @return True if watching started successfully.
+	 */
+	BIRD_NO_EXPORT bool enableHotReload(
+		const hotreload::HotReloadConfig& config = {});
+
+	/**
+	 * Stops the background hot-reload pipeline and releases watcher resources.
+	 */
+	BIRD_NO_EXPORT void disableHotReload();
+
+	/**
+	 * Polls the thread-safe reload queue on the main thread, loading newly
+	 * compiled binary assets and swapping their CPU/GPU handles in place.
+	 * Called once per frame by Application::tick().
+	 *
+	 * @return Number of asset reload requests processed this frame.
+	 */
+	BIRD_NO_EXPORT size_t pollHotReloads();
+
+	/**
+	 * Registers a main-thread callback invoked when a watched `.dart` script
+	 * changes on disk.
+	 *
+	 * @param callback Function receiving the normalized `.dart` file path.
+	 */
+	BIRD_NO_EXPORT void setDartReloadCallback(
+		hotreload::DartReloadCallback callback);
+
+	/** @return Active HotReloadManager, or nullptr if hot-reload is disabled. */
+	BIRD_NO_EXPORT hotreload::HotReloadManager* getHotReloadManager() const;
+#else
+	/** No-op in release/shipping builds where hot-reload is compiled out. */
+	BIRD_NO_EXPORT size_t pollHotReloads() { return 0; }
+#endif
+
 	/** Root working directory prepended to relative asset paths. */
 	static inline std::string RESOURCE_PATH = "";
 
    private:
 	std::shared_ptr<Texture> loadTextureWithColorSpace(const std::string& path,
 													   bool srgb);
+	std::shared_ptr<Texture> buildTextureFromBaked(const std::string& path,
+												   bool srgb);
+	std::shared_ptr<Material> buildMaterialFromBaked(const std::string& path);
+	std::shared_ptr<Font> buildFontFromBaked(const std::string& path);
 
 	std::shared_ptr<Shader> m_defaultShader;
 	std::unordered_map<std::string, std::shared_ptr<Resource>>* m_resources;
+	std::unordered_map<std::string, ShaderBuilder> m_shaderBuilders;
 	std::unordered_map<std::string, std::vector<std::shared_ptr<Mesh>>>
 		m_meshes;
 	std::unordered_map<std::string, std::shared_ptr<const SkeletalAsset>>
 		m_skeletalAssets;
+#ifdef BIRD_ENABLE_HOT_RELOAD
+	std::unique_ptr<hotreload::HotReloadManager> m_hotReloadManager;
+	hotreload::DartReloadCallback m_dartReloadCallback;
+#endif
 };
 
 }  // namespace bird

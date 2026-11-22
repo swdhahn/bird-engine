@@ -341,6 +341,22 @@ add_subdirectory(src/physics)
 include_directories(src/physics)
 add_subdirectory(src/animation)
 
+# Asset Hot-Reloading (compiled out in Release/MinSizeRel and device builds)
+if(BIRD_HOST_BUILD AND NOT CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$")
+  set(BIRD_DEFAULT_HOT_RELOAD ON)
+else()
+  set(BIRD_DEFAULT_HOT_RELOAD OFF)
+endif()
+option(BIRD_ENABLE_HOT_RELOAD
+       "Enable background asset file watcher and hot-reloading"
+       ${BIRD_DEFAULT_HOT_RELOAD})
+message(STATUS "Bird Hot-Reload: ${BIRD_ENABLE_HOT_RELOAD}")
+if(BIRD_ENABLE_HOT_RELOAD)
+  add_subdirectory(src/hotreload)
+  target_sources(Bird_core PRIVATE $<TARGET_OBJECTS:hotreload>)
+  target_compile_definitions(Bird_core PUBLIC BIRD_ENABLE_HOT_RELOAD)
+endif()
+
 target_link_libraries(
   Bird_core
   PUBLIC glm
