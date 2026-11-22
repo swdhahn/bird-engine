@@ -25,55 +25,55 @@ EventPayload& EventPayload::setField(std::string_view key, EventValue value) {
 	return *this;
 }
 
-EventPayload& EventPayload::set(std::string_view key, bool value) {
+EventPayload& EventPayload::set(const std::string& key, bool value) {
 	return setField(key, value);
 }
 
-EventPayload& EventPayload::set(std::string_view key, int64_t value) {
+EventPayload& EventPayload::set(const std::string& key, int64_t value) {
 	return setField(key, value);
 }
 
-EventPayload& EventPayload::set(std::string_view key, int value) {
+EventPayload& EventPayload::set(const std::string& key, int value) {
 	return setField(key, static_cast<int64_t>(value));
 }
 
-EventPayload& EventPayload::set(std::string_view key, uint64_t value) {
+EventPayload& EventPayload::set(const std::string& key, uint64_t value) {
 	return setField(key, static_cast<int64_t>(value));
 }
 
-EventPayload& EventPayload::set(std::string_view key, double value) {
+EventPayload& EventPayload::set(const std::string& key, double value) {
 	return setField(key, value);
 }
 
-EventPayload& EventPayload::set(std::string_view key, float value) {
+EventPayload& EventPayload::set(const std::string& key, float value) {
 	return setField(key, static_cast<double>(value));
 }
 
-EventPayload& EventPayload::set(std::string_view key, std::string value) {
+EventPayload& EventPayload::set(const std::string& key, std::string value) {
 	return setField(key, std::move(value));
 }
 
-EventPayload& EventPayload::set(std::string_view key, const char* value) {
+EventPayload& EventPayload::set(const std::string& key, const char* value) {
 	return setField(key, std::string(value ? value : ""));
 }
 
-EventPayload& EventPayload::set(std::string_view key, const Vector2& value) {
+EventPayload& EventPayload::set(const std::string& key, const Vector2& value) {
 	return setField(key, value);
 }
 
-EventPayload& EventPayload::set(std::string_view key, const Vector3& value) {
+EventPayload& EventPayload::set(const std::string& key, const Vector3& value) {
 	return setField(key, value);
 }
 
-EventPayload& EventPayload::set(std::string_view key, const Vector4& value) {
+EventPayload& EventPayload::set(const std::string& key, const Vector4& value) {
 	return setField(key, value);
 }
 
-EventPayload& EventPayload::setNull(std::string_view key) {
+EventPayload& EventPayload::setNull(const std::string& key) {
 	return setField(key, std::monostate{});
 }
 
-bool EventPayload::has(std::string_view key) const {
+bool EventPayload::has(const std::string& key) const {
 	return findField(key) != nullptr;
 }
 
@@ -98,27 +98,28 @@ EventValueType EventPayload::valueTypeOf(const EventValue& value) {
 	}
 }
 
-EventValueType EventPayload::getType(std::string_view key) const {
+EventValueType EventPayload::getType(const std::string& key) const {
 	const EventField* field = findField(key);
 	if (!field) return EventValueType::Null;
 	return valueTypeOf(field->value);
 }
 
-bool EventPayload::getBool(std::string_view key, bool defaultValue) const {
+bool EventPayload::getBool(const std::string& key, bool defaultValue) const {
 	const EventField* field = findField(key);
 	if (!field) return defaultValue;
 	if (const auto* val = std::get_if<bool>(&field->value)) return *val;
 	return defaultValue;
 }
 
-int64_t EventPayload::getInt(std::string_view key, int64_t defaultValue) const {
+int64_t EventPayload::getInt(const std::string& key,
+							 int64_t defaultValue) const {
 	const EventField* field = findField(key);
 	if (!field) return defaultValue;
 	if (const auto* val = std::get_if<int64_t>(&field->value)) return *val;
 	return defaultValue;
 }
 
-double EventPayload::getDouble(std::string_view key,
+double EventPayload::getDouble(const std::string& key,
 							   double defaultValue) const {
 	const EventField* field = findField(key);
 	if (!field) return defaultValue;
@@ -129,11 +130,11 @@ double EventPayload::getDouble(std::string_view key,
 	return defaultValue;
 }
 
-float EventPayload::getFloat(std::string_view key, float defaultValue) const {
+float EventPayload::getFloat(const std::string& key, float defaultValue) const {
 	return static_cast<float>(getDouble(key, static_cast<double>(defaultValue)));
 }
 
-std::string EventPayload::getString(std::string_view key,
+std::string EventPayload::getString(const std::string& key,
 									const std::string& defaultValue) const {
 	const EventField* field = findField(key);
 	if (!field) return defaultValue;
@@ -141,7 +142,7 @@ std::string EventPayload::getString(std::string_view key,
 	return defaultValue;
 }
 
-Vector2 EventPayload::getVector2(std::string_view key,
+Vector2 EventPayload::getVector2(const std::string& key,
 								 const Vector2& defaultValue) const {
 	const EventField* field = findField(key);
 	if (!field) return defaultValue;
@@ -149,7 +150,7 @@ Vector2 EventPayload::getVector2(std::string_view key,
 	return defaultValue;
 }
 
-Vector3 EventPayload::getVector3(std::string_view key,
+Vector3 EventPayload::getVector3(const std::string& key,
 								 const Vector3& defaultValue) const {
 	const EventField* field = findField(key);
 	if (!field) return defaultValue;
@@ -157,7 +158,7 @@ Vector3 EventPayload::getVector3(std::string_view key,
 	return defaultValue;
 }
 
-Vector4 EventPayload::getVector4(std::string_view key,
+Vector4 EventPayload::getVector4(const std::string& key,
 								 const Vector4& defaultValue) const {
 	const EventField* field = findField(key);
 	if (!field) return defaultValue;

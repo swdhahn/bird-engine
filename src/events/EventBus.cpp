@@ -32,7 +32,7 @@ struct DispatchDepthGuard {
 EventBus::EventBus(size_t queueCapacity)
 	: m_queue(queueCapacity > 0 ? queueCapacity : 1) {}
 
-SubscriptionID EventBus::subscribe(std::string_view eventName,
+SubscriptionID EventBus::subscribe(const std::string& eventName,
 								   EventCallback callback,
 								   EntityID ownerEntityId) {
 	return subscribe(hashEventName(eventName), std::move(callback),
@@ -152,7 +152,7 @@ size_t EventBus::unsubscribeByOwner(EntityID ownerEntityId) {
 	return removed;
 }
 
-bool EventBus::emit(std::string_view eventName, EventPayload payload) {
+bool EventBus::emit(const std::string& eventName, EventPayload payload) {
 	return emit(hashEventName(eventName), std::move(payload));
 }
 
@@ -175,7 +175,7 @@ bool EventBus::emit(EventTypeID eventId, EventPayload payload) {
 	return true;
 }
 
-void EventBus::emitImmediate(std::string_view eventName,
+void EventBus::emitImmediate(const std::string& eventName,
 							 const EventPayload& payload) {
 	emitImmediate(hashEventName(eventName), payload);
 }
@@ -253,7 +253,7 @@ void EventBus::flushPendingMutations() {
 	}
 }
 
-bool EventBus::hasSubscribers(std::string_view eventName) const {
+bool EventBus::hasSubscribers(const std::string& eventName) const {
 	return hasSubscribers(hashEventName(eventName));
 }
 

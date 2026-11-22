@@ -86,7 +86,8 @@ class EventBus {
 	 * @return Unique SubscriptionID, or kInvalidSubscriptionID if eventName is
 	 *         empty or callback is empty.
 	 */
-	SubscriptionID subscribe(std::string_view eventName, EventCallback callback,
+	SubscriptionID subscribe(const std::string& eventName,
+							 EventCallback callback,
 							 EntityID ownerEntityId = kNoOwnerEntityID);
 
 	/**
@@ -130,7 +131,7 @@ class EventBus {
 	 * @return true if enqueued; false if eventName is empty or the ring buffer
 	 *         is full (in which case droppedCount() is incremented).
 	 */
-	bool emit(std::string_view eventName, EventPayload payload = {});
+	bool emit(const std::string& eventName, EventPayload payload = {});
 
 	/**
 	 * Enqueues an event by pre-hashed EventTypeID into the ring buffer for
@@ -150,7 +151,7 @@ class EventBus {
 	 * @param eventName Event name (hashed via hashEventName()).
 	 * @param payload Optional read-only payload passed to every listener.
 	 */
-	void emitImmediate(std::string_view eventName,
+	void emitImmediate(const std::string& eventName,
 					   const EventPayload& payload = {});
 
 	/**
@@ -183,7 +184,7 @@ class EventBus {
 	 *
 	 * @param eventName Event name to query.
 	 */
-	bool hasSubscribers(std::string_view eventName) const;
+	bool hasSubscribers(const std::string& eventName) const;
 
 	/**
 	 * Returns true if at least one active (or pending-add) subscriber is

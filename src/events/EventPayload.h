@@ -78,7 +78,7 @@ class EventPayload {
 	 * @param value Boolean value.
 	 * @return Reference to *this for fluent chaining.
 	 */
-	EventPayload& set(std::string_view key, bool value);
+	EventPayload& set(const std::string& key, bool value);
 
 	/**
 	 * Sets a 64-bit signed integer field.
@@ -86,7 +86,7 @@ class EventPayload {
 	 * @param value Integer value.
 	 * @return Reference to *this for fluent chaining.
 	 */
-	EventPayload& set(std::string_view key, int64_t value);
+	EventPayload& set(const std::string& key, int64_t value);
 
 	/**
 	 * Convenience overload storing a 32-bit int as int64_t.
@@ -94,7 +94,7 @@ class EventPayload {
 	 * @param value Integer value.
 	 * @return Reference to *this for fluent chaining.
 	 */
-	BIRD_NO_EXPORT EventPayload& set(std::string_view key, int value);
+	BIRD_NO_EXPORT EventPayload& set(const std::string& key, int value);
 
 	/**
 	 * Convenience overload storing an unsigned 64-bit ID (such as EntityID) as
@@ -103,7 +103,7 @@ class EventPayload {
 	 * @param value Unsigned 64-bit value.
 	 * @return Reference to *this for fluent chaining.
 	 */
-	BIRD_NO_EXPORT EventPayload& set(std::string_view key, uint64_t value);
+	BIRD_NO_EXPORT EventPayload& set(const std::string& key, uint64_t value);
 
 	/**
 	 * Sets a double-precision floating-point field.
@@ -111,7 +111,7 @@ class EventPayload {
 	 * @param value Floating-point value.
 	 * @return Reference to *this for fluent chaining.
 	 */
-	EventPayload& set(std::string_view key, double value);
+	EventPayload& set(const std::string& key, double value);
 
 	/**
 	 * Convenience overload storing a float as double.
@@ -119,7 +119,7 @@ class EventPayload {
 	 * @param value Floating-point value.
 	 * @return Reference to *this for fluent chaining.
 	 */
-	BIRD_NO_EXPORT EventPayload& set(std::string_view key, float value);
+	BIRD_NO_EXPORT EventPayload& set(const std::string& key, float value);
 
 	/**
 	 * Sets a string field.
@@ -127,7 +127,7 @@ class EventPayload {
 	 * @param value String value.
 	 * @return Reference to *this for fluent chaining.
 	 */
-	EventPayload& set(std::string_view key, std::string value);
+	EventPayload& set(const std::string& key, std::string value);
 
 	/**
 	 * Convenience overload accepting a C-string literal without implicit bool
@@ -136,7 +136,7 @@ class EventPayload {
 	 * @param value Null-terminated C string (treated as empty if nullptr).
 	 * @return Reference to *this for fluent chaining.
 	 */
-	BIRD_NO_EXPORT EventPayload& set(std::string_view key, const char* value);
+	BIRD_NO_EXPORT EventPayload& set(const std::string& key, const char* value);
 
 	/**
 	 * Sets a 2D vector field.
@@ -144,7 +144,7 @@ class EventPayload {
 	 * @param value Vector2 value.
 	 * @return Reference to *this for fluent chaining.
 	 */
-	EventPayload& set(std::string_view key, const Vector2& value);
+	EventPayload& set(const std::string& key, const Vector2& value);
 
 	/**
 	 * Sets a 3D vector field.
@@ -152,7 +152,7 @@ class EventPayload {
 	 * @param value Vector3 value.
 	 * @return Reference to *this for fluent chaining.
 	 */
-	EventPayload& set(std::string_view key, const Vector3& value);
+	EventPayload& set(const std::string& key, const Vector3& value);
 
 	/**
 	 * Sets a 4D vector field.
@@ -160,41 +160,41 @@ class EventPayload {
 	 * @param value Vector4 value.
 	 * @return Reference to *this for fluent chaining.
 	 */
-	EventPayload& set(std::string_view key, const Vector4& value);
+	EventPayload& set(const std::string& key, const Vector4& value);
 
 	/**
 	 * Sets a field explicitly to Null (std::monostate).
 	 * @param key Field name.
 	 * @return Reference to *this for fluent chaining.
 	 */
-	EventPayload& setNull(std::string_view key);
+	EventPayload& setNull(const std::string& key);
 
 	/**
 	 * Returns true if a field with the given key exists in this payload.
 	 * @param key Field name to look up.
 	 */
-	bool has(std::string_view key) const;
+	bool has(const std::string& key) const;
 
 	/**
 	 * Returns the stored EventValueType for key, or EventValueType::Null if
 	 * absent.
 	 * @param key Field name to inspect.
 	 */
-	EventValueType getType(std::string_view key) const;
+	EventValueType getType(const std::string& key) const;
 
 	/**
 	 * Retrieves a boolean field, or defaultValue if missing or of another type.
 	 * @param key Field name.
 	 * @param defaultValue Fallback value when absent or mismatched.
 	 */
-	bool getBool(std::string_view key, bool defaultValue = false) const;
+	bool getBool(const std::string& key, bool defaultValue = false) const;
 
 	/**
 	 * Retrieves an integer field, or defaultValue if missing or of another type.
 	 * @param key Field name.
 	 * @param defaultValue Fallback value when absent or mismatched.
 	 */
-	int64_t getInt(std::string_view key, int64_t defaultValue = 0) const;
+	int64_t getInt(const std::string& key, int64_t defaultValue = 0) const;
 
 	/**
 	 * Retrieves a double field (also widens int64_t fields if present), or
@@ -202,21 +202,21 @@ class EventPayload {
 	 * @param key Field name.
 	 * @param defaultValue Fallback value when absent or mismatched.
 	 */
-	double getDouble(std::string_view key, double defaultValue = 0.0) const;
+	double getDouble(const std::string& key, double defaultValue = 0.0) const;
 
 	/**
 	 * Retrieves a single-precision float field (widening int64_t if present).
 	 * @param key Field name.
 	 * @param defaultValue Fallback value when absent or mismatched.
 	 */
-	float getFloat(std::string_view key, float defaultValue = 0.0f) const;
+	float getFloat(const std::string& key, float defaultValue = 0.0f) const;
 
 	/**
 	 * Retrieves a string field, or defaultValue if missing or of another type.
 	 * @param key Field name.
 	 * @param defaultValue Fallback value when absent or mismatched.
 	 */
-	std::string getString(std::string_view key,
+	std::string getString(const std::string& key,
 						  const std::string& defaultValue = "") const;
 
 	/**
@@ -224,7 +224,7 @@ class EventPayload {
 	 * @param key Field name.
 	 * @param defaultValue Fallback value when absent or mismatched.
 	 */
-	Vector2 getVector2(std::string_view key,
+	Vector2 getVector2(const std::string& key,
 					   const Vector2& defaultValue = Vector2(0.0f)) const;
 
 	/**
@@ -232,7 +232,7 @@ class EventPayload {
 	 * @param key Field name.
 	 * @param defaultValue Fallback value when absent or mismatched.
 	 */
-	Vector3 getVector3(std::string_view key,
+	Vector3 getVector3(const std::string& key,
 					   const Vector3& defaultValue = Vector3(0.0f)) const;
 
 	/**
@@ -240,7 +240,7 @@ class EventPayload {
 	 * @param key Field name.
 	 * @param defaultValue Fallback value when absent or mismatched.
 	 */
-	Vector4 getVector4(std::string_view key,
+	Vector4 getVector4(const std::string& key,
 					   const Vector4& defaultValue = Vector4(0.0f)) const;
 
 	/** Removes all fields from this payload. */
