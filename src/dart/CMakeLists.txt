@@ -68,6 +68,12 @@ set(BIRD_SCRIPT_HEADERS
     ${CMAKE_SOURCE_DIR}/src/animation/AnimationSystem.h
     ${CMAKE_SOURCE_DIR}/src/animation/Curves.h
     ${CMAKE_SOURCE_DIR}/src/animation/WorldTweens.h
+    ${CMAKE_SOURCE_DIR}/src/animation/skeletal/AnimationNotify.h
+    ${CMAKE_SOURCE_DIR}/src/animation/skeletal/AnimationParameters.h
+    ${CMAKE_SOURCE_DIR}/src/animation/skeletal/BoneMask.h
+    ${CMAKE_SOURCE_DIR}/src/animation/skeletal/TwoBoneIK.h
+    ${CMAKE_SOURCE_DIR}/src/animation/skeletal/RootMotion.h
+    ${CMAKE_SOURCE_DIR}/src/animation/skeletal/SkeletalDebugDraw.h
     ${CMAKE_SOURCE_DIR}/src/animation/skeletal/SkeletalAnimationComponent.h
     ${CMAKE_SOURCE_DIR}/src/Application.h
 )

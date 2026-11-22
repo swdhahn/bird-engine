@@ -15,9 +15,12 @@
 #include "animation/skeletal/PoseNode.h"
 #include "animation/skeletal/PoseOps.h"
 #include "animation/skeletal/RootMotion.h"
+#include "animation/skeletal/SkeletalAnimator.h"
 #include "animation/skeletal/SkeletalClip.h"
+#include "animation/skeletal/SkeletalDebugDraw.h"
 #include "animation/skeletal/Skeleton.h"
 #include "animation/skeletal/TwoBoneIK.h"
+#include "renders/DebugDraw.h"
 
 using namespace bird;
 
@@ -531,4 +534,127 @@ TEST(RootMotionTests, ExtractsPerFrameDeltaAndZerosRootTranslation) {
 	RootMotionDelta d3 = extractor.extract(*skel, p3, true);
 	EXPECT_NEAR(d3.translation.x, 0.1f, kEps);
 	EXPECT_NEAR(d3.translation.z, 0.2f, kEps);
+}
+
+// ============================================================================
+// End-to-End SkeletalAnimator Pipeline & DebugDraw Tests
+// ============================================================================
+
+TEST(SkeletalAnimatorPipeline, LayersNotifiesRootMotionIKAndDebugDraw) {
+	auto skel = makeHumanoidLite();
+
+	// Base clip moves pelvis along +Z (root motion) and leg along +X, with a notify at 0.4s.
+	auto runClip = std::make_shared<SkeletalClip>("Run", 1.0f);
+	{
+		JointTrack pelvisTrack;
+		pelvisTrack.joint = 0;
+		pelvisTrack.translation.addKey(0.0f, Vector3(0, 1, 0));
+		pelvisTrack.translation.addKey(1.0f, Vector3(0, 1, 2));
+		runClip->addTrack(std::move(pelvisTrack));
+
+		JointTrack legTrack;
+		legTrack.joint = 1;
+		legTrack.translation.addKey(0.0f, Vector3(0, -1, 0));
+		legTrack.translation.addKey(1.0f, Vector3(1, -1, 0));
+		runClip->addTrack(std::move(legTrack));
+
+		runClip->addNotify(0.4f, "Footstep", "stone");
+	}
+
+	// Upper-body aim clip moves arm to (0.5, 2.0, 0).
+	auto aimClip = std::make_shared<SkeletalClip>("Aim", 1.0f);
+	{
+		JointTrack armTrack;
+		armTrack.joint = 3;
+		armTrack.translation.addKey(0.0f, Vector3(0.5f, 2.0f, 0));
+		armTrack.translation.addKey(1.0f, Vector3(0.5f, 2.0f, 0));
+		aimClip->addTrack(std::move(armTrack));
+	}
+
+	// Additive recoil clip adds +0.3 in Y to hand relative to rest.
+	auto recoilClip = std::make_shared<SkeletalClip>("Recoil", 1.0f);
+	{
+		JointTrack handTrack;
+		handTrack.joint = 4;
+		handTrack.translation.addKey(0.0f, Vector3(0.5f, 0.3f, 0));
+		handTrack.translation.addKey(1.0f, Vector3(0.5f, 0.3f, 0));
+		recoilClip->addTrack(std::move(handTrack));
+	}
+
+	auto sm = std::make_shared<AnimationStateMachine>();
+	sm->addClipState("Run", runClip, LoopMode::Loop);
+	sm->setEntryState("Run");
+
+	SkeletalAnimator animator(skel);
+	animator.setRootNode(sm);
+
+	// Upper-body Override layer masked to spine & descendants.
+	AnimationLayer upperLayer;
+	upperLayer.name = "UpperBody";
+	upperLayer.source = std::make_shared<ClipPoseNode>(aimClip, LoopMode::Loop);
+	upperLayer.mask = BoneMask::fromBranch(*skel, "spine", 1.0f);
+	upperLayer.blendMode = LayerBlendMode::Override;
+	upperLayer.weight = 1.0f;
+	animator.addLayer(std::move(upperLayer));
+
+	// Additive recoil layer on hand.
+	AnimationLayer additiveLayer;
+	additiveLayer.name = "Recoil";
+	additiveLayer.source =
+		std::make_shared<ClipPoseNode>(recoilClip, LoopMode::Loop);
+	additiveLayer.blendMode = LayerBlendMode::Additive;
+	additiveLayer.weight = 1.0f;
+	animator.addLayer(std::move(additiveLayer));
+
+	// Enable root motion on pelvis (XZ).
+	RootMotionConfig rmCfg;
+	rmCfg.enabled = true;
+	rmCfg.rootJoint = 0;
+	rmCfg.extractTranslationX = true;
+	rmCfg.extractTranslationY = false;
+	rmCfg.extractTranslationZ = true;
+	animator.setRootMotionConfig(rmCfg);
+
+	// Subscribe to notifies.
+	std::vector<AnimationNotifyEvent> receivedNotifies;
+	animator.setOnNotify(
+		[&](const AnimationNotifyEvent& ev) { receivedNotifies.push_back(ev); });
+
+	// Tick 1: initializes root motion reference at t = 0.25 (z = 0.5).
+	animator.update(0.25f);
+	EXPECT_TRUE(receivedNotifies.empty());
+	// Pelvis Z must be zeroed to rest (0) in local pose.
+	EXPECT_NEAR(animator.getLocalPose().joints[0].translation.z, 0.0f, kEps);
+
+	// Tick 2: advances to t = 0.5 (z = 1.0) -> root motion delta Z = +0.5, notify "Footstep" fires!
+	animator.update(0.25f);
+	EXPECT_NEAR(animator.getRootMotionDelta().translation.z, 0.5f, kEps);
+	ASSERT_EQ(receivedNotifies.size(), 1u);
+	EXPECT_EQ(receivedNotifies[0].eventName, "Footstep");
+	EXPECT_EQ(receivedNotifies[0].payload, "stone");
+
+	// Verify layer isolation: leg comes from Run (x = 0.5), arm from Aim (y = 2.0), hand has +0.3 additive Y.
+	EXPECT_NEAR(animator.getLocalPose().joints[1].translation.x, 0.5f, kEps);
+	EXPECT_NEAR(animator.getLocalPose().joints[3].translation.y, 2.0f, kEps);
+	EXPECT_NEAR(animator.getLocalPose().joints[4].translation.y, 0.3f, kEps);
+
+	// Verify debug visualization emits bone lines (4 parent-child edges) and IK target lines.
+	TwoBoneIKConstraint ik;
+	ik.name = "ArmIK";
+	ik.rootJoint = 2;
+	ik.midJoint = 3;
+	ik.endJoint = 4;
+	ik.targetPosition = Vector3(0.8f, 1.5f, 0.0f);
+	ik.polePosition = Vector3(0.0f, 1.5f, -1.0f);
+	ik.weight = 1.0f;
+	animator.addIKConstraint(ik);
+	animator.update(0.0f);
+
+	DebugDrawList debugDraw;
+	SkeletalDebugSettings dbgSettings;
+	dbgSettings.drawBones = true;
+	dbgSettings.drawIKTargets = true;
+	animator.debugDraw(debugDraw, Matrix4(1.0f), dbgSettings);
+	// 4 bone lines + 12 box edges + 3 target cross + 3 pole cross + 1 pole guide = 23 lines.
+	EXPECT_EQ(debugDraw.lineCount(), 23u);
 }
