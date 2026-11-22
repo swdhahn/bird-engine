@@ -33,6 +33,7 @@ flowchart TD
     Arch --> A6["Resource & Asset Management"]
     Arch --> A7["Physics (Jolt Integration)"]
     Arch --> A8["Dart Scripting & FFI Codegen"]
+    Arch --> A9["Diagnostics (Logging, Profiling & Crash Handling)"]
 ```
 
 ---
@@ -67,3 +68,4 @@ Under-the-hood technical references detailing internal mechanics and design deci
 - **[Physics](architecture/physics.md)**: Jolt integration: per-scene worlds, the fixed-step loop, transform synchronization, character controllers, main-thread contact and trigger events (characters included), collision layers, queries, joints, render interpolation, chunked level collision, and cached debug wireframes.
 - **[Animation](architecture/animation.md)**: Shared curves, easing and playback clocks; the `AnimationSystem`; UI transitions through `UIAnimator` and the post-layout visual transform; world tweens; and the skeletal runtime with Assimp-based baking.
 - **[Dart Scripting & FFI Codegen](architecture/dart_scripting_and_codegen.md)**: `libclang`-based `DartApiGenerator`, 3-tier C++/C/Dart FFI architecture, Doxygen-to-Dartdoc extraction, ownership rules, embedded `libdart_dll` VM runtime, and troubleshooting.
+- **[Diagnostics (Logging, Profiling & Crash Handling)](architecture/diagnostics.md)**: Thread-safe structured logger with console/rotating-file/ring-buffer sinks, Dart logging bridge, Tracy & internal frame/section profiler, native stack traces, OS crash dumps, Dart script error boundary, and graceful fallback assets.
