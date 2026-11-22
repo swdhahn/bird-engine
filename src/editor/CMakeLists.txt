@@ -7,7 +7,17 @@ add_library(
   ViewportPicker.h
   ViewportPicker.cpp
   TransformGizmo.h
-  TransformGizmo.cpp)
+  TransformGizmo.cpp
+  ComponentInspector.h
+  ComponentInspector.cpp
+  HierarchyPanel.h
+  HierarchyPanel.cpp
+  InspectorPanel.h
+  InspectorPanel.cpp
+  EditorToolbar.h
+  EditorToolbar.cpp
+  LevelEditor.h
+  LevelEditor.cpp)
 
 target_link_libraries(editor PRIVATE glm)
 set_target_properties(editor PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
