@@ -2,6 +2,9 @@
 
 #include <cmath>
 #include <stdexcept>
+
+#include "../events/EventBus.h"
+#include "../scene/WorldObject.h"
 #include <utility>
 
 #include "Tween.h"
@@ -178,6 +181,14 @@ void AnimationSystem::tick(float delta) {
 		if (!running && m_slots[i].generation == generation &&
 			m_slots[i].playback) {
 			release(i);
+			constexpr EventTypeID kAnimCompleted =
+				hashEventName("animation.completed");
+			if (EVENT_BUS && EVENT_BUS->hasSubscribers(kAnimCompleted)) {
+				EventPayload payload;
+				payload.set("handleIndex", static_cast<int64_t>(i))
+					.set("handleGeneration", static_cast<int64_t>(generation));
+				EVENT_BUS->emit(kAnimCompleted, std::move(payload));
+			}
 		}
 	}
 }

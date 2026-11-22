@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <unordered_set>
 
+#include "../events/EventBus.h"
+#include "../scene/WorldObject.h"
 #include "PhysicsInternal.h"
 #include "PhysicsServer.h"
 #include "CharacterControllerComponent.h"
@@ -106,8 +108,46 @@ void deliver(const PhysicsWorldImpl& impl, uint32_t selfId, uint32_t otherId,
 	}
 }
 
+void emitPhysicsBusEvent(WorldObject* selfObj, WorldObject* otherObj,
+						 EventKind kind, const Vector3& point,
+						 const Vector3& normal) {
+	if (!EVENT_BUS || !selfObj || !otherObj) return;
+	EventTypeID eventId = kInvalidEventTypeID;
+	bool includeGeometry = false;
+	switch (kind) {
+		case EventKind::ContactBegin:
+			eventId = hashEventName("physics.contact_begin");
+			includeGeometry = true;
+			break;
+		case EventKind::ContactEnd:
+			eventId = hashEventName("physics.contact_end");
+			break;
+		case EventKind::TriggerEnter:
+			eventId = hashEventName("physics.trigger_enter");
+			includeGeometry = true;
+			break;
+		case EventKind::TriggerExit:
+			eventId = hashEventName("physics.trigger_exit");
+			break;
+	}
+	if (!EVENT_BUS->hasSubscribers(eventId)) return;
+	EventPayload payload;
+	payload.set("selfEntityId", selfObj->getID())
+		.set("otherEntityId", otherObj->getID());
+	if (includeGeometry) {
+		payload.set("point", point).set("normal", normal);
+	}
+	EVENT_BUS->emit(eventId, std::move(payload));
+}
+
 void deliverPair(const PhysicsWorldImpl& impl, uint32_t a, uint32_t b, EventKind kind,
 				 const Vector3& point, const Vector3& normalAtoB) {
+	const Endpoint endA = resolve(impl, a);
+	const Endpoint endB = resolve(impl, b);
+	if (endA && endB) {
+		emitPhysicsBusEvent(endA.object(), endB.object(), kind, point,
+							normalAtoB);
+	}
 	deliver(impl, a, b, kind, point, normalAtoB);
 	deliver(impl, b, a, kind, point, -normalAtoB);
 }

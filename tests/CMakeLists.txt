@@ -6,7 +6,9 @@ add_executable(Bird_unit_tests
   MaterialTest.cpp RenderQueueTest.cpp ShadowTest.cpp ResourceConventionTest.cpp
   GLCapabilitiesTest.cpp PlatformTest.cpp
   AnimationCoreTest.cpp UIAnimationTest.cpp SkeletalAnimationTest.cpp
-  SerializationTest.cpp)
+  SerializationTest.cpp
+  EventBusTest.cpp
+)
 target_include_directories(Bird_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(Bird_unit_tests PRIVATE Bird_core GTest::gtest_main)
 

@@ -130,9 +130,15 @@ else()
 endif()
 add_library(
   Bird_core ${BIRD_CORE_LIBRARY_TYPE}
-  ${BIRD_FILES} $<TARGET_OBJECTS:renders> $<TARGET_OBJECTS:opengl-renderer>
-  $<TARGET_OBJECTS:scene> $<TARGET_OBJECTS:physics>
-  $<TARGET_OBJECTS:animation> $<TARGET_OBJECTS:serialization>)
+  ${BIRD_FILES}
+  $<TARGET_OBJECTS:renders>
+  $<TARGET_OBJECTS:opengl-renderer>
+  $<TARGET_OBJECTS:scene>
+  $<TARGET_OBJECTS:physics>
+  $<TARGET_OBJECTS:animation>
+  $<TARGET_OBJECTS:serialization>
+  $<TARGET_OBJECTS:events>
+)
 if(BIRD_HOST_BUILD)
   add_executable(Bird src/main.cpp)
   target_link_libraries(Bird Bird_core)
@@ -342,6 +348,7 @@ include_directories(src/physics)
 add_subdirectory(src/animation)
 add_subdirectory(src/serialization)
 include_directories(src/serialization)
+add_subdirectory(src/events)
 
 target_link_libraries(
   Bird_core

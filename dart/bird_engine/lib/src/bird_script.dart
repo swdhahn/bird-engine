@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:ffi' as ffi;
 import 'package:ffi/ffi.dart' as pkg_ffi;
 
+import 'events.dart';
 import 'generated/bindings.dart' as b;
 import 'generated/component.dart';
 import 'generated/globals.dart';
@@ -132,26 +134,50 @@ abstract class BirdScript<T extends WorldObject> {
     _initCb = ffi.NativeCallable<_NativeInitSig>.isolateLocal(
       (ffi.Pointer<ffi.Void> hostPtr) {
         _host = wrapHost(hostPtr);
-        init();
+        runZoned(
+          () => init(),
+          zoneValues: <Object?, Object?>{
+            birdActiveEntityIdZoneKey: _host!.getID(),
+          },
+        );
       },
     );
     _processCb = ffi.NativeCallable<_NativeProcessSig>.isolateLocal(
       (ffi.Pointer<ffi.Void> hostPtr, double delta) {
         _host ??= wrapHost(hostPtr);
-        process(delta);
+        runZoned(
+          () => process(delta),
+          zoneValues: <Object?, Object?>{
+            birdActiveEntityIdZoneKey: _host!.getID(),
+          },
+        );
       },
     );
     _physicsProcessCb = ffi.NativeCallable<_NativeProcessSig>.isolateLocal(
       (ffi.Pointer<ffi.Void> hostPtr, double fixedDelta) {
         _host ??= wrapHost(hostPtr);
-        physicsProcess(fixedDelta);
+        runZoned(
+          () => physicsProcess(fixedDelta),
+          zoneValues: <Object?, Object?>{
+            birdActiveEntityIdZoneKey: _host!.getID(),
+          },
+        );
       },
     );
     _deinitCb = ffi.NativeCallable<_NativeDeinitSig>.isolateLocal(
       (ffi.Pointer<ffi.Void> hostPtr) {
+        _host ??= wrapHost(hostPtr);
         try {
-          deinit();
+          runZoned(
+            () => deinit(),
+            zoneValues: <Object?, Object?>{
+              birdActiveEntityIdZoneKey: _host!.getID(),
+            },
+          );
         } finally {
+          if (_host != null) {
+            Events.unsubscribeByOwner(ownerEntityId: _host!.getID());
+          }
           _initCb?.close();
           _processCb?.close();
           _physicsProcessCb?.close();

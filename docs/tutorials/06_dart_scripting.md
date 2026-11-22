@@ -222,7 +222,42 @@ For fixed-timestep physics logic (like character movement or applying continuous
 
 ---
 
+## Step 5: Decoupled Messaging with `Events`
+
+Use the static `Events` API to communicate across Dart scripts and native C++ engine subsystems without tight coupling:
+
+```dart
+class ScoreTracker extends BirdScript<WorldObject> {
+  int score = 0;
+
+  @override
+  void init() {
+    // Subscribed inside BirdScript.init(): automatically unsubscribed when
+    // this WorldObject is removed from the scene or deinitialized!
+    Events.subscribe('coin.collected', (payload) {
+      final value = (payload['points'] as int?) ?? 10;
+      score += value;
+    });
+
+    // Listen to native physics contact events on the global bus:
+    Events.subscribe('physics.contact_begin', (payload) {
+      final point = payload['point'] as Vector3;
+      // Spawn particles at point...
+    });
+  }
+}
+
+// Emit a queued event (dispatched after physics, before process()):
+Events.emit('coin.collected', {'points': 50, 'pos': Vector3(1.0, 2.0, 3.0)});
+
+// Or dispatch synchronously right now:
+Events.emitImmediate('ui.play_sound', {'clip': 'coin_pickup'});
+```
+
+---
+
 ## Further Reading
 
+- **[Event & Messaging System Architecture](../architecture/event_bus.md)**: Queued vs. immediate events, payload conventions, C++/Dart interoperability, and automatic lifecycle cleanup.
 - **[Dart Scripting & Codegen Architecture](../architecture/dart_scripting_and_codegen.md)**: Deep dive into `DartApiGenerator`, type marshalling, ownership rules, exposing new headers, and troubleshooting.
 - **[`test/main.dart`](../../test/main.dart)**: Complete reference implementation combining 3D rendering, Jolt Physics, character controller, and 2D UI in Dart.

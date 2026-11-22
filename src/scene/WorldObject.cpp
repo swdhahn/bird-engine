@@ -5,6 +5,7 @@
 #include "WorldObject.h"
 
 #include "../animation/AnimationSystem.h"
+#include "../events/EventBus.h"
 #include "Scene.h"
 
 namespace bird {
@@ -12,6 +13,8 @@ namespace bird {
 WorldObject::~WorldObject() {
 	// Tweens hold raw pointers to their target; none may outlive it.
 	if (ANIMATION_SYSTEM) ANIMATION_SYSTEM->cancelOwner(this);
+	// Event listeners owned by this entity must never fire after destruction.
+	if (EVENT_BUS) EVENT_BUS->unsubscribeByOwner(m_id);
 }
 
 WorldObject::WorldObject()
@@ -43,6 +46,7 @@ void WorldObject::deinit() {
 		m_components[i]->deinit();
 		m_components[i]->_deinit();
 	}
+	if (EVENT_BUS) EVENT_BUS->unsubscribeByOwner(m_id);
 	m_isInitiated = false;
 }
 
