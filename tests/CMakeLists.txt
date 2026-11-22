@@ -8,6 +8,9 @@ add_executable(Bird_unit_tests
   AnimationCoreTest.cpp UIAnimationTest.cpp SkeletalAnimationTest.cpp)
 target_include_directories(Bird_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(Bird_unit_tests PRIVATE Bird_core GTest::gtest_main)
+if(BIRD_ENABLE_HOT_RELOAD)
+  target_sources(Bird_unit_tests PRIVATE HotReloadTest.cpp)
+endif()
 
 include(GoogleTest)
 gtest_discover_tests(Bird_unit_tests)
