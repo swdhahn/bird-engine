@@ -3530,6 +3530,27 @@ static void printUsage() {
 		   "[--lib <name>] [<clang flags...> --] <header>...\n";
 }
 
+/**
+ * Prints every error or fatal diagnostic libclang produced for a header.
+ * @return The number of such diagnostics.
+ */
+static size_t reportParseErrors(CXTranslationUnit tu) {
+	size_t errors = 0;
+	const unsigned count = clang_getNumDiagnostics(tu);
+	for (unsigned i = 0; i < count; ++i) {
+		CXDiagnostic diagnostic = clang_getDiagnostic(tu, i);
+		if (clang_getDiagnosticSeverity(diagnostic) >= CXDiagnostic_Error) {
+			CXString text = clang_formatDiagnostic(
+				diagnostic, clang_defaultDiagnosticDisplayOptions());
+			std::cerr << "[DartApiGenerator] " << clang_getCString(text) << "\n";
+			clang_disposeString(text);
+			++errors;
+		}
+		clang_disposeDiagnostic(diagnostic);
+	}
+	return errors;
+}
+
 static bool parseArgs(int argc, char** argv, CliArgs& out) {
 	bool sawDoubleDash = false;
 	for (int i = 1; i < argc; ++i) {
@@ -3595,6 +3616,7 @@ int main(int argc, char** argv) {
 	VisitorState state;
 	state.model = &model;
 	state.nsFilter = {"bird"};
+	size_t parseErrors = 0;
 
 	for (const auto& header : cli.headers) {
 		CXTranslationUnit tu = nullptr;
@@ -3608,11 +3630,20 @@ int main(int argc, char** argv) {
 			clang_disposeIndex(index);
 			return 1;
 		}
+		parseErrors += reportParseErrors(tu);
 		CXCursor root = clang_getTranslationUnitCursor(tu);
 		clang_visitChildren(root, visitTU, &state);
 		clang_disposeTranslationUnit(tu);
 	}
 	clang_disposeIndex(index);
+	// A partial parse turns unresolved types into int and merges overloads,
+	// which yields a wrapper that does not compile; stop before writing it.
+	if (parseErrors > 0) {
+		std::cerr << "[DartApiGenerator] error: " << parseErrors
+				  << " parse error(s); bindings not written. Check the "
+					 "libclang resource dir and system headers.\n";
+		return 1;
+	}
 
 	extractInputMacroConstants(cli.headers, model);
 	finalizeModel(model);

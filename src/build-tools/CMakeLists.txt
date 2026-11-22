@@ -83,6 +83,76 @@ if(NOT LIBCLANG_LIBRARY OR NOT LIBCLANG_INCLUDE_DIR)
                        "Install LLVM/Clang -- see docs/getting_started/building_from_source.md.")
 endif()
 
+# libclang parses headers like a compiler, so it needs the builtin headers
+# (stddef.h, stdarg.h, ...) of its own version. Pointing -resource-dir at
+# the copy installed beside the library keeps them in the driver's usual
+# place in the search order; an -isystem override would shadow the C++
+# standard library's #include_next chains.
+get_filename_component(_LIBCLANG_REAL "${LIBCLANG_LIBRARY}" REALPATH)
+get_filename_component(_LIBCLANG_DIR "${_LIBCLANG_REAL}" DIRECTORY)
+# Debian/Ubuntu keep the library in /usr/lib/<triple> but the headers under
+# /usr/lib/llvm-<major>/lib/clang/<major>, so search those roots too.
+get_filename_component(_LIBCLANG_NAME "${_LIBCLANG_REAL}" NAME)
+set(_LIBCLANG_MAJOR "")
+if(_LIBCLANG_NAME MATCHES "^libclang(-([0-9]+))?\\.so\\.([0-9]+)")
+  set(_LIBCLANG_MAJOR "${CMAKE_MATCH_3}")
+endif()
+set(_CLANG_RESOURCE_ROOTS "${_LIBCLANG_DIR}" "${_LIBCLANG_DIR}/../lib")
+if(LLVM_CONFIG_LIBDIR)
+  list(APPEND _CLANG_RESOURCE_ROOTS "${LLVM_CONFIG_LIBDIR}")
+endif()
+if(_LIBCLANG_MAJOR)
+  list(APPEND _CLANG_RESOURCE_ROOTS "/usr/lib/llvm-${_LIBCLANG_MAJOR}/lib")
+endif()
+list(APPEND _CLANG_RESOURCE_ROOTS "/usr/lib")
+set(BIRD_CLANG_RESOURCE_DIR "")
+set(_CLANG_RESOURCE_FALLBACK "")
+foreach(_root IN LISTS _CLANG_RESOURCE_ROOTS)
+  file(GLOB _CLANG_RESOURCE_CANDIDATES LIST_DIRECTORIES true "${_root}/clang/*")
+  foreach(_candidate IN LISTS _CLANG_RESOURCE_CANDIDATES)
+    if(NOT EXISTS "${_candidate}/include/stddef.h")
+      continue()
+    endif()
+    get_filename_component(_candidate_name "${_candidate}" NAME)
+    if(NOT BIRD_CLANG_RESOURCE_DIR AND _LIBCLANG_MAJOR
+       AND _candidate_name MATCHES "^${_LIBCLANG_MAJOR}(\\.|$)")
+      get_filename_component(BIRD_CLANG_RESOURCE_DIR "${_candidate}" REALPATH)
+    elseif(NOT _CLANG_RESOURCE_FALLBACK)
+      get_filename_component(_CLANG_RESOURCE_FALLBACK "${_candidate}" REALPATH)
+    endif()
+  endforeach()
+endforeach()
+# Unversioned library names (macOS, Windows) take the copy beside them.
+if(NOT BIRD_CLANG_RESOURCE_DIR)
+  set(BIRD_CLANG_RESOURCE_DIR "${_CLANG_RESOURCE_FALLBACK}")
+endif()
+if(NOT BIRD_CLANG_RESOURCE_DIR)
+  message(FATAL_ERROR "Found libclang at ${_LIBCLANG_REAL}, but not its builtin "
+                      "headers (clang/<version>/include/stddef.h beside it). "
+                      "Install the matching clang resource headers.")
+endif()
+
+set(_GENERATOR_PARSE_FLAGS "-resource-dir=${BIRD_CLANG_RESOURCE_DIR}")
+if(APPLE)
+  # libclang does not ask xcrun for the SDK the way the clang driver does.
+  execute_process(COMMAND xcrun --show-sdk-path
+      OUTPUT_VARIABLE _MACOS_SDK OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  if(NOT _MACOS_SDK)
+    set(_MACOS_SDK "${CMAKE_OSX_SYSROOT}")
+  endif()
+  if(_MACOS_SDK)
+    list(APPEND _GENERATOR_PARSE_FLAGS "-isysroot" "${_MACOS_SDK}")
+  endif()
+endif()
+if(WIN32)
+  # Newer MSVC STLs reject a libclang older than they expect (STL1000).
+  # The generator only reads declarations, so the official opt-out is safe.
+  list(APPEND _GENERATOR_PARSE_FLAGS "-D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH")
+endif()
+set(BIRD_DART_GENERATOR_PARSE_FLAGS "${_GENERATOR_PARSE_FLAGS}" CACHE INTERNAL
+    "Flags DartApiGenerator passes to libclang")
+message(STATUS "DartApiGenerator: libclang ${_LIBCLANG_REAL}, resource dir ${BIRD_CLANG_RESOURCE_DIR}")
+
 add_executable(DartApiGenerator DartApiGenerator.cpp)
 target_include_directories(DartApiGenerator PRIVATE ${LIBCLANG_INCLUDE_DIR})
 target_link_libraries(DartApiGenerator PRIVATE ${LIBCLANG_LIBRARY})

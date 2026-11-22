@@ -78,26 +78,6 @@ set(BIRD_DART_GEN_DART_DIR "${CMAKE_SOURCE_DIR}/dart/bird_engine/lib/src/generat
 set(BIRD_DART_C_WRAPPER_H "${BIRD_DART_GEN_C_DIR}/c_wrapper.h")
 set(BIRD_DART_C_WRAPPER_CPP "${BIRD_DART_GEN_C_DIR}/c_wrapper.cpp")
 
-# Find Clang's builtin resource include directory (stddef.h, stdarg.h, etc.)
-find_package(LLVM QUIET CONFIG)
-set(_CLANG_BUILTIN_HINTS "")
-if(LLVM_LIBRARY_DIRS AND LLVM_VERSION_MAJOR)
-    list(APPEND _CLANG_BUILTIN_HINTS
-        "${LLVM_LIBRARY_DIRS}/clang/${LLVM_VERSION_MAJOR}/include"
-        "${LLVM_LIBRARY_DIRS}/clang/${LLVM_PACKAGE_VERSION}/include")
-endif()
-if(LLVM_VERSION_MAJOR)
-    list(APPEND _CLANG_BUILTIN_HINTS "/usr/lib/clang/${LLVM_VERSION_MAJOR}/include")
-endif()
-find_path(BIRD_CLANG_BUILTIN_INCLUDE_DIR stddef.h
-    PATHS ${_CLANG_BUILTIN_HINTS}
-    NO_DEFAULT_PATH
-)
-set(_CLANG_BUILTIN_FLAG "")
-if(BIRD_CLANG_BUILTIN_INCLUDE_DIR)
-    set(_CLANG_BUILTIN_FLAG "-isystem${BIRD_CLANG_BUILTIN_INCLUDE_DIR}")
-endif()
-
 add_custom_command(
     OUTPUT
         ${BIRD_DART_C_WRAPPER_H}
@@ -109,7 +89,7 @@ add_custom_command(
         --out-dart ${BIRD_DART_GEN_DART_DIR}
         --lib libBird_core
         --
-        ${_CLANG_BUILTIN_FLAG}
+        ${BIRD_DART_GENERATOR_PARSE_FLAGS}
         -I${CMAKE_SOURCE_DIR}/src
         -I${INSTALLED_LIB_PATH}/include
         ${BIRD_SCRIPT_HEADERS}
@@ -199,6 +179,11 @@ set_target_properties(dart_dll PROPERTIES
     IMPORTED_LOCATION "${_DART_DLL_LIB}"
     INTERFACE_INCLUDE_DIRECTORIES "${_DART_DLL_ROOT}/include"
 )
+if(WIN32)
+    # MSVC links against the import library, not the DLL itself.
+    set_target_properties(dart_dll PROPERTIES
+        IMPORTED_IMPLIB "${_DART_DLL_ROOT}/bin/dart_dll.lib")
+endif()
 
 # Generated C wrapper + Embedded Dart VM runtime compiled directly into Bird_core
 add_library(bird_dart OBJECT
