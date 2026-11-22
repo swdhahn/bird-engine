@@ -2,7 +2,7 @@ add_executable(Bird_unit_tests
   UIGeometryTest.cpp UITextTest.cpp UILayoutTest.cpp UIInputTest.cpp
   UITextEditTest.cpp UIWidgetTest.cpp UIDrawListTest.cpp UIPopupTest.cpp
   UIInputsV2Test.cpp UITextAreaTest.cpp UIMenuTest.cpp UIListTreeTest.cpp
-  UIColorTest.cpp UIRichInputsTest.cpp PhysicsTest.cpp
+  UIColorTest.cpp UIRichInputsTest.cpp PhysicsTest.cpp NavigationTest.cpp
   MaterialTest.cpp RenderQueueTest.cpp ShadowTest.cpp ResourceConventionTest.cpp
   GLCapabilitiesTest.cpp PlatformTest.cpp
   AnimationCoreTest.cpp UIAnimationTest.cpp SkeletalAnimationTest.cpp

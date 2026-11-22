@@ -80,8 +80,9 @@ void Application::start(Script<Scene>* script) {
 	handleResize();
 	stage("UI ready");
 
-	// Before the scene: bodies are created as soon as objects are added.
+	// Before the scene: bodies and nav agents are created as soon as objects are added.
 	m_physicsServer = _own_mk<PhysicsServer>();
+	m_navServer = _own_mk<NavServer>();
 
 	m_scene = new Scene();
 	m_scene->addComponent(std::unique_ptr<Script<Scene>>(script));
@@ -156,8 +157,18 @@ void Application::tick() {
 			m_processableScripts[i]->process(delta);
 		}
 	}
-	// After scripts (animation wins over script-written transforms for
-	// the frame), before matrices update and skinning palettes upload.
+	// After scripts (animation and navigation win over script-written transforms
+	// for the frame), before matrices update and skinning palettes upload.
+	{
+		PROFILE_SCOPE("Navigation");
+		m_navServer->step(delta);
+		if (m_navDebugDraw) {
+			for (NavWorld* world : m_navServer->getWorlds()) {
+				world->debugDraw(m_graphicsPipeline->getDebugDraw(),
+								 m_navDebugSettings);
+			}
+		}
+	}
 	{
 		PROFILE_SCOPE("Animation");
 		ANIMATION_SYSTEM->tick(delta);
@@ -224,9 +235,10 @@ void Application::removeProcessableScript(ProcessScriptComponent* script) {
 
 void Application::deinit() {
 	m_scene->deinit();
-	// Scenes own their physics worlds, which must die before the server.
+	// Scenes own their physics and nav worlds, which must die before the servers.
 	delete m_scene;
 	m_scene = nullptr;
+	m_navServer.reset();
 	m_physicsServer.reset();
 	// After the scene: destroyed objects cancel their own animations and
 	// audio, and unsubscribe their event listeners.
@@ -271,6 +283,10 @@ void Application::handleResize() {
 
 PhysicsServer* Application::getPhysicsServer() {
 	return m_physicsServer.get();
+}
+
+NavServer* Application::getNavServer() {
+	return m_navServer.get();
 }
 
 FixedStepClock& Application::getPhysicsClock() {

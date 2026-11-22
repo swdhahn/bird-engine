@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include "../navigation/NavWorld.h"
 #include "../physics/PhysicsWorld.h"
 #include "WorldObject.h"
 
@@ -86,10 +87,35 @@ class Scene : public WorldObject {
 	/** True when this scene owns a world (rather than using an ancestor's). */
 	bool ownsPhysicsWorld() const;
 
+	/**
+	 * Gives this scene its own isolated navigation world (NavMesh + Detour Crowd).
+	 * NavAgents in this scene and its sub-scenes (down to the next scene owning a
+	 * NavWorld) use this world. Call before adding NavAgent components.
+	 *
+	 * @param settings Crowd capacity and maximum agent radius.
+	 * @return Pointer to the newly created NavWorld owned by this scene.
+	 * @throws std::logic_error when this scene already owns a NavWorld or no
+	 *         NavServer exists.
+	 */
+	NavWorld* createNavWorld(const NavWorldSettings& settings = {});
+
+	/**
+	 * Returns the NavWorld for this scene: this scene's own world, else the
+	 * nearest ancestor's. The root scene creates a default NavWorld lazily.
+	 *
+	 * @return Pointer to the active NavWorld.
+	 * @throws std::logic_error when a world must be created and no NavServer exists.
+	 */
+	NavWorld* getNavWorld();
+
+	/** True when this scene owns a NavWorld (rather than using an ancestor's). */
+	bool ownsNavWorld() const;
+
    protected:
-	// Declared before m_children so children (and their bodies) are
-	// destroyed while the world is still alive.
+	// Declared before m_children so children (and their bodies/agents) are
+	// destroyed while the worlds are still alive.
 	_own<PhysicsWorld> m_physicsWorld;
+	_own<NavWorld> m_navWorld;
 	std::vector<_own<WorldObject>> m_children;
 	std::vector<Scene*> m_childrenScenes;
 
