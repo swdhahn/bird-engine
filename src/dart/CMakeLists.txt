@@ -69,6 +69,9 @@ set(BIRD_SCRIPT_HEADERS
     ${CMAKE_SOURCE_DIR}/src/animation/Curves.h
     ${CMAKE_SOURCE_DIR}/src/animation/WorldTweens.h
     ${CMAKE_SOURCE_DIR}/src/animation/skeletal/SkeletalAnimationComponent.h
+    ${CMAKE_SOURCE_DIR}/src/serialization/PrefabManager.h
+    ${CMAKE_SOURCE_DIR}/src/serialization/SceneSerializer.h
+    ${CMAKE_SOURCE_DIR}/src/serialization/SaveGame.h
     ${CMAKE_SOURCE_DIR}/src/events/EventTypes.h
     ${CMAKE_SOURCE_DIR}/src/events/EventPayload.h
     ${CMAKE_SOURCE_DIR}/src/events/EventBus.h

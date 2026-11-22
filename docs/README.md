@@ -33,7 +33,8 @@ flowchart TD
     Arch --> A6["Resource & Asset Management"]
     Arch --> A7["Physics (Jolt Integration)"]
     Arch --> A8["Dart Scripting & FFI Codegen"]
-    Arch --> A9["Event & Messaging System"]
+    Arch --> A9["Scene Serialization, Prefabs & Save Games"]
+    Arch --> A10["Event & Messaging System"]
 ```
 
 ---
@@ -69,3 +70,4 @@ Under-the-hood technical references detailing internal mechanics and design deci
 - **[Animation](architecture/animation.md)**: Shared curves, easing and playback clocks; the `AnimationSystem`; UI transitions through `UIAnimator` and the post-layout visual transform; world tweens; and the skeletal runtime with Assimp-based baking.
 - **[Event & Messaging System](architecture/event_bus.md)**: Decoupled C++ and Dart publish-subscribe bus (`EventBus` / `Events`), queued ring-buffer vs. immediate synchronous dispatch, variant `EventPayload` conventions, built-in physics/input/animation events, and automatic entity lifecycle cleanup.
 - **[Dart Scripting & FFI Codegen](architecture/dart_scripting_and_codegen.md)**: `libclang`-based `DartApiGenerator`, 3-tier C++/C/Dart FFI architecture, Doxygen-to-Dartdoc extraction, ownership rules, embedded `libdart_dll` VM runtime, and troubleshooting.
+- **[Scene Serialization, Prefabs & Save Games](architecture/serialization_and_prefabs.md)**: Format-agnostic `Archive` & JSON schema, `ComponentRegistry` reflection, stable `UUID` & `EntityRef` remapping, `PrefabManager` / `InstantiatePrefab(AssetID)`, property delta overrides, and cross-platform `SaveGame` directory resolution.

@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "../serialization/UUID.h"
 #include "../util/Constants.h"
 #include "../util/Input.h"
 #include "../util/Math.h"
@@ -78,6 +79,24 @@ class WorldObject : public Object {
 
 	const uint64_t& getID() const;
 	bool operator==(const WorldObject& e);
+
+	/** Returns the stable 128-bit UUID identifying this entity across saves. */
+	BIRD_NO_EXPORT const UUID& getUUID() const;
+
+	/** Overrides the entity's stable UUID (used during deserialization and prefab remapping). */
+	BIRD_NO_EXPORT void setUUID(const UUID& uuid);
+
+	/** Returns the canonical hyphenated UUID string for this entity. */
+	std::string getUUIDString() const;
+
+	/** Sets the entity's UUID from a canonical hyphenated UUID string. */
+	void setUUIDString(const std::string& uuid);
+
+	/** Returns the human-readable name assigned to this entity (may be empty). */
+	const std::string& getName() const;
+
+	/** Assigns a human-readable name to this entity. */
+	void setName(const std::string& name);
 
 	/**
 	 * Translates the object along world axes and marks the transform dirty.
@@ -157,6 +176,10 @@ class WorldObject : public Object {
    protected:
 	// Unique identifier assigned sequentially upon construction
 	uint64_t m_id;
+	// Stable persistent identifier used by scene serialization and prefabs
+	UUID m_uuid;
+	// Optional human-readable entity name
+	std::string m_name;
 	Vector3 m_worldPosition;
 	Vector3 m_localPosition;
 	Vector3 m_scale;
