@@ -2057,6 +2057,14 @@ static void writeFiles(const fs::path& outDir,
 				src << "BIRD_C_API void " << setFn << "(" << setParams
 					<< ") {\n";
 				emitVectorParamPrologue(src, {vp}, model);
+				if (f.type.cat == TypeCat::SharedPtr) {
+					// The Dart getter is nullable, so the setter accepts null
+					// too; a null handle resets the field instead of crashing.
+					src << "    if (_value == nullptr) {\n"
+						<< "        " << fieldAccess << " = nullptr;\n"
+						<< "        return;\n"
+						<< "    }\n";
+				}
 				src << "    " << fieldAccess << " = " << cppArgExpr(vp)
 					<< ";\n";
 				src << "}\n\n";
@@ -3385,8 +3393,11 @@ static void writeClassFile(const fs::path& outDir, const ClassInfo& cls,
 		f << "  }\n\n";
 
 		if (!field.isReadOnly) {
+			// Raw pointers and shared_ptr handles have nullable getters; Dart
+			// requires the setter to accept the getter's type.
 			bool nullablePtr = (field.type.cat == TypeCat::OpaqueClass &&
-								field.type.isPointer);
+								field.type.isPointer) ||
+							   field.type.cat == TypeCat::SharedPtr;
 			std::string setDartType =
 				nullablePtr ? getRet.dartUser : setArg.dartUser;
 			f << "  " << statKw << "set " << propName << "(" << setDartType
