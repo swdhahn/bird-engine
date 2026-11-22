@@ -52,6 +52,14 @@ const uint64_t& WorldObject::getID() const {
 	return m_id;
 }
 
+const std::string& WorldObject::getName() const {
+	return m_name;
+}
+
+void WorldObject::setName(std::string name) {
+	m_name = std::move(name);
+}
+
 bool WorldObject::operator==(const WorldObject& e) {
 	return e.getID() == m_id;
 }

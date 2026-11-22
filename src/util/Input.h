@@ -106,11 +106,25 @@ class Input : public WindowEventListener {
 	Vector2 getMouseDelta() const { return m_mouseDelta; }
 	/** Cursor position in window pixels at the last tick. */
 	Vector2 getMousePosition() const { return Vector2(m_tickX, m_tickY); }
+	/** Latest cursor position in window pixels from the most recent event. */
+	Vector2 getCursorPosition() const { return Vector2(float(m_mx), float(m_my)); }
+
+	/**
+	 * Accumulated mouse scroll wheel delta since the previous tick()
+	 * (+y is scrolling up/away, -y is scrolling down/toward).
+	 */
+	Vector2 getScrollDelta() const { return m_scrollAccum; }
 
 	/** @return true while a KEY_* key is held. */
 	bool isKeyDown(int key) const;
+	/** @return true on the single frame a KEY_* key transitioned from up to down. */
+	bool wasKeyPressed(int key) const;
 	/** @return true while a MOUSE_BUTTON_* button is held. */
 	bool isMouseButtonDown(int button) const;
+	/** @return true on the single frame a MOUSE_BUTTON_* button was pressed. */
+	bool wasMouseButtonPressed(int button) const;
+	/** @return true on the single frame a MOUSE_BUTTON_* button was released. */
+	bool wasMouseButtonReleased(int button) const;
 
 	/**
 	 * Per-frame input update tick. Evaluates current key and mouse states
@@ -134,10 +148,13 @@ class Input : public WindowEventListener {
 	double m_mx = 0.0, m_my = 0.0;				// tracked from events
 	double m_tickX = 0.0, m_tickY = 0.0;		// sampled by tick()
 	Vector2 m_mouseDelta{0.0f};
+	Vector2 m_scrollAccum{0.0f};
 	bool m_captured = false;
 	bool m_resetDelta = true;  // first tick, or capture changed
 	std::bitset<kKeyCount> m_keysDown;
+	std::bitset<kKeyCount> m_prevKeysDown;
 	std::bitset<kMouseButtonCount> m_buttonsDown;
+	std::bitset<kMouseButtonCount> m_prevButtonsDown;
 
 	std::vector<Action> m_actions;
 };

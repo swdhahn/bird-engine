@@ -93,14 +93,16 @@ void Application::tick() {
 	// Debug lines are rebuilt every frame (physics first, then scripts).
 	m_graphicsPipeline->getDebugDraw().clear();
 
-	// PHYSICS SECTION: zero or more fixed steps
-	const int physicsSteps = m_physicsClock.advance(delta);
-	const float fixedStep = m_physicsClock.getStep();
-	for (int step = 0; step < physicsSteps; step++) {
-		for (size_t i = 0; i < m_processableScripts.size(); i++) {
-			m_processableScripts[i]->physicsProcess(fixedStep);
+	// PHYSICS SECTION: zero or more fixed steps (skipped when simulation paused)
+	if (!m_simulationPaused) {
+		const int physicsSteps = m_physicsClock.advance(delta);
+		const float fixedStep = m_physicsClock.getStep();
+		for (int step = 0; step < physicsSteps; step++) {
+			for (size_t i = 0; i < m_processableScripts.size(); i++) {
+				m_processableScripts[i]->physicsProcess(fixedStep);
+			}
+			m_physicsServer->step(fixedStep);
 		}
-		m_physicsServer->step(fixedStep);
 	}
 	if (m_physicsDebugDraw) {
 		Camera* camera = m_graphicsPipeline->getCamera();
@@ -113,17 +115,22 @@ void Application::tick() {
 
 	// PROCESS SECTION
 	m_uiManager->process(delta);
-	for (size_t i = 0; i < m_processableScripts.size(); i++) {
-		m_processableScripts[i]->process(delta);
+	if (m_editorTickCallback) {
+		m_editorTickCallback(delta);
 	}
-	// After scripts (animation wins over script-written transforms for
-	// the frame), before matrices update and skinning palettes upload.
-	ANIMATION_SYSTEM->tick(delta);
+	if (!m_simulationPaused) {
+		for (size_t i = 0; i < m_processableScripts.size(); i++) {
+			m_processableScripts[i]->process(delta);
+		}
+		// After scripts (animation wins over script-written transforms for
+		// the frame), before matrices update and skinning palettes upload.
+		ANIMATION_SYSTEM->tick(delta);
+	}
 
 	processScene(m_scene, delta);
 	// After matrix updates: draw moving bodies between their last two
 	// physics poses so motion is smooth at any frame rate.
-	if (m_physicsInterpolation) {
+	if (!m_simulationPaused && m_physicsInterpolation) {
 		for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
 			world->interpolate(m_physicsClock.getAlpha());
 		}

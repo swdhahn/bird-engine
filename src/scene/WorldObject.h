@@ -77,6 +77,17 @@ class WorldObject : public Object {
 	bool operator==(const WorldObject& e);
 
 	/**
+	 * Returns the human-readable name of this entity (may be empty if unset).
+	 */
+	const std::string& getName() const;
+
+	/**
+	 * Assigns a human-readable name to this entity for editor display and lookup.
+	 * @param name New display name for the entity.
+	 */
+	void setName(std::string name);
+
+	/**
 	 * Translates the object along world axes and marks the transform dirty.
 	 * @param delta Translation vector in world coordinates.
 	 */
@@ -154,6 +165,7 @@ class WorldObject : public Object {
    protected:
 	// Unique identifier assigned sequentially upon construction
 	uint64_t m_id;
+	std::string m_name;
 	Vector3 m_worldPosition;
 	Vector3 m_localPosition;
 	Vector3 m_scale;

@@ -110,9 +110,24 @@ bool Input::isKeyDown(int key) const {
 	return key >= 0 && key < kKeyCount && m_keysDown.test(key);
 }
 
+bool Input::wasKeyPressed(int key) const {
+	return key >= 0 && key < kKeyCount && m_keysDown.test(key) &&
+		   !m_prevKeysDown.test(key);
+}
+
 bool Input::isMouseButtonDown(int button) const {
 	return button >= 0 && button < kMouseButtonCount &&
 		   m_buttonsDown.test(button);
+}
+
+bool Input::wasMouseButtonPressed(int button) const {
+	return button >= 0 && button < kMouseButtonCount &&
+		   m_buttonsDown.test(button) && !m_prevButtonsDown.test(button);
+}
+
+bool Input::wasMouseButtonReleased(int button) const {
+	return button >= 0 && button < kMouseButtonCount &&
+		   !m_buttonsDown.test(button) && m_prevButtonsDown.test(button);
 }
 
 void Input::tick() {
@@ -122,6 +137,9 @@ void Input::tick() {
 	m_tickX = m_mx;
 	m_tickY = m_my;
 	m_resetDelta = false;
+	m_scrollAccum = Vector2(0.0f);
+	m_prevKeysDown = m_keysDown;
+	m_prevButtonsDown = m_buttonsDown;
 
 	// While the UI owns the keyboard (a focused text box) or the pointer
 	// (hovering, dragging, modal), the game does not see that input. A
@@ -217,6 +235,8 @@ void Input::onCursorMove(double x, double y) {
 }
 
 void Input::onScroll(double dx, double dy) {
+	m_scrollAccum.x += static_cast<float>(dx);
+	m_scrollAccum.y += static_cast<float>(dy);
 	if (m_captured) return;
 	if (UIManager* ui = uiManager()) {
 		ui->scroll(Vector2(m_mx, m_my), Vector2(dx, dy));

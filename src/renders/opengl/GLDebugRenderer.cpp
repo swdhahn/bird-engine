@@ -67,6 +67,13 @@ void GLDebugRenderer::draw(const DebugDrawList& list) {
 		m_transient->upload(list.vertices().data(), list.vertices().size());
 		m_transient->draw();
 	}
+	if (!list.overlayVertices().empty()) {
+		glDisable(GL_DEPTH_TEST);
+		if (!m_overlay) m_overlay = std::make_unique<LineBuffer>();
+		m_overlay->upload(list.overlayVertices().data(),
+						  list.overlayVertices().size());
+		m_overlay->draw();
+	}
 	glEnable(GL_DEPTH_TEST);
 }
 
