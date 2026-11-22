@@ -290,7 +290,12 @@ else()
       GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
       GIT_TAG v1.6.0
       GIT_SHALLOW TRUE)
+  # recastnavigation v1.6.0 declares cmake_minimum_required(VERSION 3.0),
+  # which CMake 4 rejects; libs/CMakeLists.txt passes the same minimum to
+  # the host build. Scoped to these dependencies only.
+  set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
   FetchContent_MakeAvailable(bird_glm bird_jolt bird_recastnavigation)
+  unset(CMAKE_POLICY_VERSION_MINIMUM)
   set_target_properties(Jolt PROPERTIES POSITION_INDEPENDENT_CODE ON)
   if(NOT TARGET Jolt::Jolt)
     add_library(Jolt::Jolt ALIAS Jolt)

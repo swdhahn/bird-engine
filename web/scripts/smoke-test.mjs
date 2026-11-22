@@ -33,7 +33,8 @@ page.on('console', (message) => {
   const text = message.text();
   const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
   console.log(`[page ${message.type()} +${seconds}s] ${text}`);
-  if (text.startsWith('FPS:')) frames++;
+  // Diagnostics prefixes records with a timestamp, severity and category.
+  if (text.includes('FPS:')) frames++;
   if (text.includes('Fatal:') || text.includes('Aborted(')) failure = text;
 });
 page.on('pageerror', (error) => {
