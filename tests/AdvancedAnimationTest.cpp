@@ -14,8 +14,10 @@
 #include "animation/skeletal/BoneMask.h"
 #include "animation/skeletal/PoseNode.h"
 #include "animation/skeletal/PoseOps.h"
+#include "animation/skeletal/RootMotion.h"
 #include "animation/skeletal/SkeletalClip.h"
 #include "animation/skeletal/Skeleton.h"
+#include "animation/skeletal/TwoBoneIK.h"
 
 using namespace bird;
 
@@ -405,4 +407,128 @@ TEST(AnimationStateMachineTests, TransitionsCrossFadeExitTimeAndTriggers) {
 	sm.evaluate(ctx, out);
 	EXPECT_EQ(sm.getCurrentStateName(), "Hit");
 	EXPECT_NEAR(out.joints[0].translation.x, -3.0f, kEps);
+}
+
+// ============================================================================
+// 2-Bone Analytic IK Tests
+// ============================================================================
+
+namespace {
+
+/** 3-joint leg: hip at (0, 2, 0), knee at (0, 1, 0), ankle at (0, 0, 0). */
+std::shared_ptr<Skeleton> makeLegSkeleton() {
+	auto skel = std::make_shared<Skeleton>();
+	skel->addJoint("hip", -1, Matrix4(1.0f), makeTRS(Vector3(0, 2, 0)));
+	skel->addJoint("knee", 0, Matrix4(1.0f), makeTRS(Vector3(0, -1, 0)));
+	skel->addJoint("ankle", 1, Matrix4(1.0f), makeTRS(Vector3(0, -1, 0)));
+	return skel;
+}
+
+}  // namespace
+
+TEST(TwoBoneIKTests, ReachesTargetAndRespectsPoleVector) {
+	auto skel = makeLegSkeleton();
+	Pose pose = skel->getRestPose();
+	std::vector<Matrix4> model;
+	localToModel(*skel, pose, model);
+
+	TwoBoneIKConstraint ik;
+	ik.name = "LeftFoot";
+	ik.rootJoint = 0;
+	ik.midJoint = 1;
+	ik.endJoint = 2;
+	// Reachable target: 1.0 unit below hip (two 1.0 bones form equilateral triangle).
+	ik.targetPosition = Vector3(0.0f, 1.0f, 0.0f);
+	ik.polePosition = Vector3(0.0f, 1.5f, 2.0f);  // Bend knee toward +Z
+	ik.usePolePosition = true;
+	ik.weight = 1.0f;
+	ik.enabled = true;
+
+	ASSERT_TRUE(solveTwoBoneIK(*skel, pose, model, ik));
+
+	const Vector3 anklePos(model[2][3]);
+	const Vector3 kneePos(model[1][3]);
+	const Vector3 hipPos(model[0][3]);
+
+	// Ankle must land on target within 1e-3.
+	EXPECT_NEAR(anklePos.x, 0.0f, 1e-3f);
+	EXPECT_NEAR(anklePos.y, 1.0f, 1e-3f);
+	EXPECT_NEAR(anklePos.z, 0.0f, 1e-3f);
+
+	// Knee must bend toward +Z pole and preserve bone lengths (1.0 each).
+	EXPECT_GT(kneePos.z, 0.8f);
+	EXPECT_NEAR(glm::length(kneePos - hipPos), 1.0f, 1e-3f);
+	EXPECT_NEAR(glm::length(anklePos - kneePos), 1.0f, 1e-3f);
+}
+
+TEST(TwoBoneIKTests, ClampsUnreachableTargetAndRespectsWeight) {
+	auto skel = makeLegSkeleton();
+	Pose pose = skel->getRestPose();
+	std::vector<Matrix4> model;
+	localToModel(*skel, pose, model);
+
+	TwoBoneIKConstraint ik;
+	ik.rootJoint = 0;
+	ik.midJoint = 1;
+	ik.endJoint = 2;
+	// 5 units out along +X (max reach is 2.0).
+	ik.targetPosition = Vector3(5.0f, 2.0f, 0.0f);
+	ik.polePosition = Vector3(0.0f, 2.0f, 1.0f);
+	ik.weight = 1.0f;
+
+	ASSERT_TRUE(solveTwoBoneIK(*skel, pose, model, ik));
+	const Vector3 anklePos(model[2][3]);
+	EXPECT_NEAR(anklePos.x, 2.0f, 2e-3f);
+	EXPECT_NEAR(anklePos.y, 2.0f, 2e-3f);
+
+	// Weight 0 leaves FK pose untouched.
+	Pose fkPose = skel->getRestPose();
+	localToModel(*skel, fkPose, model);
+	ik.weight = 0.0f;
+	EXPECT_FALSE(solveTwoBoneIK(*skel, fkPose, model, ik));
+	EXPECT_NEAR(Vector3(model[2][3]).y, 0.0f, kEps);
+}
+
+// ============================================================================
+// Root Motion Tests
+// ============================================================================
+
+TEST(RootMotionTests, ExtractsPerFrameDeltaAndZerosRootTranslation) {
+	auto skel = makeHumanoidLite();
+	RootMotionConfig cfg;
+	cfg.enabled = true;
+	cfg.rootJoint = 0;
+	cfg.extractTranslationX = true;
+	cfg.extractTranslationY = false;  // Keep vertical bounce in pose
+	cfg.extractTranslationZ = true;
+
+	RootMotionExtractor extractor;
+	extractor.setConfig(cfg);
+
+	// Frame 1: root at (0, 1.1, 0) -> initializes reference, delta = 0.
+	Pose p1 = skel->getRestPose();
+	p1.joints[0].translation = Vector3(0.0f, 1.1f, 0.0f);
+	RootMotionDelta d1 = extractor.extract(*skel, p1, false);
+	EXPECT_NEAR(glm::length(d1.translation), 0.0f, kEps);
+	EXPECT_NEAR(p1.joints[0].translation.x, 0.0f, kEps);
+	EXPECT_NEAR(p1.joints[0].translation.y, 1.1f, kEps);  // Y preserved
+	EXPECT_NEAR(p1.joints[0].translation.z, 0.0f, kEps);
+
+	// Frame 2: root moves to (0.5, 1.2, 1.5) -> delta = (0.5, 0, 1.5), XZ zeroed to rest.
+	Pose p2 = skel->getRestPose();
+	p2.joints[0].translation = Vector3(0.5f, 1.2f, 1.5f);
+	RootMotionDelta d2 = extractor.extract(*skel, p2, false);
+	EXPECT_NEAR(d2.translation.x, 0.5f, kEps);
+	EXPECT_NEAR(d2.translation.y, 0.0f, kEps);
+	EXPECT_NEAR(d2.translation.z, 1.5f, kEps);
+	EXPECT_NEAR(p2.joints[0].translation.x, 0.0f, kEps);
+	EXPECT_NEAR(p2.joints[0].translation.y, 1.2f, kEps);
+	EXPECT_NEAR(p2.joints[0].translation.z, 0.0f, kEps);
+
+	// Frame 3 (loop wrapped): root wrapped back to (0.1, 1.0, 0.2) -> positive delta from rest, no backward spike.
+	Pose p3 = skel->getRestPose();
+	p3.joints[0].translation = Vector3(0.1f, 1.0f, 0.2f);
+	RootMotionDelta d3 = extractor.extract(*skel, p3, true);
+	EXPECT_NEAR(d3.translation.x, 0.1f, kEps);
+	EXPECT_NEAR(d3.translation.z, 0.2f, kEps);
 }
