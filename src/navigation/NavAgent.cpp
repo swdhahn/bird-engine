@@ -52,7 +52,7 @@ void NavAgent::_init() {
 	if (parent == nullptr) return;
 
 	m_world = parent->getNavWorld();
-	m_lastSyncedRevision = obj->getTransformRevision();
+	m_lastSyncedPosition = obj->getWorldPosition();
 	if (m_world != nullptr) {
 		m_world->_addAgent(this);
 	}

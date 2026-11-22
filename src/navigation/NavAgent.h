@@ -140,8 +140,11 @@ class NavAgent : public Component {
 	BIRD_NO_EXPORT int _crowdIndex() const { return m_crowdIndex; }
 	BIRD_NO_EXPORT void _setCrowdIndex(int idx) { m_crowdIndex = idx; }
 	BIRD_NO_EXPORT void _detachWorld();
-	BIRD_NO_EXPORT uint64_t _lastSyncedRevision() const { return m_lastSyncedRevision; }
-	BIRD_NO_EXPORT void _setLastSyncedRevision(uint64_t rev) { m_lastSyncedRevision = rev; }
+	/** Position the crowd last wrote to (or read from) the host object. */
+	BIRD_NO_EXPORT const Vector3& _lastSyncedPosition() const { return m_lastSyncedPosition; }
+	BIRD_NO_EXPORT void _setLastSyncedPosition(const Vector3& position) {
+		m_lastSyncedPosition = position;
+	}
 	BIRD_NO_EXPORT bool _hasPendingDestination() const { return m_pendingDestination; }
 	BIRD_NO_EXPORT void _applyPendingDestination();
 	BIRD_NO_EXPORT void _markReachedDestination();
@@ -152,7 +155,7 @@ class NavAgent : public Component {
 	NavAgentSettings m_settings;
 	NavWorld* m_world = nullptr;
 	int m_crowdIndex = -1;
-	uint64_t m_lastSyncedRevision = 0;
+	Vector3 m_lastSyncedPosition{0.0f};
 
 	Vector3 m_destination{0.0f};
 	bool m_hasDestination = false;

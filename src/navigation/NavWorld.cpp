@@ -15,6 +15,9 @@ namespace bird {
 
 namespace {
 
+/** Squared distance (1 mm) past which a host move counts as a teleport. */
+constexpr float kTeleportThresholdSq = 1e-6f;
+
 dtCrowdAgentParams makeCrowdParams(const NavAgentSettings& s) {
 	dtCrowdAgentParams ap{};
 	ap.radius = s.radius;
@@ -159,7 +162,7 @@ void NavWorld::registerAgentInCrowd(NavAgent* agent) {
 	dtCrowdAgentParams ap = makeCrowdParams(agent->getSettings());
 	const int idx = m_impl->crowd->addAgent(p, &ap);
 	agent->_setCrowdIndex(idx);
-	agent->_setLastSyncedRevision(agent->world_object()->getTransformRevision());
+	agent->_setLastSyncedPosition(pos);
 
 	if (idx >= 0 && (agent->_hasPendingDestination() || agent->hasDestination())) {
 		agent->_applyPendingDestination();
@@ -193,7 +196,9 @@ void NavWorld::_removeAgent(NavAgent* agent) {
 void NavWorld::step(float deltaTime) {
 	if (!(deltaTime > 0.0f) || !m_impl->crowd || !hasNavMesh()) return;
 
-	// 1. Pre-sync: detect external teleports via WorldObject transform revision.
+	// 1. Pre-sync: detect external teleports. Only a moved position counts;
+	// scripts that merely turn the host (any transform revision) must not
+	// re-register the agent, which would reset its velocity every frame.
 	for (NavAgent* agent : m_agents) {
 		WorldObject* obj = agent->world_object();
 		if (obj == nullptr) continue;
@@ -203,7 +208,8 @@ void NavWorld::step(float deltaTime) {
 			continue;
 		}
 
-		if (obj->getTransformRevision() != agent->_lastSyncedRevision()) {
+		const Vector3 offset = obj->getWorldPosition() - agent->_lastSyncedPosition();
+		if (glm::dot(offset, offset) > kTeleportThresholdSq) {
 			const bool hadDest = agent->hasDestination();
 			const Vector3 dest = agent->getDestination();
 			unregisterAgentFromCrowd(agent);
@@ -263,7 +269,7 @@ void NavWorld::step(float deltaTime) {
 			}
 		}
 
-		agent->_setLastSyncedRevision(obj->getTransformRevision());
+		agent->_setLastSyncedPosition(newPos);
 	}
 }
 
