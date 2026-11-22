@@ -83,6 +83,44 @@ if(NOT LIBCLANG_LIBRARY OR NOT LIBCLANG_INCLUDE_DIR)
                        "Install LLVM/Clang -- see docs/getting_started/building_from_source.md.")
 endif()
 
+# libclang parses headers like a compiler, so it needs the builtin headers
+# (stddef.h, stdarg.h, ...) of its own version. Pointing -resource-dir at
+# the copy installed beside the library keeps them in the driver's usual
+# place in the search order; an -isystem override would shadow the C++
+# standard library's #include_next chains.
+get_filename_component(_LIBCLANG_REAL "${LIBCLANG_LIBRARY}" REALPATH)
+get_filename_component(_LIBCLANG_DIR "${_LIBCLANG_REAL}" DIRECTORY)
+file(GLOB _CLANG_RESOURCE_CANDIDATES LIST_DIRECTORIES true
+     "${_LIBCLANG_DIR}/clang/*"
+     "${_LIBCLANG_DIR}/../lib/clang/*")
+set(BIRD_CLANG_RESOURCE_DIR "")
+foreach(_candidate IN LISTS _CLANG_RESOURCE_CANDIDATES)
+  if(EXISTS "${_candidate}/include/stddef.h")
+    get_filename_component(BIRD_CLANG_RESOURCE_DIR "${_candidate}" REALPATH)
+  endif()
+endforeach()
+if(NOT BIRD_CLANG_RESOURCE_DIR)
+  message(FATAL_ERROR "Found libclang at ${_LIBCLANG_REAL}, but not its builtin "
+                      "headers (clang/<version>/include/stddef.h beside it). "
+                      "Install the matching clang resource headers.")
+endif()
+
+set(_GENERATOR_PARSE_FLAGS "-resource-dir=${BIRD_CLANG_RESOURCE_DIR}")
+if(APPLE)
+  # libclang does not ask xcrun for the SDK the way the clang driver does.
+  execute_process(COMMAND xcrun --show-sdk-path
+      OUTPUT_VARIABLE _MACOS_SDK OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  if(NOT _MACOS_SDK)
+    set(_MACOS_SDK "${CMAKE_OSX_SYSROOT}")
+  endif()
+  if(_MACOS_SDK)
+    list(APPEND _GENERATOR_PARSE_FLAGS "-isysroot" "${_MACOS_SDK}")
+  endif()
+endif()
+set(BIRD_DART_GENERATOR_PARSE_FLAGS "${_GENERATOR_PARSE_FLAGS}" CACHE INTERNAL
+    "Flags DartApiGenerator passes to libclang")
+message(STATUS "DartApiGenerator: libclang ${_LIBCLANG_REAL}, resource dir ${BIRD_CLANG_RESOURCE_DIR}")
+
 add_executable(DartApiGenerator DartApiGenerator.cpp)
 target_include_directories(DartApiGenerator PRIVATE ${LIBCLANG_INCLUDE_DIR})
 target_link_libraries(DartApiGenerator PRIVATE ${LIBCLANG_LIBRARY})

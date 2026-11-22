@@ -18,6 +18,10 @@
 #include "ShaderBaker.h"
 #include "SkeletalImport.h"
 
+// Static: Assimp 5.3.1 bundles its own stb_image whose *_thread setters
+// stay external, so a second external copy collides when linking BuildTools
+// against a static libassimp. Every stbi_ call in BuildTools is in this file.
+#define STB_IMAGE_STATIC
 #define STB_IMAGE_IMPLEMENTATION
 #include "../util/stb_image.h"
 #define STB_TRUETYPE_IMPLEMENTATION

@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - "v*.*.*"
+  # Build-only on pull requests, so release breakage shows up before a tag;
+  # the publish job below runs only for a tag or an explicit version.
+  pull_request:
+    paths:
+      - "src/**"
+      - "libs/**"
+      - "dart/**"
+      - "CMakeLists.txt"
+      - ".github/workflows/release.yml"
   workflow_dispatch:
     inputs:
       version:
