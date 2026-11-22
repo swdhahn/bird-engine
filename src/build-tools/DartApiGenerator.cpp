@@ -1324,6 +1324,28 @@ static void finalizeModel(Model& model) {
 		}
 		cls.fields = std::move(validFields);
 
+		// Collapse const/non-const accessor pairs (`T& get()` and
+		// `const T& get() const`): Dart cannot tell them apart, and their
+		// mangled wrapper names would collide. The non-const overload wins.
+		const auto signatureKey = [](const MethodInfo& m) {
+			std::string key = m.name;
+			for (const auto& p : m.params) key += "|" + paramTag(p.type);
+			return key;
+		};
+		std::set<std::string> nonConstSignatures;
+		for (const auto& m : cls.methods) {
+			if (!m.isConst && !m.isConstructor && !m.isStatic) {
+				nonConstSignatures.insert(signatureKey(m));
+			}
+		}
+		cls.methods.erase(
+			std::remove_if(cls.methods.begin(), cls.methods.end(),
+						   [&](const MethodInfo& m) {
+							   return m.isConst && nonConstSignatures.count(
+													   signatureKey(m)) > 0;
+						   }),
+			cls.methods.end());
+
 		// Disambiguate overloads within class
 		std::map<std::string, int> counts;
 		for (const auto& m : cls.methods) {

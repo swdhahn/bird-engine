@@ -20,8 +20,26 @@ add_library(
   skeletal/Skeleton.cpp
   skeletal/SkeletalClip.h
   skeletal/SkeletalClip.cpp
+  skeletal/AnimationNotify.h
+  skeletal/AnimationParameters.h
+  skeletal/AnimationParameters.cpp
+  skeletal/BoneMask.h
+  skeletal/BoneMask.cpp
   skeletal/PoseOps.h
   skeletal/PoseOps.cpp
+  skeletal/PoseNode.h
+  skeletal/PoseNode.cpp
+  skeletal/BlendTree.h
+  skeletal/BlendTree.cpp
+  skeletal/AnimationStateMachine.h
+  skeletal/AnimationStateMachine.cpp
+  skeletal/AnimationLayer.h
+  skeletal/TwoBoneIK.h
+  skeletal/TwoBoneIK.cpp
+  skeletal/RootMotion.h
+  skeletal/RootMotion.cpp
+  skeletal/SkeletalDebugDraw.h
+  skeletal/SkeletalDebugDraw.cpp
   skeletal/SkeletalAnimator.h
   skeletal/SkeletalAnimator.cpp
   skeletal/SkeletalAsset.h

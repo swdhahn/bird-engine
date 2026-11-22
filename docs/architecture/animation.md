@@ -73,13 +73,21 @@ dialog->animate()
 Pipeline per frame, each stage one linear pass with no allocation once warm:
 
 ```
-SkeletalClip::sample -> blendPoses (crossfade) -> localToModel -> buildSkinningPalette
+PoseNode (StateMachine / BlendTrees / Clips)
+  -> AnimationLayers (BoneMask Override / Additive)
+  -> RootMotionExtractor
+  -> localToModel
+  -> TwoBoneIK (Law of Cosines)
+  -> buildSkinningPalette
+  -> AnimationNotify dispatch
 ```
 
+> See **[Advanced Skeletal Animation](advanced_animation.md)** for full documentation on the Pose Evaluation Pipeline, Animation State Machines, 1D/2D Blend Trees, Bone Masks & Additive Layers, Animation Notifies, 2-Bone Analytic IK, Root Motion, Debug Visualization, and Dart parameter control.
+
 * `Skeleton` stores joints in topological order (`addJoint` enforces it), so model-space conversion needs no recursion.
-* `SkeletalClip` holds per-joint `Curve<Vector3>` / `Curve<Quaternion>` channels; empty channels keep the rest value.
-* `SkeletalAnimator` plays one clip plus an optional fading clip, using the same `PlaybackClock` as everything else.
-* `SkeletalAnimationComponent` is a `ProcessScriptComponent` that loads `<model>.skel.bird` and exposes `play`, `crossFade`, `stop`, `setSpeed`, `getClipNames` and `getJointModelMatrix`.
+* `SkeletalClip` holds per-joint `Curve<Vector3>` / `Curve<Quaternion>` channels plus sorted `AnimationNotify` events; empty channels keep the rest value.
+* `SkeletalAnimator` evaluates either direct `play`/`crossFade` clips or a full `PoseNode` graph (`AnimationStateMachine`, `BlendTree1D`, `BlendTree2D`), composites `AnimationLayer` stacks, extracts `RootMotionDelta`, solves `TwoBoneIKConstraint` chains, and emits `DebugDrawList` overlays.
+* `SkeletalAnimationComponent` is a `ProcessScriptComponent` that loads `<model>.skel.bird` and exposes playback, `AnimationParameters` (`setFloat`/`setBool`/`setInt`/`setTrigger`), notifies, layers, IK targets, root motion, and debug drawing to both C++ and Dart scripts.
 * The skinning palette is `model * inverseBind` packed as three rows (`mat3x4`, 48 bytes per joint). In GLSL: `vec3 p = vec4(position, 1.0) * palette[joint];`. `Skeleton::kMaxJoints` is 256, which fits the 16 KB uniform-block minimum guaranteed by OpenGL ES.
 
 ### Baking
