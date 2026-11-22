@@ -10,6 +10,8 @@
 
 #include "../animation/skeletal/PoseOps.h"
 #include "../platform/Log.h"
+#include "../diagnostics/FallbackAssets.h"
+#include "../diagnostics/Logger.h"
 #include "../platform/VFS.h"
 #ifdef BIRD_ENABLE_HOT_RELOAD
 #include "../hotreload/HotReloadManager.h"
@@ -65,9 +67,9 @@ std::shared_ptr<Texture> ResourceManager::buildTextureFromBaked(
 	const auto file = openBaked(RESOURCE_PATH + path + ".bird");
 
 	if (!file) {
-		std::cout << "Error loading file. File does not exist: " << path
-				  << std::endl;
-		return std::shared_ptr<Texture>(0);
+		BIRD_LOG_ERROR("Assets",
+					   "Missing texture asset: " + path + ".bird");
+		return nullptr;
 	}
 
 	int32_t width = 0, height = 0, channels = 0;
@@ -75,22 +77,24 @@ std::shared_ptr<Texture> ResourceManager::buildTextureFromBaked(
 	file->read(reinterpret_cast<char*>(&width), sizeof(int32_t));
 	file->read(reinterpret_cast<char*>(&height), sizeof(int32_t));
 	file->read(reinterpret_cast<char*>(&channels), sizeof(int32_t));
+
 	if (!*file || width <= 0 || height <= 0 || channels <= 0 || channels > 4) {
-		std::cout << "Error loading file: " << path << std::endl;
-		std::cout << "Invalid baked texture header" << std::endl;
-		return std::shared_ptr<Texture>(0);
+		BIRD_LOG_ERROR("Assets",
+					   "Invalid or corrupt texture header: " + path + ".bird");
+		return nullptr;
 	}
+
 	const size_t byteCount =
 		static_cast<size_t>(width) * static_cast<size_t>(height) *
 		static_cast<size_t>(channels);
 	uint8_t* data = new uint8_t[byteCount];
 	file->read(reinterpret_cast<char*>(data),
-			   static_cast<std::streamsize>(byteCount));
+			  static_cast<std::streamsize>(byteCount));
 	if (!*file) {
 		delete[] data;
-		std::cout << "Error loading file: " << path
-				  << " (truncated texture data)" << std::endl;
-		return std::shared_ptr<Texture>(0);
+		BIRD_LOG_ERROR("Assets",
+					   "Truncated texture data: " + path + ".bird");
+		return nullptr;
 	}
 
 	TextureFormat form = (TextureFormat)(1 << (channels));
@@ -110,7 +114,9 @@ std::shared_ptr<Texture> ResourceManager::loadTextureWithColorSpace(
 
 	std::shared_ptr<Texture> tex = buildTextureFromBaked(path, srgb);
 	if (!tex) {
-		return nullptr;
+		// The shared fallback is never cached under this key, so a later
+		// hot reload cannot swap real data into the fallback texture.
+		return m_useFallbackAssets ? getFallbackTexture(srgb) : nullptr;
 	}
 	addResource(cacheKey, tex, ASSET_TYPE_TEXTURE);
 	return tex;
@@ -120,8 +126,8 @@ std::shared_ptr<Font> ResourceManager::buildFontFromBaked(
 	const std::string& path) {
 	const auto file = openBaked(RESOURCE_PATH + path + ".bird");
 	if (!file) {
-		std::cerr << "Error loading font. File does not exist: " << path
-				  << ".bird (run BuildTools)" << std::endl;
+		BIRD_LOG_ERROR("Assets",
+					   "Missing font asset: " + path + ".bird (run BuildTools)");
 		return nullptr;
 	}
 
@@ -233,7 +239,13 @@ std::vector<std::shared_ptr<Mesh>> ResourceManager::loadMesh(
 	const auto file = openBaked(RESOURCE_PATH + path + ".bird");
 
 	if (!file) {
-		std::cout << "Error loading file: " << path << std::endl;
+		BIRD_LOG_ERROR("Assets",
+					   "Missing mesh asset: " + path + ".bird");
+		if (m_useFallbackAssets) {
+			if (auto fallback = getFallbackMesh()) {
+				return {fallback};
+			}
+		}
 		return std::vector<std::shared_ptr<Mesh>>(0);
 	}
 
@@ -368,8 +380,9 @@ std::shared_ptr<Material> ResourceManager::buildMaterialFromBaked(
 	const auto file = openBaked(RESOURCE_PATH + path + ".bird");
 
 	if (!file) {
-		std::cout << "Error loading file: " << path << std::endl;
-		return std::shared_ptr<Material>(0);
+		BIRD_LOG_ERROR("Assets",
+					   "Missing material asset: " + path + ".bird");
+		return nullptr;
 	}
 
 	const format::MaterialFileData data = format::readMaterialFile(*file);
@@ -422,7 +435,7 @@ std::shared_ptr<Material> ResourceManager::loadMaterial(
 
 	auto mat = buildMaterialFromBaked(path);
 	if (!mat) {
-		return nullptr;
+		return m_useFallbackAssets ? getFallbackMaterial() : nullptr;
 	}
 
 	addResource(path, mat, ASSET_TYPE_MATERIAL);
@@ -477,6 +490,43 @@ void ResourceManager::addMesh(std::string path,
 
 std::shared_ptr<Shader> ResourceManager::getDefaultShader() {
 	return m_defaultShader;
+}
+
+std::shared_ptr<Texture> ResourceManager::getFallbackTexture(bool srgb) {
+	std::shared_ptr<Texture>& slot =
+		srgb ? m_fallbackTextureSrgb : m_fallbackTextureLinear;
+	if (!slot) {
+		try {
+			slot = diag::createFallbackTexture(srgb);
+		} catch (const std::exception& e) {
+			BIRD_LOG_WARN("Assets",
+						  std::string("Unable to upload fallback texture: ") +
+							  e.what());
+		}
+	}
+	return slot;
+}
+
+std::shared_ptr<Material> ResourceManager::getFallbackMaterial() {
+	if (!m_fallbackMaterial) {
+		m_fallbackMaterial =
+			diag::createFallbackMaterial(getFallbackTexture(/*srgb=*/true));
+	}
+	return m_fallbackMaterial;
+}
+
+std::shared_ptr<Mesh> ResourceManager::getFallbackMesh() {
+	if (!m_fallbackMesh) {
+		try {
+			m_fallbackMesh =
+				diag::createFallbackUnitCubeMesh(getFallbackMaterial());
+		} catch (const std::exception& e) {
+			BIRD_LOG_WARN("Assets",
+						  std::string("Unable to upload fallback unit cube: ") +
+							  e.what());
+		}
+	}
+	return m_fallbackMesh;
 }
 
 bool ResourceManager::reloadTexture(const std::string& path) {
