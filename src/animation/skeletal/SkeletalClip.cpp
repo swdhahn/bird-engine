@@ -1,5 +1,6 @@
 #include "SkeletalClip.h"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <utility>
@@ -55,6 +56,86 @@ void SkeletalClip::sample(float time, Pose& pose, ClipCursor& cursor) const {
 			joint.scale = track.scale.sample(time, cursors[2]);
 		}
 		cursors += 3;
+	}
+}
+
+void SkeletalClip::addNotify(AnimationNotify notify) {
+	if (!std::isfinite(notify.time) || notify.time < 0.0f ||
+		notify.time > m_duration) {
+		throw std::invalid_argument(
+			"SkeletalClip::addNotify: time must be finite and in [0, duration]");
+	}
+	if (notify.name.empty()) {
+		throw std::invalid_argument(
+			"SkeletalClip::addNotify: name must not be empty");
+	}
+	const auto it = std::upper_bound(
+		m_notifies.begin(), m_notifies.end(), notify.time,
+		[](float t, const AnimationNotify& n) { return t < n.time; });
+	m_notifies.insert(it, std::move(notify));
+}
+
+void SkeletalClip::addNotify(float time, const std::string& name,
+							 const std::string& payload) {
+	addNotify(AnimationNotify{time, name, payload});
+}
+
+void SkeletalClip::collectNotifies(
+	float prevTime, float currTime, bool wrapped, bool reversed,
+	bool includeStart, std::vector<const AnimationNotify*>& out) const {
+	if (m_notifies.empty()) return;
+
+	if (!reversed) {
+		if (!wrapped) {
+			if (currTime < prevTime) return;
+			for (const AnimationNotify& n : m_notifies) {
+				const bool afterPrev =
+					includeStart ? (n.time >= prevTime) : (n.time > prevTime);
+				if (afterPrev && n.time <= currTime) {
+					out.push_back(&n);
+				}
+			}
+		} else {
+			// Wrapped forward: (prevTime, duration] then [0, currTime].
+			for (const AnimationNotify& n : m_notifies) {
+				const bool afterPrev =
+					includeStart ? (n.time >= prevTime) : (n.time > prevTime);
+				if (afterPrev && n.time <= m_duration) {
+					out.push_back(&n);
+				}
+			}
+			for (const AnimationNotify& n : m_notifies) {
+				if (n.time >= 0.0f && n.time <= currTime) {
+					out.push_back(&n);
+				}
+			}
+		}
+	} else {
+		if (!wrapped) {
+			if (currTime > prevTime) return;
+			// Iterate backward so events fire in chronological playback order.
+			for (auto it = m_notifies.rbegin(); it != m_notifies.rend(); ++it) {
+				const bool beforePrev =
+					includeStart ? (it->time <= prevTime) : (it->time < prevTime);
+				if (beforePrev && it->time >= currTime) {
+					out.push_back(&(*it));
+				}
+			}
+		} else {
+			// Wrapped backward: [0, prevTime) then [currTime, duration].
+			for (auto it = m_notifies.rbegin(); it != m_notifies.rend(); ++it) {
+				const bool beforePrev =
+					includeStart ? (it->time <= prevTime) : (it->time < prevTime);
+				if (beforePrev && it->time >= 0.0f) {
+					out.push_back(&(*it));
+				}
+			}
+			for (auto it = m_notifies.rbegin(); it != m_notifies.rend(); ++it) {
+				if (it->time <= m_duration && it->time >= currTime) {
+					out.push_back(&(*it));
+				}
+			}
+		}
 	}
 }
 

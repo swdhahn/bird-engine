@@ -5,8 +5,13 @@
 #include "Application.h"
 
 #include <cstdio>
+#include <cstdlib>
 
 #include "animation/AnimationSystem.h"
+#include "events/EventBus.h"
+#include "diagnostics/Logger.h"
+#include "diagnostics/Profiler.h"
+#include "audio/AudioSystem.h"
 #include "platform/Clock.h"
 #include "platform/Log.h"
 #include "renders/Window.h"
@@ -23,6 +28,8 @@ Input* INPUT = nullptr;
 ResourceManager* RESOURCE_MANAGER = nullptr;
 Application* APPLICATION = nullptr;
 AnimationSystem* ANIMATION_SYSTEM = nullptr;
+EventBus* EVENT_BUS = nullptr;
+AudioSystem* AUDIO_SYSTEM = nullptr;
 
 Application::Application() {}
 
@@ -34,6 +41,9 @@ void Application::init(Script<Scene>* script) {
 }
 
 void Application::start(Script<Scene>* script) {
+	if (!diag::Logger::get().isInitialized()) {
+		diag::Logger::get().init();
+	}
 	const double startTime = platform::now();
 	auto stage = [startTime](const char* what) {
 		char elapsed[32];
@@ -48,11 +58,21 @@ void Application::start(Script<Scene>* script) {
 	m_graphicsPipeline = new gl::GLPipeline();
 	m_graphicsPipeline->init();
 	RESOURCE_MANAGER->init();
+#ifdef BIRD_ENABLE_HOT_RELOAD
+	if (!std::getenv("BIRD_DISABLE_HOT_RELOAD")) {
+		hotreload::HotReloadConfig hrConfig;
+		hrConfig.watchDirectory = ResourceManager::RESOURCE_PATH + "assets";
+		RESOURCE_MANAGER->enableHotReload(hrConfig);
+	}
+#endif
 	APPLICATION = this;
 	stage("graphics ready");
 
 	INPUT = new Input(m_graphicsPipeline->getWindow().get());
 	ANIMATION_SYSTEM = new AnimationSystem();
+	EVENT_BUS = new EventBus();
+	AUDIO_SYSTEM = new AudioSystem();
+	AUDIO_SYSTEM->init();
 	m_uiManager = new UIManager();
 	m_uiManager->init(RESOURCE_MANAGER->loadFont(UIManager::kDefaultFontPath),
 					  m_graphicsPipeline->getWindow().get());
@@ -60,8 +80,9 @@ void Application::start(Script<Scene>* script) {
 	handleResize();
 	stage("UI ready");
 
-	// Before the scene: bodies are created as soon as objects are added.
+	// Before the scene: bodies and nav agents are created as soon as objects are added.
 	m_physicsServer = _own_mk<PhysicsServer>();
+	m_navServer = _own_mk<NavServer>();
 
 	m_scene = new Scene();
 	m_scene->addComponent(std::unique_ptr<Script<Scene>>(script));
@@ -82,6 +103,13 @@ void Application::run() {
 }
 
 void Application::tick() {
+	PROFILE_FRAME();
+#ifdef BIRD_ENABLE_HOT_RELOAD
+	if (RESOURCE_MANAGER) {
+		RESOURCE_MANAGER->pollHotReloads();
+	}
+#endif
+
 	const double frameTime = platform::now();
 	const float delta = static_cast<float>(frameTime - m_lastFrameTime);
 	m_lastFrameTime = frameTime;
@@ -94,43 +122,80 @@ void Application::tick() {
 	m_graphicsPipeline->getDebugDraw().clear();
 
 	// PHYSICS SECTION: zero or more fixed steps
-	const int physicsSteps = m_physicsClock.advance(delta);
-	const float fixedStep = m_physicsClock.getStep();
-	for (int step = 0; step < physicsSteps; step++) {
-		for (size_t i = 0; i < m_processableScripts.size(); i++) {
-			m_processableScripts[i]->physicsProcess(fixedStep);
+	{
+		PROFILE_SCOPE("Physics");
+		const int physicsSteps = m_physicsClock.advance(delta);
+		const float fixedStep = m_physicsClock.getStep();
+		for (int step = 0; step < physicsSteps; step++) {
+			for (size_t i = 0; i < m_processableScripts.size(); i++) {
+				m_processableScripts[i]->physicsProcess(fixedStep);
+			}
+			m_physicsServer->step(fixedStep);
 		}
-		m_physicsServer->step(fixedStep);
-	}
-	if (m_physicsDebugDraw) {
-		Camera* camera = m_graphicsPipeline->getCamera();
-		const Vector3 eye = camera ? camera->getWorldPosition() : Vector3(0.0f);
-		for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
-			world->debugDraw(m_graphicsPipeline->getDebugDraw(),
-							 m_physicsDebugSettings, eye);
+		if (m_physicsDebugDraw) {
+			Camera* camera = m_graphicsPipeline->getCamera();
+			const Vector3 eye =
+				camera ? camera->getWorldPosition() : Vector3(0.0f);
+			for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
+				world->debugDraw(m_graphicsPipeline->getDebugDraw(),
+								 m_physicsDebugSettings, eye);
+			}
 		}
 	}
+
+	// EVENT BUS SECTION: dispatch queued events after physics, before scripts.
+	if (EVENT_BUS) EVENT_BUS->dispatchQueued();
 
 	// PROCESS SECTION
-	m_uiManager->process(delta);
-	for (size_t i = 0; i < m_processableScripts.size(); i++) {
-		m_processableScripts[i]->process(delta);
+	{
+		PROFILE_SCOPE("UI");
+		m_uiManager->process(delta);
 	}
-	// After scripts (animation wins over script-written transforms for
-	// the frame), before matrices update and skinning palettes upload.
-	ANIMATION_SYSTEM->tick(delta);
-
-	processScene(m_scene, delta);
-	// After matrix updates: draw moving bodies between their last two
-	// physics poses so motion is smooth at any frame rate.
-	if (m_physicsInterpolation) {
-		for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
-			world->interpolate(m_physicsClock.getAlpha());
+	{
+		PROFILE_SCOPE("Scripts");
+		for (size_t i = 0; i < m_processableScripts.size(); i++) {
+			m_processableScripts[i]->process(delta);
 		}
+	}
+	// After scripts (animation and navigation win over script-written transforms
+	// for the frame), before matrices update and skinning palettes upload.
+	{
+		PROFILE_SCOPE("Navigation");
+		m_navServer->step(delta);
+		if (m_navDebugDraw) {
+			for (NavWorld* world : m_navServer->getWorlds()) {
+				world->debugDraw(m_graphicsPipeline->getDebugDraw(),
+								 m_navDebugSettings);
+			}
+		}
+	}
+	{
+		PROFILE_SCOPE("Animation");
+		ANIMATION_SYSTEM->tick(delta);
+	}
+
+	{
+		PROFILE_SCOPE("SceneUpdate");
+		processScene(m_scene, delta);
+		// After matrix updates: draw moving bodies between their last two
+		// physics poses so motion is smooth at any frame rate.
+		if (m_physicsInterpolation) {
+			for (PhysicsWorld* world : m_physicsServer->getWorlds()) {
+				world->interpolate(m_physicsClock.getAlpha());
+			}
+		}
+	}
+	// After scene transforms and physics interpolation: sync 3D listener and
+	// audio sources to their final frame poses and retire finished one-shots.
+	if (AUDIO_SYSTEM) {
+		AUDIO_SYSTEM->tick(delta);
 	}
 	// PROCESS SECTION END
 
-	m_graphicsPipeline->renderRootScene(m_scene);
+	{
+		PROFILE_SCOPE("Render");
+		m_graphicsPipeline->renderRootScene(m_scene);
+	}
 	m_framesThisSecond++;
 	if (m_fpsWindowStart + 1.0 < platform::now()) {
 		platform::log(platform::LogLevel::Info,
@@ -139,10 +204,13 @@ void Application::tick() {
 		m_fpsWindowStart = platform::now();
 	}
 	INPUT->tick();
-	Window* window = m_graphicsPipeline->getWindow().get();
-	window->present();
-	window->pollEvents();
-	handleResize();
+	{
+		PROFILE_SCOPE("Present");
+		Window* window = m_graphicsPipeline->getWindow().get();
+		window->present();
+		window->pollEvents();
+		handleResize();
+	}
 }
 
 void Application::processScene(Scene* scene, float delta) {
@@ -167,19 +235,31 @@ void Application::removeProcessableScript(ProcessScriptComponent* script) {
 
 void Application::deinit() {
 	m_scene->deinit();
-	// Scenes own their physics worlds, which must die before the server.
+	// Scenes own their physics and nav worlds, which must die before the servers.
 	delete m_scene;
 	m_scene = nullptr;
+	m_navServer.reset();
 	m_physicsServer.reset();
-	// After the scene: destroyed objects cancel their own animations.
+	// After the scene: destroyed objects cancel their own animations and
+	// audio, and unsubscribe their event listeners.
+	delete EVENT_BUS;
+	EVENT_BUS = nullptr;
 	delete ANIMATION_SYSTEM;
 	ANIMATION_SYSTEM = nullptr;
+	delete AUDIO_SYSTEM;
+	AUDIO_SYSTEM = nullptr;
 
 	m_uiManager->deinit();
 	delete m_uiManager;
 	delete INPUT;
+#ifdef BIRD_ENABLE_HOT_RELOAD
+	if (RESOURCE_MANAGER) {
+		RESOURCE_MANAGER->disableHotReload();
+	}
+#endif
 	m_graphicsPipeline->cleanUp();
 	delete m_graphicsPipeline;
+	diag::Logger::get().flush();
 }
 void Application::setCamera(bird::Camera* camera) {
 	m_graphicsPipeline->setCamera(camera);
@@ -205,12 +285,20 @@ PhysicsServer* Application::getPhysicsServer() {
 	return m_physicsServer.get();
 }
 
+NavServer* Application::getNavServer() {
+	return m_navServer.get();
+}
+
 FixedStepClock& Application::getPhysicsClock() {
 	return m_physicsClock;
 }
 
 UIManager* Application::getUIManager() {
 	return m_uiManager;
+}
+
+AudioSystem* Application::getAudioSystem() {
+	return AUDIO_SYSTEM;
 }
 
 }  // namespace bird

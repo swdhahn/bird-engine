@@ -72,7 +72,14 @@ class MeshComponent : public Component {
 	/** Overrides the material of every mesh of this component. */
 	void setAllMaterials(_ref<Material> material);
 
+	/** Returns the source asset path if constructed from a model file, or empty string. */
+	const std::string& getAssetPath() const { return m_assetPath; }
+
+	/** Records the source asset path associated with this mesh component. */
+	void setAssetPath(const std::string& path) { m_assetPath = path; }
+
    protected:
+	std::string m_assetPath;
 	std::vector<_ref<Mesh>> m_meshes;
 	/** Per-mesh overrides; empty or null entries fall back to the mesh. */
 	std::vector<_ref<Material>> m_materialOverrides;

@@ -8,6 +8,9 @@
 #include <algorithm>
 #include <vector>
 
+#include "navigation/NavServer.h"
+#include "navigation/NavTypes.h"
+#include "navigation/NavWorld.h"
 #include "physics/FixedStepClock.h"
 #include "physics/PhysicsServer.h"
 #include "physics/PhysicsWorld.h"
@@ -22,6 +25,7 @@
 namespace bird {
 
 class UIManager;
+class AudioSystem;
 
 /**
  * Central engine orchestrator.
@@ -77,11 +81,12 @@ class Application {
 	 * 1. Computes delta time from the platform clock.
 	 * 2. Updates camera matrices if dirty.
 	 * 3. Steps physics at its fixed rate.
-	 * 4. Ticks UIManager layout, animations, and modals.
-	 * 5. Calls process(delta) on all registered ProcessScript instances.
-	 * 6. Recursively updates dirty scene transform matrices via processScene().
-	 * 7. Renders the active scene and overlays UI via the graphics pipeline.
-	 * 8. Ticks input, presents the frame, and polls platform window events.
+	 * 4. Dispatches queued events on EVENT_BUS.
+	 * 5. Ticks UIManager layout, animations, and modals.
+	 * 6. Calls process(delta) on all registered ProcessScript instances.
+	 * 7. Recursively updates dirty scene transform matrices via processScene().
+	 * 8. Renders the active scene and overlays UI via the graphics pipeline.
+	 * 9. Ticks input, presents the frame, and polls platform window events.
 	 */
 	void tick();
 
@@ -113,6 +118,8 @@ class Application {
 
 	GraphicsPipeline* getGraphicsPipeline();
 	UIManager* getUIManager();
+	/** Engine-wide audio subsystem (2D/3D playback and mixing buses). */
+	AudioSystem* getAudioSystem();
 
 	/** Global physics state; every scene's PhysicsWorld is stepped through it. */
 	PhysicsServer* getPhysicsServer();
@@ -131,6 +138,17 @@ class Application {
 	void setPhysicsInterpolation(bool enabled) { m_physicsInterpolation = enabled; }
 	bool isPhysicsInterpolationEnabled() const { return m_physicsInterpolation; }
 
+	/** Global navigation state; every scene's NavWorld is stepped through it. */
+	NavServer* getNavServer();
+
+	/**
+	 * Draws every navigation world's NavMesh polygons and active agent paths
+	 * into GraphicsPipeline::getDebugDraw(), configured by getNavDebugSettings().
+	 */
+	void setNavDebugDraw(bool enabled) { m_navDebugDraw = enabled; }
+	bool isNavDebugDrawEnabled() const { return m_navDebugDraw; }
+	NavDebugSettings& getNavDebugSettings() { return m_navDebugSettings; }
+
    private:
 	/** Propagates a window size change to the renderer, camera and UI. */
 	void handleResize();
@@ -138,10 +156,13 @@ class Application {
 	GraphicsPipeline* m_graphicsPipeline;
 	UIManager* m_uiManager;
 	_own<PhysicsServer> m_physicsServer;
+	_own<NavServer> m_navServer;
 	FixedStepClock m_physicsClock;
 	bool m_physicsDebugDraw = false;
 	bool m_physicsInterpolation = true;
 	PhysicsDebugSettings m_physicsDebugSettings;
+	bool m_navDebugDraw = false;
+	NavDebugSettings m_navDebugSettings;
 	Scene* m_scene;
 
 	std::vector<ProcessScriptComponent*> m_processableScripts;

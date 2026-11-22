@@ -230,4 +230,11 @@ uint32_t Texture::getHeight() {
 	return m_height;
 }
 
+void Texture::swapFrom(Texture& other) {
+	std::swap(m_pData, other.m_pData);
+	std::swap(m_width, other.m_width);
+	std::swap(m_height, other.m_height);
+	std::swap(m_format, other.m_format);
+}
+
 }  // namespace bird

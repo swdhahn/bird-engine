@@ -133,6 +133,11 @@ if(NOT BIRD_CLANG_RESOURCE_DIR)
 endif()
 
 set(_GENERATOR_PARSE_FLAGS "-resource-dir=${BIRD_CLANG_RESOURCE_DIR}")
+if(UNIX AND NOT APPLE AND EXISTS "/usr/include/c++")
+  # Help libclang locate the system GCC C++ stdlib when DartApiGenerator
+  # runs outside /usr/bin (e.g. Clang 23 + GCC 16 on Arch Linux).
+  list(APPEND _GENERATOR_PARSE_FLAGS "--gcc-toolchain=/usr")
+endif()
 if(APPLE)
   # libclang does not ask xcrun for the SDK the way the clang driver does.
   execute_process(COMMAND xcrun --show-sdk-path
