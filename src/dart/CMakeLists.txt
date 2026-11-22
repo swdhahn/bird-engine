@@ -27,6 +27,11 @@ set(BIRD_SCRIPT_HEADERS
     ${CMAKE_SOURCE_DIR}/src/physics/PhysicsServer.h
     ${CMAKE_SOURCE_DIR}/src/physics/RigidBodyComponent.h
     ${CMAKE_SOURCE_DIR}/src/physics/CharacterControllerComponent.h
+    ${CMAKE_SOURCE_DIR}/src/navigation/NavTypes.h
+    ${CMAKE_SOURCE_DIR}/src/navigation/NavMesh.h
+    ${CMAKE_SOURCE_DIR}/src/navigation/NavServer.h
+    ${CMAKE_SOURCE_DIR}/src/navigation/NavWorld.h
+    ${CMAKE_SOURCE_DIR}/src/navigation/NavAgent.h
     ${CMAKE_SOURCE_DIR}/src/scene/2D/ScreenObject.h
     ${CMAKE_SOURCE_DIR}/src/scene/2D/UILayout.h
     ${CMAKE_SOURCE_DIR}/src/scene/2D/UIEvents.h
