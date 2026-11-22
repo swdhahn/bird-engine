@@ -55,39 +55,42 @@ std::vector<std::vector<const char*>> supportedFileTypes{
 AssetLoader::AssetLoader() {}
 AssetLoader::~AssetLoader() {}
 
-size_t AssetLoader::init(std::string assetPath) {
+size_t AssetLoader::init(std::string assetPath, bool force) {
 	size_t failures = 0;
-	// load assets from file
-
 	for (const auto& entry :
 		 std::filesystem::recursive_directory_iterator(assetPath)) {
 		if (entry.is_directory()) {
 			continue;
 		}
-		int i = 0;
-		bool fileSupported = false;
-		std::string filePath = entry.path().string();
-		for (; i < supportedFileTypes.size(); i++) {
-			for (const auto& ext : supportedFileTypes[i]) {
-				std::string mp = entry.path().extension().string();
-				std::transform(mp.begin(), mp.end(), mp.begin(),
-							   [](unsigned char c) { return std::tolower(c); });
-				if (mp == ext) {
-					fileSupported = true;
-					break;
-				}
-			}
-			if (fileSupported) {
+		if (!compileFile(entry.path().string(), force)) {
+			failures++;
+		}
+	}
+	return failures;
+}
+
+bool AssetLoader::compileFile(const std::string& filePath, bool force) {
+	m_forceRebuild = force;
+	const std::filesystem::path fsPath(filePath);
+	std::string extLower = fsPath.extension().string();
+	std::transform(extLower.begin(), extLower.end(), extLower.begin(),
+				   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+	int matchedType = -1;
+	for (size_t i = 0; i < supportedFileTypes.size(); i++) {
+		for (const auto& ext : supportedFileTypes[i]) {
+			if (extLower == ext) {
+				matchedType = static_cast<int>(i);
 				break;
 			}
 		}
-		if (!fileSupported) {
-			i = -1;
+		if (matchedType != -1) {
+			break;
 		}
+	}
 
-		// Check if generated asset exists / needs updating
-		try {
-		switch ((AssetType)i) {
+	try {
+		switch (static_cast<AssetType>(matchedType)) {
 			case TEXTURE:
 				loadTexture(filePath);
 				break;
@@ -113,16 +116,14 @@ size_t AssetLoader::init(std::string assetPath) {
 				loadCustom(filePath);
 				break;
 			default:
-				// Do nothing if file is not supported. This is not an error.
-				// .txt, etc.
+				// Unsupported files (.txt, .bird, etc.) are ignored without error.
 				break;
 		}
-		} catch (const std::exception& error) {
-			failures++;
-			std::cerr << "FAILED: " << error.what() << std::endl;
-		}
+	} catch (const std::exception& error) {
+		std::cerr << "FAILED: " << error.what() << std::endl;
+		return false;
 	}
-	return failures;
+	return true;
 }
 
 void AssetLoader::loadAsset() {
@@ -327,7 +328,7 @@ format::MaterialFileData extractMaterial(const aiMaterial* aiMat,
 }  // namespace
 
 void AssetLoader::loadModel(const std::string& path) {
-	if (isModelBakeCurrent(path)) {
+	if (!m_forceRebuild && isModelBakeCurrent(path)) {
 		return;
 	}
 
@@ -521,18 +522,24 @@ void AssetLoader::loadModel(const std::string& path) {
 }
 
 void AssetLoader::loadTexture(const std::string& path) {
-	if (std::filesystem::exists(path + ".bird")) {
-		return;
+	namespace fs = std::filesystem;
+	const std::string baked = path + ".bird";
+	if (!m_forceRebuild && fs::exists(baked)) {
+		std::error_code ec;
+		if (fs::last_write_time(baked, ec) >= fs::last_write_time(path, ec) &&
+			!ec) {
+			return;
+		}
 	}
 	// load texture
-	int32_t width, height, channels;
+	int32_t width = 0, height = 0, channels = 0;
 	std::cout << "Compiling Image: " << path << std::endl;
 
 	// Load the image
 	uint8_t* img = stbi_load(path.c_str(), &width, &height, &channels, 0);
 
 	if (img == NULL) {
-		std::cout << "Error in loading the image: " << path << std::endl;
+		throw std::runtime_error("Error in loading the image: " + path);
 	}
 
 	writeImage(width, height, channels, img, path);
@@ -544,17 +551,37 @@ void AssetLoader::loadTexture(const std::string& path) {
 
 void AssetLoader::writeImage(uint32_t width, uint32_t height, uint32_t channels,
 							 uint8_t* imageData, const std::string& path) {
-	if (std::filesystem::exists(path + ".bird")) {
-		return;
+	const std::string finalPath = path + ".bird";
+	const std::string tempPath = finalPath + ".tmp";
+	if (!m_forceRebuild && std::filesystem::exists(finalPath)) {
+		std::error_code ec;
+		if (std::filesystem::exists(path, ec) && !ec &&
+			std::filesystem::last_write_time(finalPath, ec) >=
+				std::filesystem::last_write_time(path, ec) &&
+			!ec) {
+			return;
+		}
 	}
-	std::fstream file(path + ".bird", std::ios::out | std::ios::binary);
+	std::fstream file(tempPath,
+					  std::ios::out | std::ios::binary | std::ios::trunc);
+	if (!file.is_open()) {
+		throw std::runtime_error("Failed to open output texture file: " +
+								 tempPath);
+	}
 
 	file.write((char*)&width, sizeof(int32_t));
 	file.write((char*)&height, sizeof(int32_t));
 	file.write((char*)&channels, sizeof(int32_t));
-	file.write((char*)imageData, width * height * channels * sizeof(uint8_t));
-
+	file.write((char*)imageData,
+			   static_cast<std::streamsize>(width) * height * channels *
+				   sizeof(uint8_t));
 	file.close();
+	if (!file) {
+		std::error_code ec;
+		std::filesystem::remove(tempPath, ec);
+		throw std::runtime_error("Failed writing texture file: " + finalPath);
+	}
+	std::filesystem::rename(tempPath, finalPath);
 
 	std::cout << "Image saved." << std::endl;
 }
@@ -587,8 +614,14 @@ uint32_t nextPowerOfTwo(uint32_t value) {
 }  // namespace
 
 void AssetLoader::loadFont(const std::string& path) {
-	if (std::filesystem::exists(path + ".bird")) {
-		return;
+	namespace fs = std::filesystem;
+	const std::string baked = path + ".bird";
+	if (!m_forceRebuild && fs::exists(baked)) {
+		std::error_code ec;
+		if (fs::last_write_time(baked, ec) >= fs::last_write_time(path, ec) &&
+			!ec) {
+			return;
+		}
 	}
 	std::cout << "Compiling Font: " << path << std::endl;
 
@@ -683,12 +716,16 @@ void AssetLoader::loadFont(const std::string& path) {
 	header.whiteTexelX = static_cast<uint16_t>(whiteOrigin.first + 1);
 	header.whiteTexelY = static_cast<uint16_t>(whiteOrigin.second + 1);
 
-	std::fstream file(path + ".bird", std::ios::out | std::ios::binary);
+	const std::string finalFontPath = path + ".bird";
+	const std::string tempFontPath = finalFontPath + ".tmp";
+	std::fstream file(tempFontPath,
+					  std::ios::out | std::ios::binary | std::ios::trunc);
 	file.write(reinterpret_cast<const char*>(&header), sizeof(header));
 	file.write(reinterpret_cast<const char*>(glyphs.data()),
 			   glyphs.size() * sizeof(format::FontGlyph));
 	file.write(reinterpret_cast<const char*>(atlas.data()), atlas.size());
 	file.close();
+	std::filesystem::rename(tempFontPath, finalFontPath);
 
 	std::cout << "Font saved (" << kFontAtlasWidth << "x" << atlasHeight
 			  << " SDF atlas)." << std::endl;
@@ -700,11 +737,14 @@ void AssetLoader::loadSound(const std::string& path) {
 
 void AssetLoader::loadShader(const std::string& path) {
 	const std::string source = readFile(path);
-	if (!bake::needsShaderBake(path, source)) {
+	if (!m_forceRebuild && !bake::needsShaderBake(path, source)) {
 		return;
 	}
 	std::cout << "Compiling Shader: " << path << std::endl;
-	writeShaderBinaryFile(path + ".bird", bake::bakeShader(path, source));
+	const std::string finalPath = path + ".bird";
+	const std::string tempPath = finalPath + ".tmp";
+	writeShaderBinaryFile(tempPath, bake::bakeShader(path, source));
+	std::filesystem::rename(tempPath, finalPath);
 }
 
 void AssetLoader::loadMaterial(const std::string& path) {

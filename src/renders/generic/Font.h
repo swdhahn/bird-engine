@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "../../build-tools/FormatHeaders.h"
+#include "../../util/Constants.h"
 #include "../../util/Math.h"
 #include "../../util/Resource.h"
 
@@ -68,6 +69,15 @@ class Font : public Resource {
 									float pixelHeight) const;
 	/** Horizontal advance of one character at a pixel height. */
 	float advance(char character, float pixelHeight) const;
+
+	/**
+	 * Swaps glyph metrics, header, and SDF atlas texture in place with `other`.
+	 * When both fonts own an atlas texture, swaps the atlas GPU handles in place
+	 * so cached Texture references also update immediately.
+	 *
+	 * @param other Freshly loaded Font to swap into *this.
+	 */
+	BIRD_NO_EXPORT void swapFrom(Font& other);
 
    private:
 	const format::FontGlyph& glyphFor(char character) const;

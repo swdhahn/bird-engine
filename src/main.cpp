@@ -1,6 +1,8 @@
 #include <iostream>
 
 #include "Application.h"
+#include "diagnostics/CrashHandler.h"
+#include "diagnostics/Logger.h"
 #include "scene/Scene.h"
 #include "scene/components/Script.h"
 #include "util/ResourceManager.h"
@@ -105,6 +107,11 @@ int main(int argc, char** argv) {
 	if (argc > 2) directory_path = std::string(argv[2]);
 	std::string inputPath(argv[1]);
 
+	bird::diag::LoggerConfig logConfig;
+	logConfig.logFilePath = "logs/bird.log";
+	bird::diag::Logger::get().init(logConfig);
+	bird::diag::CrashHandler::install();
+
 #ifdef BIRD_ENABLE_DART
 	if (hasSuffix(inputPath, ".dart") || hasSuffix(inputPath, ".dill")) {
 		bird::DartRuntime dartRuntime;
@@ -126,12 +133,14 @@ int main(int argc, char** argv) {
 		try {
 			app.init(dartScript);
 		} catch (std::exception& e) {
-			std::cerr << e.what() << std::endl;
+			BIRD_LOG_FATAL("Engine", std::string("Unhandled exception: ") + e.what());
 			dartRuntime.shutdown();
+			bird::diag::Logger::get().shutdown();
 			return EXIT_FAILURE;
 		}
 
 		dartRuntime.shutdown();
+		bird::diag::Logger::get().shutdown();
 		return 0;
 	}
 #endif
@@ -165,11 +174,13 @@ int main(int argc, char** argv) {
 	try {
 		app.init(script);
 	} catch (std::exception& e) {
-		std::cerr << e.what() << std::endl;
+		BIRD_LOG_FATAL("Engine", std::string("Unhandled exception: ") + e.what());
+		bird::diag::Logger::get().shutdown();
 		return EXIT_FAILURE;
 	}
 
 	LIB_CLOSE(app_handle);
+	bird::diag::Logger::get().shutdown();
 
 	return 0;  //*/
 }

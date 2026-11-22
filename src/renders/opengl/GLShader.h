@@ -34,6 +34,13 @@ class GLShader : public Shader {
 	void setPushConstants(const void* data, uint32_t size,
 						  uint32_t offset = 0) override;
 
+	/**
+	 * Swaps the OpenGL program handle and push-constant uniform locations in
+	 * place with another GLShader. Safe to call on the main GL thread during
+	 * hot-reload.
+	 */
+	void swapFrom(Shader& other) override;
+
 	void bind() const;
 	void unbind() const;
 

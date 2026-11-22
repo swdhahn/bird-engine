@@ -30,4 +30,11 @@ uint32_t GLTexture::getTextureID() {
 	return m_textureID;
 }
 
+void GLTexture::swapFrom(Texture& other) {
+	Texture::swapFrom(other);
+	auto* otherGL = dynamic_cast<GLTexture*>(&other);
+	if (!otherGL) return;
+	std::swap(m_textureID, otherGL->m_textureID);
+}
+
 }  // namespace bird::gl

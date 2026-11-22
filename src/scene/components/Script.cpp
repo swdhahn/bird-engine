@@ -14,6 +14,9 @@ ResourceManager* ScriptComponent::resource_manager() {
 Input* ScriptComponent::input() {
 	return INPUT;
 }
+EventBus* ScriptComponent::event_bus() {
+	return EVENT_BUS;
+}
 
 const std::vector<std::unique_ptr<Component>>& ScriptComponent::components() {
 	return world_object()->getComponents();
