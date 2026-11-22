@@ -1,4 +1,6 @@
 #include <Application.h>
+#include <animation/skeletal/PoseOps.h>
+#include <animation/skeletal/SkeletalAnimationComponent.h>
 #include <physics/CharacterControllerComponent.h>
 #include <physics/CollisionShape.h>
 #include <physics/PhysicsWorld.h>
@@ -36,13 +38,16 @@
 #include <scene/components/Script.h>
 #include <util/Assets.h>
 #include <util/Math.h>
+#include <util/ResourceManager.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 #include <iostream>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -859,6 +864,234 @@ void build(bird::Scene* scene) {
 
 }  // namespace lighting
 
+namespace animation {
+
+constexpr const char* kKnightModel = "assets/models/Character_Skeleton_Knight.gltf";
+/** The pack holds 16 characters on one rig; mesh 11 is the skeleton knight. */
+constexpr size_t kKnightMeshIndex = 11;
+constexpr float kCycleSeconds = 1.1f;
+constexpr int kKeysPerCycle = 32;
+constexpr float kPi = 3.14159265358979f;
+
+float radians(float degrees) { return degrees * kPi / 180.0f; }
+
+/** Fails fast when the rig lacks a joint the walk cycle drives. */
+int32_t requireJoint(const bird::Skeleton& skeleton, const std::string& name) {
+	const int32_t joint = skeleton.findJoint(name);
+	if (joint < 0) {
+		throw std::runtime_error("animation demo: rig has no joint '" + name + "'");
+	}
+	return joint;
+}
+
+/**
+ * Rest-pose context for authoring rotations in model space: a model-space
+ * rotation R on joint j becomes the local value P^-1 * R * P * L, where P
+ * is the parent's rest model rotation and L the joint's rest rotation.
+ */
+class RestFrame {
+   public:
+	explicit RestFrame(const bird::Skeleton& skeleton) : m_skeleton(skeleton) {
+		bird::localToModel(skeleton, skeleton.getRestPose(), m_model);
+	}
+
+	bird::Vector3 modelPosition(int32_t joint) const {
+		return bird::Vector3(m_model[joint][3]);
+	}
+
+	/** Local rotation that applies modelRotation at the joint. */
+	bird::Quaternion localRotation(int32_t joint,
+								   const bird::Quaternion& modelRotation) const {
+		const bird::Quaternion parent = parentRotation(joint);
+		return glm::normalize(glm::inverse(parent) * modelRotation * parent *
+							  m_skeleton.getRestPose().joints[joint].rotation);
+	}
+
+	/** Local translation that offsets the joint by a model-space vector. */
+	bird::Vector3 localTranslation(int32_t joint, const bird::Vector3& offset) const {
+		const int32_t parentJoint = m_skeleton.getParent(joint);
+		const bird::Vector3 rest = m_skeleton.getRestPose().joints[joint].translation;
+		if (parentJoint < 0) return rest + offset;
+		const glm::mat3 parentLinear(m_model[parentJoint]);
+		return rest + glm::inverse(parentLinear) * offset;
+	}
+
+   private:
+	bird::Quaternion parentRotation(int32_t joint) const {
+		const int32_t parentJoint = m_skeleton.getParent(joint);
+		if (parentJoint < 0) return bird::Quaternion(1, 0, 0, 0);
+		glm::mat3 linear(m_model[parentJoint]);
+		for (int axis = 0; axis < 3; axis++) linear[axis] = glm::normalize(linear[axis]);
+		return glm::quat_cast(linear);
+	}
+
+	const bird::Skeleton& m_skeleton;
+	std::vector<bird::Matrix4> m_model;
+};
+
+/** Model-space axis rotation shorthand. */
+bird::Quaternion around(float degrees, const bird::Vector3& axis) {
+	return glm::angleAxis(radians(degrees), axis);
+}
+
+/** Samples rotationAt(phase) over one cycle into a looping joint track. */
+template <typename RotationAt>
+bird::JointTrack rotationTrack(const RestFrame& rest, int32_t joint,
+							   RotationAt rotationAt) {
+	bird::JointTrack track;
+	track.joint = joint;
+	for (int key = 0; key <= kKeysPerCycle; key++) {
+		const float phase = 2.0f * kPi * key / kKeysPerCycle;
+		track.rotation.addKey(kCycleSeconds * key / kKeysPerCycle,
+							  rest.localRotation(joint, rotationAt(phase)));
+	}
+	return track;
+}
+
+/**
+ * Procedural walk for the pack's T-posed rig: legs swing with knee lift,
+ * arms drop to the sides and counter-swing, hips bob and twist against the
+ * spine. Sides and facing are measured from the rest pose rather than
+ * assumed, so the cycle holds for either axis convention.
+ *
+ * @param forwardSign Receives +1 when the rig faces +Z, -1 for -Z.
+ * @throws std::runtime_error when a required joint is missing.
+ */
+std::shared_ptr<bird::SkeletalClip> buildWalkClip(const bird::Skeleton& skeleton,
+												  float& forwardSign) {
+	using bird::Vector3;
+	const RestFrame rest(skeleton);
+	const Vector3 xAxis(1, 0, 0), yAxis(0, 1, 0), zAxis(0, 0, 1);
+	forwardSign = rest.modelPosition(requireJoint(skeleton, "Toes_L")).z >
+						  rest.modelPosition(requireJoint(skeleton, "Ankle_L")).z
+					  ? 1.0f
+					  : -1.0f;
+	const float f = forwardSign;
+	auto clip = std::make_shared<bird::SkeletalClip>("Walk", kCycleSeconds);
+
+	struct Side {
+		const char* upperLeg;
+		const char* lowerLeg;
+		const char* shoulder;
+		const char* elbow;
+		const char* hand;
+		float phaseOffset;
+	};
+	const Side sides[] = {
+		{"UpperLeg_L", "LowerLeg_L", "Shoulder_L", "Elbow_L", "Hand_L", 0.0f},
+		{"UpperLeg_R", "LowerLeg_R", "Shoulder_R", "Elbow_R", "Hand_R", kPi},
+	};
+	for (const Side& side : sides) {
+		const float offset = side.phaseOffset;
+		const int32_t shoulder = requireJoint(skeleton, side.shoulder);
+		const float armSide =
+			rest.modelPosition(requireJoint(skeleton, side.hand)).x >
+					rest.modelPosition(shoulder).x
+				? 1.0f
+				: -1.0f;
+
+		clip->addTrack(rotationTrack(
+			rest, requireJoint(skeleton, side.upperLeg), [=](float phase) {
+				return around(-f * 26.0f * std::sin(phase + offset), xAxis);
+			}));
+		clip->addTrack(rotationTrack(
+			rest, requireJoint(skeleton, side.lowerLeg), [=](float phase) {
+				const float lift = std::max(0.0f, std::cos(phase + offset));
+				return around(f * (6.0f + 45.0f * lift), xAxis);
+			}));
+		clip->addTrack(rotationTrack(rest, shoulder, [=](float phase) {
+			const float swing = 18.0f * std::sin(phase + offset);
+			return around(f * swing, xAxis) * around(-armSide * 74.0f, zAxis);
+		}));
+		clip->addTrack(rotationTrack(
+			rest, requireJoint(skeleton, side.elbow), [=](float phase) {
+				const float bend = 14.0f + 12.0f * std::max(0.0f, -std::sin(phase + offset));
+				return around(-armSide * f * bend, yAxis);
+			}));
+	}
+
+	const int32_t hips = requireJoint(skeleton, "Hips");
+	bird::JointTrack hipsTrack =
+		rotationTrack(rest, hips, [=](float phase) { return around(6.0f * std::sin(phase), yAxis); });
+	for (int key = 0; key <= kKeysPerCycle; key++) {
+		const float phase = 2.0f * kPi * key / kKeysPerCycle;
+		const float bob = 0.035f * std::cos(2.0f * phase);
+		hipsTrack.translation.addKey(kCycleSeconds * key / kKeysPerCycle,
+									 rest.localTranslation(hips, Vector3(0, bob, 0)));
+	}
+	clip->addTrack(std::move(hipsTrack));
+	clip->addTrack(rotationTrack(rest, requireJoint(skeleton, "Spine_02"), [=](float phase) {
+		return around(-9.0f * std::sin(phase), yAxis);
+	}));
+	clip->addTrack(rotationTrack(rest, requireJoint(skeleton, "Head"), [=](float phase) {
+		return around(f * 3.0f * std::cos(2.0f * phase), xAxis);
+	}));
+	return clip;
+}
+
+/** Walks its host around a circle, facing along the path. */
+class CircleWalkScript : public bird::ProcessScript<bird::WorldObject> {
+   public:
+	CircleWalkScript(bird::Vector3 center, float radius, float speed, float forwardSign)
+		: m_center(center),
+		  m_radius(radius),
+		  m_angularSpeed(speed / radius),
+		  m_baseYaw(forwardSign > 0.0f ? 0.0f : kPi) {}
+
+	void init() override {}
+	void deinit() override {}
+
+	void process(float delta) override {
+		m_angle += m_angularSpeed * delta;
+		object()->setWorldPosition(
+			m_center + bird::Vector3(std::cos(m_angle) * m_radius, 0.0f,
+									 std::sin(m_angle) * m_radius));
+		object()->setWorldRotation(
+			glm::angleAxis(m_baseYaw - m_angle, bird::Vector3(0, 1, 0)));
+	}
+
+   private:
+	bird::Vector3 m_center;
+	float m_radius;
+	float m_angularSpeed;
+	float m_baseYaw;
+	float m_angle = 0.0f;
+};
+
+/**
+ * Skinned character showcase: the skeleton knight from the bundled pack,
+ * driven by a procedural walk clip while circling the playground floor.
+ *
+ * @throws std::runtime_error when the model, its skeleton bake, or the
+ *         knight mesh is missing.
+ */
+void build(bird::Scene* scene) {
+	using namespace bird;
+	const auto meshes = RESOURCE_MANAGER->loadMesh(kKnightModel);
+	const auto baked = RESOURCE_MANAGER->loadSkeletalAsset(kKnightModel);
+	if (!baked || meshes.size() <= kKnightMeshIndex ||
+		!meshes[kKnightMeshIndex]->isSkinned()) {
+		throw std::runtime_error("animation demo: knight model or skeleton bake missing");
+	}
+
+	float forwardSign = 1.0f;
+	auto asset = std::make_shared<SkeletalAsset>(*baked);
+	asset->clips.push_back(buildWalkClip(*asset->skeleton, forwardSign));
+	auto animator = _own_mk<SkeletalAnimationComponent>(
+		std::shared_ptr<const SkeletalAsset>(std::move(asset)));
+	animator->play("Walk");
+
+	auto knight = _own_mk<WorldObject>();
+	knight->addComponent(_own_mk<MeshComponent>(
+		std::vector<std::shared_ptr<Mesh>>{meshes[kKnightMeshIndex]}));
+	knight->addComponent(std::move(animator));
+	knight->addComponent(_own_mk<CircleWalkScript>(Vector3(-3.0f, -2.0f, -8.2f),
+												   1.4f, 1.2f, forwardSign));
+	scene->addChild(std::move(knight));
+}
+
+}  // namespace animation
+
 class MainScript : public bird::Script<bird::Scene> {
    public:
 	void init() override {
@@ -902,6 +1135,7 @@ class MainScript : public bird::Script<bird::Scene> {
 		object()->addChild(std::move(cam));
 		buildGallery(bird::APPLICATION->getUIManager());
 		lighting::build(object());
+		animation::build(object());
 		playground::build(object(), camera, bird::APPLICATION->getUIManager());
 		// BIRD_PHYSICS_DEBUG=1 starts with collider wireframes on (G toggles).
 		if (std::getenv("BIRD_PHYSICS_DEBUG") != nullptr) {
