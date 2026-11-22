@@ -28,7 +28,12 @@ vec3 importanceSampleGGX(vec2 xi, vec3 N, float roughness) {
     float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
 
     vec3 H = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
-    vec3 up = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    // An explicit branch: the ternary form cross-compiled to a select that
+    // picked +Z for N = +Z, so cross(up, N) was zero and every sample NaN.
+    vec3 up = vec3(1.0, 0.0, 0.0);
+    if (abs(N.z) < 0.999) {
+        up = vec3(0.0, 0.0, 1.0);
+    }
     vec3 tangent = normalize(cross(up, N));
     vec3 bitangent = cross(N, tangent);
     return normalize(tangent * H.x + bitangent * H.y + N * H.z);

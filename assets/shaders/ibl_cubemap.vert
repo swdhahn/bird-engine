@@ -6,8 +6,12 @@ layout(location = 0) in vec3 inPosition;
 
 layout(location = 0) out vec3 localPos;
 
-layout(push_constant) uniform IBLCubemap {
+// Shared with ibl_prefilter.frag: OpenGL links push constants as one
+// uniform, so both stages must declare the identical block. Passes without
+// a roughness parameter push only viewProjection.
+layout(push_constant) uniform IBLCapture {
     mat4 viewProjection;
+    vec4 params;  // x = roughness [0..1], y = env cubemap resolution
 } pc;
 
 void main() {
