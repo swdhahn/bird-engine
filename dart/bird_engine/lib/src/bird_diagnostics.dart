@@ -45,6 +45,9 @@ typedef _DiagSetMinSeverityDart = void Function(int severity);
 typedef _DiagGetMinSeverityNative = ffi.Int32 Function();
 typedef _DiagGetMinSeverityDart = int Function();
 
+typedef _DiagGetDoubleNative = ffi.Double Function();
+typedef _DiagGetDoubleDart = double Function();
+
 late final _DiagLogDart _diagLog = b.nativeLib
     .lookupFunction<_DiagLogNative, _DiagLogDart>('bird_diag_log');
 
@@ -58,6 +61,14 @@ late final _DiagSetMinSeverityDart _diagSetMinSeverity = b.nativeLib
 late final _DiagGetMinSeverityDart _diagGetMinSeverity = b.nativeLib
     .lookupFunction<_DiagGetMinSeverityNative, _DiagGetMinSeverityDart>(
         'bird_diag_get_min_severity');
+
+late final _DiagGetDoubleDart _diagGetAverageFps = b.nativeLib
+    .lookupFunction<_DiagGetDoubleNative, _DiagGetDoubleDart>(
+        'bird_diag_get_average_fps');
+
+late final _DiagGetDoubleDart _diagGetLastFrameMs = b.nativeLib
+    .lookupFunction<_DiagGetDoubleNative, _DiagGetDoubleDart>(
+        'bird_diag_get_last_frame_ms');
 
 /// Structured logging bridge into the native `bird::diag::Logger`.
 ///
@@ -111,4 +122,13 @@ abstract final class BirdLog {
   /// Returns the current minimum severity threshold on the native logger.
   static LogSeverity getMinSeverity() =>
       LogSeverity.fromValue(_diagGetMinSeverity());
+}
+
+/// Read-only access to lightweight native profiler metrics from Dart.
+abstract final class BirdProfiler {
+  /// Rolling average FPS over the last 60 frames.
+  static double get averageFps => _diagGetAverageFps();
+
+  /// Duration of the most recently completed frame in milliseconds.
+  static double get lastFrameMs => _diagGetLastFrameMs();
 }

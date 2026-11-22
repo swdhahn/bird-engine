@@ -43,6 +43,18 @@ BIRD_DIAG_C_API void bird_diag_set_min_severity(int32_t severity);
  */
 BIRD_DIAG_C_API int32_t bird_diag_get_min_severity(void);
 
+/**
+ * Returns the rolling average FPS over the last 60 profiled frames (0.0 if
+ * no frames have been profiled yet).
+ */
+BIRD_DIAG_C_API double bird_diag_get_average_fps(void);
+
+/**
+ * Returns the most recently completed frame duration in milliseconds (0.0 if
+ * no frames have been profiled yet).
+ */
+BIRD_DIAG_C_API double bird_diag_get_last_frame_ms(void);
+
 }  // extern "C"
 
 #endif	// BIRD_DIAGNOSTICS_C_API_H

@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "Logger.h"
+#include "Profiler.h"
 
 namespace {
 
@@ -32,6 +33,14 @@ BIRD_DIAG_C_API void bird_diag_set_min_severity(int32_t severity) {
 
 BIRD_DIAG_C_API int32_t bird_diag_get_min_severity(void) {
 	return static_cast<int32_t>(bird::diag::Logger::get().getMinSeverity());
+}
+
+BIRD_DIAG_C_API double bird_diag_get_average_fps(void) {
+	return bird::diag::Profiler::get().summary(60).averageFps;
+}
+
+BIRD_DIAG_C_API double bird_diag_get_last_frame_ms(void) {
+	return bird::diag::Profiler::get().latestFrame().frameTimeMs;
 }
 
 }  // extern "C"

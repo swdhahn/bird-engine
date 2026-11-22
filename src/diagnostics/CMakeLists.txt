@@ -6,6 +6,8 @@ add_library(
   LogSinks.cpp
   Logger.h
   Logger.cpp
+  Profiler.h
+  Profiler.cpp
   DiagnosticsCApi.h
   DiagnosticsCApi.cpp)
 
