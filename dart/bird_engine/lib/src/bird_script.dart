@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ffi' as ffi;
 import 'package:ffi/ffi.dart' as pkg_ffi;
 
+import 'bird_diagnostics.dart';
 import 'events.dart';
 import 'generated/bindings.dart' as b;
 import 'generated/component.dart';
@@ -75,6 +76,19 @@ late final _SetPropStringDart _setPropString = b.nativeLib
     .lookupFunction<_SetPropStringNative, _SetPropStringDart>(
         'bird_DartScriptComponent_setPropertyString');
 
+typedef _DisableDartScriptNative = ffi.Void Function(
+  ffi.Pointer<ffi.Void> componentPtr,
+  ffi.Pointer<pkg_ffi.Utf8> reason,
+);
+typedef _DisableDartScriptDart = void Function(
+  ffi.Pointer<ffi.Void> componentPtr,
+  ffi.Pointer<pkg_ffi.Utf8> reason,
+);
+
+late final _DisableDartScriptDart _disableDartScriptComponent = b.nativeLib
+    .lookupFunction<_DisableDartScriptNative, _DisableDartScriptDart>(
+        'bird_DartScriptComponent_disable');
+
 /// Base class for Dart scripts attached to a [WorldObject] (or [Scene]),
 /// mirroring C++ `bird::ProcessScript<T>`.
 ///
@@ -82,10 +96,46 @@ late final _SetPropStringDart _setPropString = b.nativeLib
 /// [deinit], and attach it to an entity via `entity.addComponent(myScript.createComponent())`.
 abstract class BirdScript<T extends WorldObject> {
   WorldObject? _host;
+  ffi.Pointer<ffi.Void>? _nativeComponentPtr;
+  bool _disabled = false;
   ffi.NativeCallable<_NativeInitSig>? _initCb;
   ffi.NativeCallable<_NativeProcessSig>? _processCb;
   ffi.NativeCallable<_NativeProcessSig>? _physicsProcessCb;
   ffi.NativeCallable<_NativeDeinitSig>? _deinitCb;
+
+  /// True if this script component was disabled after throwing an unhandled
+  /// exception in [init], [process], [physicsProcess], or [deinit].
+  bool get isDisabled => _disabled;
+
+  void _handleScriptError(String phase, Object error, StackTrace stackTrace) {
+    final summary = '$runtimeType.$phase() threw: $error';
+    BirdLog.error('DartScript', '$summary\n$stackTrace');
+    _disabled = true;
+    final ptr = _nativeComponentPtr;
+    if (ptr != null && ptr != ffi.nullptr) {
+      final reasonPtr = summary.toNativeUtf8();
+      try {
+        _disableDartScriptComponent(ptr, reasonPtr);
+      } finally {
+        pkg_ffi.calloc.free(reasonPtr);
+      }
+    }
+  }
+
+  /// Runs one lifecycle [body] inside the host entity's event-ownership zone,
+  /// disabling this script instead of crashing the engine when it throws.
+  void _runGuarded(String phase, void Function() body) {
+    try {
+      runZoned(
+        body,
+        zoneValues: <Object?, Object?>{
+          birdActiveEntityIdZoneKey: _host!.getID(),
+        },
+      );
+    } catch (error, stackTrace) {
+      _handleScriptError(phase, error, stackTrace);
+    }
+  }
 
   /// Wraps the raw native host pointer into the typed entity [T].
   /// Override if using a subclass of [WorldObject] (e.g. `Camera.fromHandle`).
@@ -131,53 +181,38 @@ abstract class BirdScript<T extends WorldObject> {
   ///
   /// Pass the returned [Component] directly to `worldObject.addComponent(...)`.
   Component createComponent() {
+    _disabled = false;
     _initCb = ffi.NativeCallable<_NativeInitSig>.isolateLocal(
       (ffi.Pointer<ffi.Void> hostPtr) {
+        if (_disabled) return;
         _host = wrapHost(hostPtr);
-        runZoned(
-          () => init(),
-          zoneValues: <Object?, Object?>{
-            birdActiveEntityIdZoneKey: _host!.getID(),
-          },
-        );
+        _runGuarded('init', init);
       },
     );
     _processCb = ffi.NativeCallable<_NativeProcessSig>.isolateLocal(
       (ffi.Pointer<ffi.Void> hostPtr, double delta) {
+        if (_disabled) return;
         _host ??= wrapHost(hostPtr);
-        runZoned(
-          () => process(delta),
-          zoneValues: <Object?, Object?>{
-            birdActiveEntityIdZoneKey: _host!.getID(),
-          },
-        );
+        _runGuarded('process', () => process(delta));
       },
     );
     _physicsProcessCb = ffi.NativeCallable<_NativeProcessSig>.isolateLocal(
       (ffi.Pointer<ffi.Void> hostPtr, double fixedDelta) {
+        if (_disabled) return;
         _host ??= wrapHost(hostPtr);
-        runZoned(
-          () => physicsProcess(fixedDelta),
-          zoneValues: <Object?, Object?>{
-            birdActiveEntityIdZoneKey: _host!.getID(),
-          },
-        );
+        _runGuarded('physicsProcess', () => physicsProcess(fixedDelta));
       },
     );
     _deinitCb = ffi.NativeCallable<_NativeDeinitSig>.isolateLocal(
       (ffi.Pointer<ffi.Void> hostPtr) {
         _host ??= wrapHost(hostPtr);
         try {
-          runZoned(
-            () => deinit(),
-            zoneValues: <Object?, Object?>{
-              birdActiveEntityIdZoneKey: _host!.getID(),
-            },
-          );
-        } finally {
-          if (_host != null) {
-            Events.unsubscribeByOwner(ownerEntityId: _host!.getID());
+          if (!_disabled) {
+            _runGuarded('deinit', deinit);
           }
+        } finally {
+          Events.unsubscribeByOwner(ownerEntityId: _host!.getID());
+          _nativeComponentPtr = null;
           _initCb?.close();
           _processCb?.close();
           _physicsProcessCb?.close();
@@ -196,6 +231,7 @@ abstract class BirdScript<T extends WorldObject> {
       _physicsProcessCb!.nativeFunction,
       _deinitCb!.nativeFunction,
     );
+    _nativeComponentPtr = ptr;
 
     final classPtr = scriptClassName.toNativeUtf8();
     final pathPtr = scriptPath.toNativeUtf8();

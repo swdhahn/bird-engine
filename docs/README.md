@@ -35,6 +35,7 @@ flowchart TD
     Arch --> A8["Dart Scripting & FFI Codegen"]
     Arch --> A9["Scene Serialization, Prefabs & Save Games"]
     Arch --> A10["Event & Messaging System"]
+    Arch --> A11["Diagnostics (Logging, Profiling & Crash Handling)"]
 ```
 
 ---
@@ -71,3 +72,4 @@ Under-the-hood technical references detailing internal mechanics and design deci
 - **[Event & Messaging System](architecture/event_bus.md)**: Decoupled C++ and Dart publish-subscribe bus (`EventBus` / `Events`), queued ring-buffer vs. immediate synchronous dispatch, variant `EventPayload` conventions, built-in physics/input/animation events, and automatic entity lifecycle cleanup.
 - **[Dart Scripting & FFI Codegen](architecture/dart_scripting_and_codegen.md)**: `libclang`-based `DartApiGenerator`, 3-tier C++/C/Dart FFI architecture, Doxygen-to-Dartdoc extraction, ownership rules, embedded `libdart_dll` VM runtime, and troubleshooting.
 - **[Scene Serialization, Prefabs & Save Games](architecture/serialization_and_prefabs.md)**: Format-agnostic `Archive` & JSON schema, `ComponentRegistry` reflection, stable `UUID` & `EntityRef` remapping, `PrefabManager` / `InstantiatePrefab(AssetID)`, property delta overrides, and cross-platform `SaveGame` directory resolution.
+- **[Diagnostics (Logging, Profiling & Crash Handling)](architecture/diagnostics.md)**: Thread-safe structured logger with console/rotating-file/ring-buffer sinks, Dart logging bridge, Tracy & internal frame/section profiler, native stack traces, OS crash dumps, Dart script error boundary, and graceful fallback assets.

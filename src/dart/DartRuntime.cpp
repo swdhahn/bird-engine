@@ -7,6 +7,7 @@
 #include <iostream>
 
 #include "DartEventBridge.h"
+#include "../diagnostics/Logger.h"
 
 namespace fs = std::filesystem;
 
@@ -51,8 +52,34 @@ bool DartRuntime::checkHandleError(Dart_Handle handle,
 								   const std::string& context) {
 	if (Dart_IsError(handle)) {
 		const char* err = Dart_GetError(handle);
-		m_lastError = context + ": " + (err ? err : "unknown Dart error");
-		std::cerr << "[DartRuntime] " << m_lastError << std::endl;
+		std::string detail = err ? err : "unknown Dart error";
+
+		if (Dart_IsUnhandledExceptionError(handle)) {
+			Dart_Handle exc = Dart_ErrorGetException(handle);
+			Dart_Handle st = Dart_ErrorGetStackTrace(handle);
+			if (!Dart_IsError(exc) && !Dart_IsNull(exc)) {
+				Dart_Handle excStr = Dart_ToString(exc);
+				const char* cstr = nullptr;
+				if (!Dart_IsError(excStr) &&
+					!Dart_IsError(Dart_StringToCString(excStr, &cstr)) &&
+					cstr) {
+					detail = cstr;
+				}
+			}
+			if (!Dart_IsError(st) && !Dart_IsNull(st)) {
+				Dart_Handle stStr = Dart_ToString(st);
+				const char* cstr = nullptr;
+				if (!Dart_IsError(stStr) &&
+					!Dart_IsError(Dart_StringToCString(stStr, &cstr)) &&
+					cstr && cstr[0] != '\0') {
+					detail += "\n";
+					detail += cstr;
+				}
+			}
+		}
+
+		m_lastError = context + ": " + detail;
+		BIRD_LOG_ERROR("Dart", m_lastError);
 		return false;
 	}
 	return true;
