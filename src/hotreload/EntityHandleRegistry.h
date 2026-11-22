@@ -8,11 +8,10 @@
 #include "../util/Constants.h"
 
 #if defined(_WIN32) || defined(_MSC_VER)
-#ifdef BIRD_CORE_EXPORTS
+// Always export: these are defined only inside Bird_core (compiled through
+// the hotreload object library, which never sees BIRD_CORE_EXPORTS) and are
+// resolved at runtime by Dart FFI, never linked against by C++ consumers.
 #define BIRD_ENTITY_C_API __declspec(dllexport)
-#else
-#define BIRD_ENTITY_C_API __declspec(dllimport)
-#endif
 #else
 #define BIRD_ENTITY_C_API __attribute__((visibility("default")))
 #endif

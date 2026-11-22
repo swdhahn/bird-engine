@@ -7,11 +7,35 @@
 #include <iostream>
 #include <utility>
 
+#if defined(_WIN32)
+#include <io.h>
+#elif !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+#include <unistd.h>
+#endif
+
 namespace fs = std::filesystem;
 
 namespace bird::diag {
 
 namespace {
+
+/**
+ * Reports whether both console streams reach a terminal that renders ANSI
+ * escapes. Browser consoles, logcat and redirected output never do, and
+ * escape codes there corrupt lines that tools such as the WebGL smoke test
+ * parse.
+ *
+ * @return True when stdout and stderr are both interactive terminals.
+ */
+bool consoleSupportsAnsiColors() {
+#if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
+	return false;
+#elif defined(_WIN32)
+	return _isatty(_fileno(stdout)) != 0 && _isatty(_fileno(stderr)) != 0;
+#else
+	return ::isatty(STDOUT_FILENO) != 0 && ::isatty(STDERR_FILENO) != 0;
+#endif
+}
 
 std::tm toUtcTm(std::time_t seconds) {
 	std::tm utc{};
@@ -94,7 +118,7 @@ std::string LogRecord::format() const {
 // ============================================================================
 
 ConsoleLogSink::ConsoleLogSink(bool enableColors)
-	: m_enableColors(enableColors) {}
+	: m_enableColors(enableColors && consoleSupportsAnsiColors()) {}
 
 void ConsoleLogSink::write(const LogRecord& record) {
 	std::lock_guard<std::mutex> lock(m_mutex);

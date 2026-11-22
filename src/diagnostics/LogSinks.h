@@ -107,7 +107,8 @@ class ConsoleLogSink final : public ILogSink {
 	/**
 	 * Constructs a console sink.
 	 *
-	 * @param enableColors When true, wraps log lines in ANSI severity colors.
+	 * @param enableColors When true, wraps log lines in ANSI severity colors
+	 *        if stdout and stderr are terminals (never in browsers or logcat).
 	 */
 	explicit ConsoleLogSink(bool enableColors = true);
 
