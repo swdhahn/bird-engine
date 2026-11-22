@@ -52,3 +52,7 @@ install/
 .dart_tool/
 pubspec.lock
 dart/bird_engine/lib/src/generated/
+
+# Runtime output from the diagnostics module (Logger file sink, CrashHandler)
+logs/
+crashes/

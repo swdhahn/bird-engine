@@ -11,7 +11,12 @@ const float PI = 3.14159265359;
 
 void main() {
     vec3 N = normalize(localPos);
-    vec3 up = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0);
+    // Explicit branch, as in ibl_prefilter.frag: the ternary form selected
+    // the parallel axis for N = +/-Y and produced NaN samples.
+    vec3 up = vec3(0.0, 0.0, 1.0);
+    if (abs(N.y) < 0.999) {
+        up = vec3(0.0, 1.0, 0.0);
+    }
     vec3 right = normalize(cross(up, N));
     up = normalize(cross(N, right));
 

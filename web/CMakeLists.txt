@@ -23,10 +23,11 @@ target_include_directories(bird_web PRIVATE "${BIRD_ROOT}/src")
 target_link_libraries(bird_web PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,Bird_core>")
 set_target_properties(bird_web PROPERTIES OUTPUT_NAME index SUFFIX ".html")
 
-# Stage the baked assets at their repo paths; the runtime reads only .bird
-# files, which BuildTools bakes on a desktop.
+# Stage the baked assets at their repo paths; the runtime reads .bird files,
+# which BuildTools bakes on a desktop, plus raw audio clips, which miniaudio
+# decodes directly.
 file(GLOB_RECURSE BIRD_BAKED_ASSETS RELATIVE "${BIRD_ROOT}" CONFIGURE_DEPENDS
-     "${BIRD_ROOT}/assets/*.bird")
+     "${BIRD_ROOT}/assets/*.bird" "${BIRD_ROOT}/assets/audio/*.wav")
 # Not used by the sample game; keeps the download about 57 MB smaller.
 list(FILTER BIRD_BAKED_ASSETS EXCLUDE REGEX "^assets/models/bugatti/")
 set(BIRD_WEB_STAGE "${CMAKE_CURRENT_BINARY_DIR}/staged")

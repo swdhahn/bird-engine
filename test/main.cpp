@@ -1,6 +1,23 @@
 #include <Application.h>
+#include <animation/skeletal/BlendTree.h>
 #include <animation/skeletal/PoseOps.h>
 #include <animation/skeletal/SkeletalAnimationComponent.h>
+#include <audio/AudioListenerComponent.h>
+#include <audio/AudioSourceComponent.h>
+#include <audio/AudioSystem.h>
+#include <diagnostics/Logger.h>
+#include <diagnostics/Profiler.h>
+#include <editor/LevelEditor.h>
+#include <events/EventBus.h>
+#include <navigation/NavAgent.h>
+#include <navigation/NavMesh.h>
+#include <navigation/NavWorld.h>
+#include <renders/GraphicsPipeline.h>
+#include <renders/generic/EnvironmentMap.h>
+#include <scene/components/ParticleEmitter.h>
+#include <serialization/Json.h>
+#include <serialization/SaveGame.h>
+#include <serialization/SceneSerializer.h>
 #include <physics/CharacterControllerComponent.h>
 #include <physics/CollisionShape.h>
 #include <physics/PhysicsWorld.h>
@@ -53,6 +70,12 @@
 
 // True while the camera rides the walking character (toggle with C).
 bool g_walkMode = false;
+
+/** Horizontal screen margins for HUD overlays (wider beside editor panels). */
+struct HudInsets {
+	float left = 16.0f;
+	float right = 16.0f;
+};
 
 class POVCamera : public bird::ProcessScript<bird::Camera> {
    public:
@@ -648,7 +671,8 @@ bird::WorldObject* addObject(bird::Scene* scene,
 	return raw;
 }
 
-void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui) {
+void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui,
+		   const HudInsets& insets) {
 	using namespace bird;
 	auto cube = RESOURCE_MANAGER->loadMesh("assets/models/cube.obj");  // -1..1
 	const CollisionShape unitBox = CollisionShape::box(Vector3(1.0f));
@@ -657,7 +681,8 @@ void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui) {
 
 	// Floor slab: top face at y = -2.
 	addObject(scene, cube, {0, -2.5f, -18}, {12, 0.5f, 12},
-			  _own_mk<RigidBodyComponent>(unitBox, still));
+			  _own_mk<RigidBodyComponent>(unitBox, still))
+		->setName("Floor Slab");
 
 	// 80 half-metre boxes dropped from a height with varied rotations, so
 	// they tumble into a pile (deterministic, so R replays the same drop).
@@ -677,6 +702,7 @@ void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui) {
 				WorldObject* object = addObject(scene, cube, position,
 												Vector3(0.5f), std::move(body));
 				object->setWorldRotation(rotation);	 // synced at the first step
+				object->setName("Crate " + std::to_string(i + 1));
 				boxes.push_back({raw, position, rotation});
 			}
 		}
@@ -691,7 +717,8 @@ void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui) {
 			link.mass = 10.0f;
 			auto body = _own_mk<RigidBodyComponent>(unitBox, link);
 			RigidBodyComponent* raw = body.get();
-			addObject(scene, cube, position, Vector3(0.4f), std::move(body));
+			addObject(scene, cube, position, Vector3(0.4f), std::move(body))
+				->setName("Chain Link " + std::to_string(i + 1));
 			scene->getPhysicsWorld()->createPointJoint(raw, previous,
 													   position + Vector3(0, 0.55f, 0));
 			previous = raw;
@@ -703,12 +730,13 @@ void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui) {
 	sensor.isSensor = true;
 	auto zone = _own_mk<RigidBodyComponent>(CollisionShape::box({3, 1, 2}), sensor);
 	RigidBodyComponent* zoneBody = zone.get();
-	addObject(scene, {}, {0, -1, -12}, Vector3(1.0f), std::move(zone));
+	addObject(scene, {}, {0, -1, -12}, Vector3(1.0f), std::move(zone))
+		->setName("Trigger Zone");
 
 	auto* hudColumn = ui->getRoot()->add<UIStack>(UIAxis::Vertical);
 	hudColumn->setAnchor(UIAlignment::TopRight);
 	hudColumn->setPivot(UIAlignment::TopRight);
-	hudColumn->setOffset(Vector2(-16.0f, 44.0f));
+	hudColumn->setOffset(Vector2(-insets.right, 44.0f));
 	hudColumn->setAlign(UIAlign::End);
 	hudColumn->setGap(4.0f);
 	std::array<UILabel*, 3> hud{};
@@ -723,6 +751,7 @@ void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui) {
 	auto walker = _own_mk<CharacterControllerComponent>(walkerSettings);
 	CharacterControllerComponent* walkerRaw = walker.get();
 	auto walkerObject = _own_mk<WorldObject>();
+	walkerObject->setName("Walker (character controller)");
 	walkerObject->addComponent(std::move(walker));
 	walkerObject->setWorldPosition({0, -2.0f, -10});
 	scene->addChild(std::move(walkerObject));
@@ -736,6 +765,7 @@ void build(bird::Scene* scene, bird::Camera* camera, bird::UIManager* ui) {
 	walkerRaw->setOnContactBegin(
 		[scriptRaw](const ContactEvent& e) { scriptRaw->walkerTouched(e); });
 	auto controller = _own_mk<WorldObject>();
+	controller->setName("Playground Controller");
 	controller->addComponent(std::move(script));
 	scene->addChild(std::move(controller));
 }
@@ -781,14 +811,15 @@ bird::WorldObject* addLight(bird::Scene* scene,
 	return raw;
 }
 
-/** Adds a static mesh object rendered with a material override. */
-void addMaterialObject(bird::Scene* scene,
+/** Adds a named static mesh object rendered with a material override. */
+void addMaterialObject(bird::Scene* scene, const std::string& name,
 					   const std::vector<std::shared_ptr<bird::Mesh>>& meshes,
 					   bird::Vector3 position, bird::Vector3 scale,
 					   std::shared_ptr<bird::Material> material) {
 	auto mesh = bird::_own_mk<bird::MeshComponent>(meshes);
 	mesh->setAllMaterials(std::move(material));
 	auto object = bird::_own_mk<bird::WorldObject>();
+	object->setName(name);
 	object->addComponent(std::move(mesh));
 	object->setWorldPosition(position);
 	object->setScale(scale);
@@ -809,19 +840,22 @@ void build(bird::Scene* scene) {
 	sun->setIntensity(3.0f);
 	sun->setCastsShadows(true);
 	addLight(scene, std::move(sun), Vector3(0, 20, 0),
-			 glm::angleAxis(0.6f, up) * glm::angleAxis(-0.9f, right));
+			 glm::angleAxis(0.6f, up) * glm::angleAxis(-0.9f, right))
+		->setName("Sun");
 
 	const Vector3 playground(0.0f, -1.0f, -18.0f);
 	auto red = _own_mk<LightComponent>(LightType::Point);
 	red->setColor(Vector3(1.0f, 0.25f, 0.2f));
 	red->setIntensity(25.0f);
 	red->setRange(9.0f);
-	addLight(scene, std::move(red), playground + Vector3(-7.0f, 0.5f, 2.0f));
+	addLight(scene, std::move(red), playground + Vector3(-7.0f, 0.5f, 2.0f))
+		->setName("Red Point Light");
 	auto blue = _own_mk<LightComponent>(LightType::Point);
 	blue->setColor(Vector3(0.25f, 0.45f, 1.0f));
 	blue->setIntensity(25.0f);
 	blue->setRange(9.0f);
-	addLight(scene, std::move(blue), playground + Vector3(7.0f, 0.5f, 2.0f));
+	addLight(scene, std::move(blue), playground + Vector3(7.0f, 0.5f, 2.0f))
+		->setName("Blue Point Light");
 
 	auto orbiting = _own_mk<LightComponent>(LightType::Point);
 	orbiting->setColor(Vector3(1.0f, 0.85f, 0.6f));
@@ -829,6 +863,7 @@ void build(bird::Scene* scene) {
 	orbiting->setRange(12.0f);
 	orbiting->setCastsShadows(true);
 	WorldObject* orbitObject = addLight(scene, std::move(orbiting), playground);
+	orbitObject->setName("Orbiting Light");
 	orbitObject->addComponent(_own_mk<OrbitScript>(
 		playground + Vector3(0.0f, 1.5f, 0.0f), 6.0f, 0.8f));
 
@@ -839,27 +874,28 @@ void build(bird::Scene* scene) {
 	spot->setConeAngles(0.3f, 0.45f);
 	spot->setCastsShadows(true);
 	addLight(scene, std::move(spot), Vector3(0, 10, -8),
-			 glm::angleAxis(-1.0f, right));
+			 glm::angleAxis(-1.0f, right))
+		->setName("Spot Light");
 
 	auto cube = RESOURCE_MANAGER->loadMesh("assets/models/cube.obj");
 	auto glass = Material::create();
 	glass->setBaseColor(Vector4(0.6f, 0.85f, 1.0f, 0.35f))
 		.setRoughness(0.1f)
 		.setBlendMode(BlendMode::Transparent);
-	addMaterialObject(scene, cube, Vector3(5, -1, -11), Vector3(1.0f), glass);
+	addMaterialObject(scene, "Glass Cube", cube, Vector3(5, -1, -11), Vector3(1.0f), glass);
 
 	auto neon = Material::create();
 	neon->setBaseColor(Vector4(0, 0, 0, 1))
 		.setEmissive(Vector3(1.0f, 0.3f, 0.9f))
 		.setEmissiveStrength(4.0f)
 		.setDomain(MaterialDomain::Unlit);
-	addMaterialObject(scene, cube, Vector3(-5, -1, -11), Vector3(0.6f), neon);
+	addMaterialObject(scene, "Neon Cube", cube, Vector3(-5, -1, -11), Vector3(0.6f), neon);
 
 	auto metal = Material::create();
 	metal->setBaseColor(Vector4(0.95f, 0.64f, 0.54f, 1.0f))
 		.setMetallic(1.0f)
 		.setRoughness(0.3f);
-	addMaterialObject(scene, cube, Vector3(0, -1, -11), Vector3(0.8f), metal);
+	addMaterialObject(scene, "Copper Cube", cube, Vector3(0, -1, -11), Vector3(0.8f), metal);
 }
 
 }  // namespace lighting
@@ -1038,7 +1074,8 @@ class CircleWalkScript : public bird::ProcessScript<bird::WorldObject> {
 		  m_angularSpeed(speed / radius),
 		  m_baseYaw(forwardSign > 0.0f ? 0.0f : kPi) {}
 
-	void init() override {}
+	/** Places the host on its circle before the first (possibly paused) frame. */
+	void init() override { process(0.0f); }
 	void deinit() override {}
 
 	void process(float delta) override {
@@ -1058,32 +1095,84 @@ class CircleWalkScript : public bird::ProcessScript<bird::WorldObject> {
 	float m_angle = 0.0f;
 };
 
+/** The knight's skinned mesh and a private copy of its baked rig. */
+struct KnightRig {
+	std::shared_ptr<bird::Mesh> mesh;
+	std::shared_ptr<bird::SkeletalAsset> asset;
+};
+
 /**
- * Skinned character showcase: the skeleton knight from the bundled pack,
- * driven by a procedural walk clip while circling the playground floor.
+ * Loads the skeleton knight from the bundled character pack.
  *
+ * @return The skinned knight mesh and a mutable copy of its skeletal asset.
  * @throws std::runtime_error when the model, its skeleton bake, or the
  *         knight mesh is missing.
  */
-void build(bird::Scene* scene) {
-	using namespace bird;
-	const auto meshes = RESOURCE_MANAGER->loadMesh(kKnightModel);
-	const auto baked = RESOURCE_MANAGER->loadSkeletalAsset(kKnightModel);
+KnightRig loadKnight() {
+	const auto meshes = bird::RESOURCE_MANAGER->loadMesh(kKnightModel);
+	const auto baked = bird::RESOURCE_MANAGER->loadSkeletalAsset(kKnightModel);
 	if (!baked || meshes.size() <= kKnightMeshIndex ||
 		!meshes[kKnightMeshIndex]->isSkinned()) {
 		throw std::runtime_error("animation demo: knight model or skeleton bake missing");
 	}
+	return {meshes[kKnightMeshIndex], std::make_shared<bird::SkeletalAsset>(*baked)};
+}
 
+/**
+ * Procedural idle for the same rig: arms rest at the sides with a slight
+ * sway while the chest and head breathe. Shares the walk clip's length so a
+ * 1D blend tree can keep both cycles phase-aligned.
+ *
+ * @param forwardSign +1 when the rig faces +Z, -1 for -Z (from buildWalkClip).
+ * @throws std::runtime_error when a required joint is missing.
+ */
+std::shared_ptr<bird::SkeletalClip> buildIdleClip(const bird::Skeleton& skeleton,
+												  float forwardSign) {
+	using bird::Vector3;
+	const RestFrame rest(skeleton);
+	const Vector3 xAxis(1, 0, 0), zAxis(0, 0, 1);
+	const float f = forwardSign;
+	auto clip = std::make_shared<bird::SkeletalClip>("Idle", kCycleSeconds);
+	const std::pair<const char*, const char*> arms[] = {{"Shoulder_L", "Hand_L"},
+														{"Shoulder_R", "Hand_R"}};
+	for (const auto& [shoulderName, handName] : arms) {
+		const int32_t shoulder = requireJoint(skeleton, shoulderName);
+		const float armSide = rest.modelPosition(requireJoint(skeleton, handName)).x >
+									  rest.modelPosition(shoulder).x
+								  ? 1.0f
+								  : -1.0f;
+		clip->addTrack(rotationTrack(rest, shoulder, [=](float phase) {
+			return around(f * 2.0f * std::sin(phase), xAxis) *
+				   around(-armSide * (76.0f + 1.5f * std::cos(phase)), zAxis);
+		}));
+	}
+	clip->addTrack(rotationTrack(rest, requireJoint(skeleton, "Spine_02"), [=](float phase) {
+		return around(-f * 2.5f * std::sin(phase), xAxis);
+	}));
+	clip->addTrack(rotationTrack(rest, requireJoint(skeleton, "Head"), [=](float phase) {
+		return around(f * 2.0f * std::sin(phase + 0.6f), xAxis);
+	}));
+	return clip;
+}
+
+/**
+ * Skinned character showcase: the skeleton knight from the bundled pack,
+ * driven by a procedural walk clip while circling the playground floor.
+ *
+ * @throws std::runtime_error when the knight cannot be loaded.
+ */
+void build(bird::Scene* scene) {
+	using namespace bird;
+	KnightRig rig = loadKnight();
 	float forwardSign = 1.0f;
-	auto asset = std::make_shared<SkeletalAsset>(*baked);
-	asset->clips.push_back(buildWalkClip(*asset->skeleton, forwardSign));
+	rig.asset->clips.push_back(buildWalkClip(*rig.asset->skeleton, forwardSign));
 	auto animator = _own_mk<SkeletalAnimationComponent>(
-		std::shared_ptr<const SkeletalAsset>(std::move(asset)));
+		std::shared_ptr<const SkeletalAsset>(std::move(rig.asset)));
 	animator->play("Walk");
 
 	auto knight = _own_mk<WorldObject>();
-	knight->addComponent(_own_mk<MeshComponent>(
-		std::vector<std::shared_ptr<Mesh>>{meshes[kKnightMeshIndex]}));
+	knight->setName("Circling Knight");
+	knight->addComponent(_own_mk<MeshComponent>(std::vector<std::shared_ptr<Mesh>>{rig.mesh}));
 	knight->addComponent(std::move(animator));
 	knight->addComponent(_own_mk<CircleWalkScript>(Vector3(-3.0f, -2.0f, -8.2f),
 												   1.4f, 1.2f, forwardSign));
@@ -1091,6 +1180,450 @@ void build(bird::Scene* scene) {
 }
 
 }  // namespace animation
+
+namespace environment {
+
+/** Sun orientation shared by the directional light and the sky's sun disc. */
+bird::Quaternion sunRotation() {
+	return glm::angleAxis(0.6f, bird::Vector3(0, 1, 0)) *
+		   glm::angleAxis(-0.9f, bird::Vector3(1, 0, 0));
+}
+
+/**
+ * Procedural sky rendered as the skybox and baked into image-based lighting
+ * (irradiance + prefiltered specular) for every lit surface the camera sees.
+ * Device builds bake smaller cubemaps to keep startup short.
+ */
+void build(bird::Camera* camera) {
+	bird::SkyboxProceduralParams sky;
+	// The sun disc sits where the directional light shines from.
+	sky.sunDirection = glm::normalize(-(sunRotation() * bird::Vector3(0, 0, -1)));
+	bird::IBLQualitySettings quality;
+#if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
+	quality.environmentSize = 128;
+	quality.irradianceSize = 16;
+	quality.prefilterSize = 64;
+#endif
+	bird::WorldEnvironment& env = camera->getWorldEnvironment();
+	env.environmentMap = bird::EnvironmentMap::createProcedural(sky, quality);
+	env.renderSkybox = true;
+	env.iblIntensity = 1.0f;
+}
+
+}  // namespace environment
+
+namespace effects {
+
+constexpr const char* kCampfireSound = "assets/audio/campfire.wav";
+
+/** Modulates its light's intensity like firelight. */
+class FlickerScript : public bird::ProcessScript<bird::WorldObject> {
+   public:
+	FlickerScript(bird::LightComponent* light, float baseIntensity)
+		: m_light(light), m_baseIntensity(baseIntensity) {}
+
+	void init() override {}
+	void deinit() override {}
+
+	void process(float delta) override {
+		m_time += delta;
+		const float wave = 0.8f + 0.12f * std::sin(m_time * 9.0f) +
+						   0.08f * std::sin(m_time * 23.0f + 1.3f);
+		m_light->setIntensity(m_baseIntensity * wave);
+	}
+
+   private:
+	bird::LightComponent* m_light;
+	float m_baseIntensity;
+	float m_time = 0.0f;
+};
+
+/** Places an emitter on its own named object and returns it. */
+bird::ParticleEmitter* addEmitter(bird::Scene* scene, const std::string& name,
+								  bird::Vector3 position,
+								  std::unique_ptr<bird::ParticleEmitter> emitter) {
+	bird::ParticleEmitter* raw = emitter.get();
+	auto object = bird::_own_mk<bird::WorldObject>();
+	object->setName(name);
+	object->addComponent(std::move(emitter));
+	object->setWorldPosition(position);
+	scene->addChild(std::move(object));
+	return raw;
+}
+
+/**
+ * Campfire (additive flames, alpha smoke, a flickering point light and a
+ * looping 3D crackle) plus a spark fountain that bursts on demand.
+ *
+ * @return The spark emitter, burst by the showcase controls.
+ */
+bird::ParticleEmitter* build(bird::Scene* scene) {
+	using namespace bird;
+	const Vector3 fire(-8.0f, -2.0f, -24.0f);
+
+	auto flames = _own_mk<ParticleEmitter>(192);
+	flames->setSpawnRate(70.0f);
+	flames->setLifetimeRange(0.45f, 0.9f);
+	flames->setInitialSpeedRange(0.8f, 1.8f);
+	flames->setEmissionCone(Vector3(0, 1, 0), 0.3f);
+	flames->setGravity(Vector3(0.0f, 1.8f, 0.0f));
+	flames->setColorGradient(Vector4(1.0f, 0.8f, 0.3f, 1.0f),
+							 Vector4(0.9f, 0.15f, 0.02f, 0.0f));
+	flames->setSizeRange(0.55f, 0.1f);
+	flames->setBlendMode(ParticleBlendMode::Additive);
+	addEmitter(scene, "Campfire Flames", fire, std::move(flames));
+
+	auto smoke = _own_mk<ParticleEmitter>(96);
+	smoke->setSpawnRate(10.0f);
+	smoke->setLifetimeRange(2.5f, 4.0f);
+	smoke->setInitialSpeedRange(0.6f, 1.1f);
+	smoke->setEmissionCone(Vector3(0, 1, 0), 0.2f);
+	smoke->setGravity(Vector3(0.3f, 0.4f, 0.0f));
+	smoke->setColorGradient(Vector4(0.35f, 0.35f, 0.38f, 0.45f),
+							Vector4(0.6f, 0.6f, 0.65f, 0.0f));
+	smoke->setSizeRange(0.4f, 1.6f);
+	smoke->setPositionOffset(Vector3(0.0f, 1.0f, 0.0f));
+	addEmitter(scene, "Campfire Smoke", fire, std::move(smoke));
+
+	auto glow = _own_mk<LightComponent>(LightType::Point);
+	glow->setColor(Vector3(1.0f, 0.55f, 0.2f));
+	glow->setRange(9.0f);
+	LightComponent* glowRaw = glow.get();
+	auto crackle = _own_mk<AudioSourceComponent>(kCampfireSound);
+	crackle->setLooping(true);
+	crackle->setSpatialized(true);
+	crackle->setMinDistance(2.0f);
+	crackle->setMaxDistance(35.0f);
+	crackle->setPlayOnInit(true);
+	auto fireObject = _own_mk<WorldObject>();
+	fireObject->setName("Campfire Light & Sound");
+	fireObject->addComponent(std::move(glow));
+	fireObject->addComponent(_own_mk<FlickerScript>(glowRaw, 30.0f));
+	fireObject->addComponent(std::move(crackle));
+	fireObject->setWorldPosition(fire + Vector3(0.0f, 0.8f, 0.0f));
+	scene->addChild(std::move(fireObject));
+
+	auto sparks = _own_mk<ParticleEmitter>(512);
+	sparks->setSpawnRate(0.0f);
+	sparks->setLifetimeRange(1.2f, 2.2f);
+	sparks->setInitialSpeedRange(5.0f, 9.0f);
+	sparks->setEmissionCone(Vector3(0, 1, 0), 0.35f);
+	sparks->setColorGradient(Vector4(0.6f, 0.9f, 1.0f, 1.0f),
+							 Vector4(0.2f, 0.3f, 1.0f, 0.0f));
+	sparks->setSizeRange(0.18f, 0.04f);
+	sparks->setDrag(0.4f);
+	sparks->setBlendMode(ParticleBlendMode::Additive);
+	return addEmitter(scene, "Spark Fountain", Vector3(8.0f, -2.0f, -24.0f),
+					  std::move(sparks));
+}
+
+}  // namespace effects
+
+namespace patrol {
+
+constexpr const char* kFootstepSound = "assets/audio/footstep.wav";
+constexpr const char* kFootstepEvent = "demo.footstep";
+/** Agent top speed, which is also the blend tree's full-walk threshold. */
+constexpr float kWalkSpeed = 1.4f;
+constexpr float kWaitSeconds = 1.5f;
+
+/**
+ * Walks a NavAgent between waypoints, pausing at each, and feeds the
+ * agent's ground speed into the animator's "speed" blend parameter.
+ */
+class PatrolScript : public bird::ProcessScript<bird::WorldObject> {
+   public:
+	PatrolScript(bird::NavAgent* agent, bird::SkeletalAnimationComponent* animator,
+				 std::vector<bird::Vector3> waypoints, float forwardSign)
+		: m_agent(agent),
+		  m_animator(animator),
+		  m_waypoints(std::move(waypoints)),
+		  m_baseYaw(forwardSign > 0.0f ? 0.0f : animation::kPi) {}
+
+	void init() override { m_agent->setDestination(m_waypoints[m_next]); }
+	void deinit() override {}
+
+	void process(float delta) override {
+		if (m_agent->hasReachedDestination()) {
+			m_wait += delta;
+			if (m_wait >= kWaitSeconds) {
+				m_wait = 0.0f;
+				m_next = (m_next + 1) % m_waypoints.size();
+				m_agent->setDestination(m_waypoints[m_next]);
+			}
+		}
+		bird::Vector3 velocity = m_agent->getVelocity();
+		velocity.y = 0.0f;
+		const float speed = glm::length(velocity);
+		m_animator->setFloat("speed", speed);
+		// Face the direction of travel; the rig's forward axis may be -Z.
+		if (speed > 0.15f) {
+			const float yaw = std::atan2(velocity.x, velocity.z) + m_baseYaw;
+			const bird::Quaternion target = glm::angleAxis(yaw, bird::Vector3(0, 1, 0));
+			object()->setWorldRotation(
+				glm::slerp(object()->getWorldRotation(), target,
+						   std::min(1.0f, delta * 8.0f)));
+		}
+	}
+
+   private:
+	bird::NavAgent* m_agent;
+	bird::SkeletalAnimationComponent* m_animator;
+	std::vector<bird::Vector3> m_waypoints;
+	float m_baseYaw;
+	size_t m_next = 0;
+	float m_wait = 0.0f;
+};
+
+/**
+ * Bakes a navmesh over the playground slab and adds a patrolling guard:
+ * a NavAgent steers it, a 1D blend tree mixes Idle and Walk by speed, and
+ * Walk's foot-plant notifies play 3D footsteps and post "demo.footstep" on
+ * the event bus.
+ *
+ * @throws std::runtime_error when the knight cannot be loaded.
+ */
+void build(bird::Scene* scene) {
+	using namespace bird;
+	// The slab's top face (y = -2), wound counter-clockwise seen from above.
+	const std::vector<Vector3> floor = {
+		{-12.0f, -2.0f, -30.0f}, {12.0f, -2.0f, -30.0f},
+		{12.0f, -2.0f, -6.0f},	 {-12.0f, -2.0f, -6.0f}};
+	const std::vector<uint32_t> triangles = {0, 2, 1, 0, 3, 2};
+	scene->getNavWorld()->setNavMesh(NavMesh::build(floor, triangles));
+
+	animation::KnightRig rig = animation::loadKnight();
+	float forwardSign = 1.0f;
+	auto walk = animation::buildWalkClip(*rig.asset->skeleton, forwardSign);
+	auto idle = animation::buildIdleClip(*rig.asset->skeleton, forwardSign);
+	rig.asset->clips.push_back(walk);
+	rig.asset->clips.push_back(idle);
+
+	auto tree = std::make_shared<BlendTree1D>("speed");
+	tree->addClip(idle, 0.0f);
+	tree->addClip(walk, kWalkSpeed);
+	auto animator = _own_mk<SkeletalAnimationComponent>(
+		std::shared_ptr<const SkeletalAsset>(rig.asset));
+	animator->setRootNode(tree);
+	// Each leg plants once per cycle, half a cycle apart.
+	animator->addClipNotify("Walk", 0.0f, "footstep");
+	animator->addClipNotify("Walk", animation::kCycleSeconds * 0.5f, "footstep");
+	SkeletalAnimationComponent* animatorRaw = animator.get();
+
+	NavAgentSettings agentSettings;
+	agentSettings.maxSpeed = kWalkSpeed;
+	agentSettings.radius = 0.5f;
+	agentSettings.updateRotation = false;  // PatrolScript turns the rig
+	auto agent = _own_mk<NavAgent>(agentSettings);
+	NavAgent* agentRaw = agent.get();
+
+	auto guard = _own_mk<WorldObject>();
+	guard->setName("Patrolling Guard");
+	WorldObject* guardRaw = guard.get();
+	animator->setOnNotify([guardRaw, animatorRaw](const AnimationNotifyEvent& e) {
+		// The blend tree reports Walk's notifies even at low weight.
+		if (e.eventName != "footstep" || animatorRaw->getFloat("speed") < 0.4f) return;
+		const Vector3 position = guardRaw->getWorldPosition();
+		if (AudioSystem* audio = AudioSystem::getGlobal()) {
+			audio->playOneShot3D(kFootstepSound, position, AudioBus::kSFX, 0.7f);
+		}
+		if (EventBus* bus = EventBus::getGlobal()) {
+			EventPayload payload;
+			payload.set("position", position);
+			bus->emit(kFootstepEvent, std::move(payload));
+		}
+	});
+	guard->addComponent(_own_mk<MeshComponent>(std::vector<std::shared_ptr<Mesh>>{rig.mesh}));
+	guard->addComponent(std::move(animator));
+	guard->addComponent(std::move(agent));
+	guard->addComponent(_own_mk<PatrolScript>(
+		agentRaw, animatorRaw,
+		std::vector<Vector3>{{-9.0f, -2.0f, -27.0f},
+							 {9.0f, -2.0f, -27.0f},
+							 {9.0f, -2.0f, -13.0f},
+							 {-9.0f, -2.0f, -13.0f}},
+		forwardSign));
+	guard->setWorldPosition(Vector3(-9.0f, -2.0f, -13.0f));
+	scene->addChild(std::move(guard));
+}
+
+}  // namespace patrol
+
+namespace showcase {
+
+constexpr const char* kAppName = "BirdShowcase";
+constexpr const char* kSceneSnapshotFile = "scene_snapshot.json";
+constexpr const char* kCameraSaveFile = "camera.json";
+constexpr const char* kImpactSound = "assets/audio/impact.wav";
+constexpr float kImpactCooldownSeconds = 0.12f;
+constexpr size_t kHudLines = 5;
+
+/**
+ * Engine-systems overlay and controls: culling, profiler, event bus and
+ * audio readouts, plus navmesh debug draw, spark bursts, muting and
+ * save/load through the serialization module.
+ */
+class ShowcaseScript : public bird::ProcessScript<bird::WorldObject> {
+   public:
+	ShowcaseScript(bird::Camera* camera, bird::ParticleEmitter* sparks,
+				   std::array<bird::UILabel*, kHudLines> hud)
+		: m_camera(camera), m_sparks(sparks), m_hud(hud) {
+		m_hud[kHudLines - 1]->setText(
+			"N: navmesh   B: sparks   M: mute   F9: save   F10: load camera");
+	}
+
+	void init() override {
+		bird::EventBus* bus = bird::EventBus::getGlobal();
+		if (bus == nullptr) return;
+		// Owned by this entity: the bus drops both when it is destroyed.
+		const bird::EntityID owner = object()->getID();
+		bus->subscribe(
+			"physics.contact_begin",
+			[this](const bird::EventPayload& payload) { onContact(payload); }, owner);
+		bus->subscribe(
+			patrol::kFootstepEvent,
+			[this](const bird::EventPayload&) { m_footsteps++; }, owner);
+	}
+
+	void deinit() override {}
+
+	void process(float delta) override {
+		m_impactCooldown = std::max(0.0f, m_impactCooldown - delta);
+		if (pressed("showcase_nav", m_navHeld)) {
+			bird::APPLICATION->setNavDebugDraw(!bird::APPLICATION->isNavDebugDrawEnabled());
+		}
+		if (pressed("showcase_sparks", m_sparksHeld)) {
+			m_sparks->emitBurst(160);
+			m_message = "Particles: 160-spark burst";
+		}
+		if (pressed("showcase_mute", m_muteHeld)) toggleMute();
+		if (pressed("showcase_save", m_saveHeld)) save();
+		if (pressed("showcase_load", m_loadHeld)) loadCamera();
+		refreshHud();
+	}
+
+   private:
+	/** True on the frame an action goes down (edge-triggered). */
+	bool pressed(const char* action, bool& held) {
+		const bool down = input()->getActionValue(action) > 0.5f;
+		const bool edge = down && !held;
+		held = down;
+		return edge;
+	}
+
+	void onContact(const bird::EventPayload& payload) {
+		m_contacts++;
+		if (m_impactCooldown > 0.0f || !payload.has("point")) return;
+		m_impactCooldown = kImpactCooldownSeconds;
+		if (bird::AudioSystem* audio = bird::AudioSystem::getGlobal()) {
+			audio->playOneShot3D(kImpactSound, payload.getVector3("point"),
+								 bird::AudioBus::kSFX, 0.5f);
+		}
+	}
+
+	void toggleMute() {
+		bird::AudioSystem* audio = bird::AudioSystem::getGlobal();
+		if (audio == nullptr) return;
+		audio->setMasterMuted(!audio->isMasterMuted());
+		m_message = audio->isMasterMuted() ? "Audio: muted" : "Audio: unmuted";
+	}
+
+	/** Writes the whole scene as JSON and the camera position as a save. */
+	void save() {
+		using bird::SaveGame;
+		SaveGame::ensureDirectoryExists(SaveGame::getUserDataDirectory(kAppName));
+		const std::string scenePath = SaveGame::getSaveFilePath(kAppName, kSceneSnapshotFile);
+		const bool sceneSaved = bird::SceneSerializer::saveSceneToFile(scene(), scenePath);
+
+		const bird::Vector3 eye = m_camera->getWorldPosition();
+		bird::JsonValue position = bird::JsonValue::array();
+		for (int axis = 0; axis < 3; axis++) position.pushBack(eye[axis]);
+		bird::JsonValue save = bird::JsonValue::object();
+		save.set("cameraPosition", std::move(position));
+		const bool cameraSaved = SaveGame::writeTextFile(kAppName, kCameraSaveFile, save.dump());
+
+		m_message = sceneSaved && cameraSaved ? "Saved scene + camera to " + scenePath
+											  : "Save failed (see log)";
+		BIRD_LOG_INFO("Showcase", m_message);
+	}
+
+	/** Restores the camera position written by save(). */
+	void loadCamera() {
+		const std::string text = bird::SaveGame::readTextFile(kAppName, kCameraSaveFile);
+		const std::optional<bird::JsonValue> save = bird::JsonValue::parse(text);
+		const bird::JsonValue* position = save ? save->find("cameraPosition") : nullptr;
+		if (position == nullptr || !position->isArray() || position->asArray().size() != 3) {
+			m_message = "Load: no saved camera yet (press F9 first)";
+			return;
+		}
+		const auto& xyz = position->asArray();
+		m_camera->setWorldPosition(bird::Vector3(xyz[0].asDouble(), xyz[1].asDouble(),
+												 xyz[2].asDouble()));
+		m_message = "Loaded camera position from save";
+	}
+
+	void refreshHud() {
+		const bird::CullingStats& culling =
+			bird::APPLICATION->getGraphicsPipeline()->getCullingStats();
+		m_hud[0]->setText("Culling  drawn " + std::to_string(culling.rendered) + " / " +
+						  std::to_string(culling.totalTested) + "   emitters " +
+						  std::to_string(culling.emittersRendered) + "   particles " +
+						  std::to_string(m_sparks->getActiveCount()));
+		const bird::diag::ProfilerSummary profile = bird::diag::Profiler::get().summary(120);
+		m_hud[1]->setText("Profiler  " + std::to_string(int(profile.averageFps)) +
+						  " fps   p95 " + std::to_string(int(profile.p95FrameTimeMs)) +
+						  " ms   agents " +
+						  std::to_string(scene()->getNavWorld()->getAgentCount()));
+		m_hud[2]->setText("Events  contacts " + std::to_string(m_contacts) +
+						  "   footsteps " + std::to_string(m_footsteps));
+		m_hud[3]->setText(m_message);
+	}
+
+	bird::Camera* m_camera;
+	bird::ParticleEmitter* m_sparks;
+	std::array<bird::UILabel*, kHudLines> m_hud;
+	std::string m_message = "Edit assets/ in a Debug build to hot-reload them";
+	uint64_t m_contacts = 0;
+	uint64_t m_footsteps = 0;
+	float m_impactCooldown = 0.0f;
+	bool m_navHeld = false;
+	bool m_sparksHeld = false;
+	bool m_muteHeld = false;
+	bool m_saveHeld = false;
+	bool m_loadHeld = false;
+};
+
+/** Registers the showcase key bindings. */
+void addActions() {
+	bird::INPUT->addAction(bird::Action("showcase_nav").addKey(KEY_N));
+	bird::INPUT->addAction(bird::Action("showcase_sparks").addKey(KEY_B));
+	bird::INPUT->addAction(bird::Action("showcase_mute").addKey(KEY_M));
+	bird::INPUT->addAction(bird::Action("showcase_save").addKey(KEY_F9));
+	bird::INPUT->addAction(bird::Action("showcase_load").addKey(KEY_F10));
+}
+
+/** Adds the bottom-left systems overlay and its controller. */
+void build(bird::Scene* scene, bird::Camera* camera, bird::ParticleEmitter* sparks,
+		   bird::UIManager* ui, const HudInsets& insets) {
+	using namespace bird;
+	addActions();
+	auto* column = ui->getRoot()->add<UIStack>(UIAxis::Vertical);
+	column->setAnchor(UIAlignment::BottomLeft);
+	column->setPivot(UIAlignment::BottomLeft);
+	column->setOffset(Vector2(insets.left, -16.0f));
+	column->setGap(4.0f);
+	std::array<UILabel*, kHudLines> hud{};
+	for (UILabel*& line : hud) {
+		line = column->add<UILabel>("");
+		line->setColor(Vector4(0.7f, 1.0f, 0.85f, 1.0f));
+	}
+	auto controller = _own_mk<WorldObject>();
+	controller->setName("Showcase Controller");
+	controller->addComponent(_own_mk<ShowcaseScript>(camera, sparks, hud));
+	scene->addChild(std::move(controller));
+}
+
+}  // namespace showcase
 
 class MainScript : public bird::Script<bird::Scene> {
    public:
@@ -1115,6 +1648,7 @@ class MainScript : public bird::Script<bird::Scene> {
 		auto mapMeshes = resource_manager()->loadMesh("assets/models/maps/Map1.glb");
 		const bird::Vector3 mapPosition(0, -5, 30);
 		auto e = bird::_own_mk<bird::WorldObject>();
+		e->setName("Village Map");
 		e->addComponent(bird::_own_mk<bird::MeshComponent>(mapMeshes));
 		e->translate(mapPosition);
 		object()->addChild(std::move(e));
@@ -1123,29 +1657,72 @@ class MainScript : public bird::Script<bird::Scene> {
 		for (const bird::CollisionShape& chunk :
 			 bird::CollisionShape::triangleMeshChunks(mapMeshes, 3, 3)) {
 			auto collider = bird::_own_mk<bird::WorldObject>();
+			collider->setName("Map Collider");
 			collider->addComponent(bird::_own_mk<bird::RigidBodyComponent>(chunk, level));
 			collider->setWorldPosition(mapPosition);
 			object()->addChild(std::move(collider));
 		}
 
 		auto cam = bird::_own_mk<bird::Camera>(1280, 720);
+		cam->setName("Main Camera");
 		cam->addComponent(bird::_own_mk<POVCamera>());
+		cam->addComponent(bird::_own_mk<bird::AudioListenerComponent>(true));
 		cam->enable();
 		bird::Camera* camera = cam.get();
 		object()->addChild(std::move(cam));
-		buildGallery(bird::APPLICATION->getUIManager());
+
+		// BIRD_EDITOR=1 launches the level editor; its panels replace the
+		// widget gallery, which would otherwise cover them.
+		const bool editorRequested = std::getenv("BIRD_EDITOR") != nullptr;
+		bird::UIManager* ui = bird::APPLICATION->getUIManager();
+		if (!editorRequested) buildGallery(ui);
+		// Editor side panels: hierarchy 260 px + 8 margin, inspector 300 + 8.
+		const HudInsets insets =
+			editorRequested ? HudInsets{284.0f, 324.0f} : HudInsets{};
+		environment::build(camera);
 		lighting::build(object());
 		animation::build(object());
-		playground::build(object(), camera, bird::APPLICATION->getUIManager());
+		playground::build(object(), camera, ui, insets);
+		bird::ParticleEmitter* sparks = effects::build(object());
+		patrol::build(object());
+		showcase::build(object(), camera, sparks, ui, insets);
 		// BIRD_PHYSICS_DEBUG=1 starts with collider wireframes on (G toggles).
 		if (std::getenv("BIRD_PHYSICS_DEBUG") != nullptr) {
 			bird::APPLICATION->setPhysicsDebugDraw(true);
 		}
+		if (editorRequested) startEditor(camera);
 	}
 
-	void deinit() override {}
+	void deinit() override {
+		if (m_editor) {
+			bird::APPLICATION->setEditorTickCallback(nullptr);
+			m_editor.reset();
+		}
+	}
 
    private:
+	/**
+	 * Opens the level editor in Edit mode (simulation paused). F1 or the
+	 * toolbar's Play button runs the game; Ctrl+S saves the scene as JSON.
+	 */
+	void startEditor(bird::Camera* camera) {
+		m_editor = std::make_unique<bird::editor::LevelEditor>(
+			bird::APPLICATION->getUIManager(), object(), camera, bird::APPLICATION);
+		bird::editor::SceneSerializationHooks hooks;
+		hooks.defaultScenePath =
+			bird::SaveGame::getSaveFilePath(showcase::kAppName, "editor_scene.json");
+		hooks.saveScene = [](bird::Scene* root, const std::string& path) {
+			bird::SaveGame::ensureDirectoryExists(
+				bird::SaveGame::getUserDataDirectory(showcase::kAppName));
+			return bird::SceneSerializer::saveSceneToFile(root, path);
+		};
+		m_editor->setSerializationHooks(std::move(hooks));
+		bird::editor::LevelEditor* editor = m_editor.get();
+		bird::APPLICATION->setEditorTickCallback(
+			[editor](float delta) { editor->update(delta); });
+	}
+
+	std::unique_ptr<bird::editor::LevelEditor> m_editor;
 };
 
 extern "C" BIRD_API_EXPORT bird::Script<bird::Scene>* app_entry() {

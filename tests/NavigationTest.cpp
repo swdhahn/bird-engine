@@ -321,6 +321,25 @@ TEST_F(NavigationTest, ExternalTeleportSyncsCrowdAgent) {
 	EXPECT_NEAR(pos.z, 5.0f, 0.3f);
 }
 
+TEST_F(NavigationTest, RotatingHostDoesNotResetAgentVelocity) {
+	root->getNavWorld()->setNavMesh(buildFlatFloorNavMesh());
+
+	NavAgentSettings settings;
+	settings.maxSpeed = 3.0f;
+	settings.updateRotation = false;
+	AgentEntity npc = addAgent({-12.0f, 0.0f, 0.0f}, settings);
+	ASSERT_TRUE(npc.agent->setDestination({12.0f, 0.0f, 0.0f}));
+
+	// A script turning its host every frame changes only the rotation; that
+	// must not count as a teleport (which re-registers the crowd agent).
+	for (int i = 0; i < 60; ++i) {
+		npc.object->setWorldRotation(
+			glm::angleAxis(0.05f * static_cast<float>(i), Vector3(0.0f, 1.0f, 0.0f)));
+		server.step(kStep);
+	}
+	EXPECT_GT(glm::length(npc.agent->getVelocity()), 0.8f * settings.maxSpeed);
+}
+
 TEST_F(NavigationTest, PendingDestinationAppliesOnceNavMeshIsAssigned) {
 	AgentEntity npc = addAgent({-5.0f, 0.0f, 0.0f});
 	ASSERT_TRUE(npc.agent->setDestination({5.0f, 0.0f, 0.0f}));
