@@ -276,8 +276,8 @@ TEST_F(AudioTest, Spatial3DPanningAndDistanceAttenuation) {
 }
 
 TEST_F(AudioTest, ListenerAndSourceComponentsSyncTransforms) {
-	bird::AudioSystem* prevGlobal = bird::AUDIO_SYSTEM;
-	bird::AUDIO_SYSTEM = &audio_;
+	bird::AudioSystem* prevGlobal = bird::AudioSystem::getGlobal();
+	bird::AudioSystem::setGlobal(&audio_);
 
 	{
 		bird::WorldObject listenerObj;
@@ -328,7 +328,7 @@ TEST_F(AudioTest, ListenerAndSourceComponentsSyncTransforms) {
 		listenerObj.deinit();
 	}
 
-	bird::AUDIO_SYSTEM = prevGlobal;
+	bird::AudioSystem::setGlobal(prevGlobal);
 }
 
 }  // namespace

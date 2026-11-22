@@ -85,6 +85,23 @@ class AudioSystem {
 	 */
 	void tick(float delta);
 
+	/**
+	 * Returns the engine-wide AudioSystem (AUDIO_SYSTEM as seen from inside
+	 * Bird_core, which links with -Bsymbolic and so keeps its own copy).
+	 *
+	 * @return The global AudioSystem, or nullptr before Application::init().
+	 */
+	static AudioSystem* getGlobal();
+
+	/**
+	 * Replaces the engine-wide AudioSystem that components bind to on init.
+	 * Intended for Application startup/teardown and unit tests; assigning
+	 * AUDIO_SYSTEM from another module writes that module's copy instead.
+	 *
+	 * @param system The AudioSystem to install, or nullptr to clear it.
+	 */
+	static void setGlobal(AudioSystem* system);
+
 	// ---------------------------------------------------------- Mixing Buses
 
 	/**

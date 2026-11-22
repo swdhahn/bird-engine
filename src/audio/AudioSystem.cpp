@@ -180,6 +180,14 @@ uint32_t AudioSystem::getChannels() const {
 	return ma_engine_get_channels(&m_impl->engine);
 }
 
+AudioSystem* AudioSystem::getGlobal() {
+	return AUDIO_SYSTEM;
+}
+
+void AudioSystem::setGlobal(AudioSystem* system) {
+	AUDIO_SYSTEM = system;
+}
+
 void AudioSystem::tick(float delta) {
 	if (!isInitialized()) return;
 
