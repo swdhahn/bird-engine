@@ -3,7 +3,11 @@ add_library(
   UndoStack.h
   UndoStack.cpp
   EditorCamera.h
-  EditorCamera.cpp)
+  EditorCamera.cpp
+  ViewportPicker.h
+  ViewportPicker.cpp
+  TransformGizmo.h
+  TransformGizmo.cpp)
 
 target_link_libraries(editor PRIVATE glm)
 set_target_properties(editor PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
